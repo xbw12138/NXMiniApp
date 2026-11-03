@@ -1,0 +1,10 @@
+{
+  "title": "演示小程序",
+  "summary": "卡片、列表、主题色与按钮的原生渲染示例",
+  "description": "NXKit 小程序容器的参考实现，包含 flex 布局、wx:for、文本与按钮样式。",
+  "category": "示例",
+  "developer": "NXKit",
+  "version": "0.1.0",
+  "icon": "icon.png",
+  "published": true
+}

@@ -1,0 +1,24 @@
+<view class="page">
+  <view class="header">
+    <view class="brand-row">
+      <view class="brand-text">
+        <text class="title">{{appName}}</text>
+        <text class="subtitle">{{subtitle}}</text>
+      </view>
+      <view class="badge">v{{version}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="row" wx:for="{{items}}" wx:for-item="item">
+      <view class="dot" style="background-color: {{item.color}};"></view>
+      <view class="row-main">
+        <text class="row-name">{{item.name}}</text>
+        <text class="row-desc">{{item.desc}}</text>
+      </view>
+    </view>
+  </view>
+
+  <text class="footer">{{footer}}</text>
+  <button class="start">开始</button>
+</view>

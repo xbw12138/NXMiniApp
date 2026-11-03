@@ -1,0 +1,6 @@
+server/web/admin/node_modules
+server/web/admin/dist
+server/data
+client/build_desktop
+client/build_switch
+**/.git

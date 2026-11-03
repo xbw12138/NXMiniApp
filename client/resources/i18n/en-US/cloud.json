@@ -1,0 +1,86 @@
+{
+  "tab": {
+    "files": "Files",
+    "profile": "Profile"
+  },
+  "login": {
+    "title": "Scan to sign in",
+    "requesting": "Requesting QR code…",
+    "scan": "Scan with the Quark app",
+    "waiting": "Waiting for scan",
+    "scanned": "Scanned, confirm on your phone",
+    "expired": "QR code expired, tap refresh",
+    "success": "Signed in"
+  },
+  "files": {
+    "root": "All files",
+    "picker_title": "Choose a folder",
+    "items": "items",
+    "loading": "Loading…",
+    "not_signed_in": "Not signed in",
+    "hint_browse": "B Back  Y New  X More",
+    "hint_picker": "B Back  Y Choose",
+    "pick_here": "Choose this folder",
+    "mkdir": "New folder",
+    "more": "More actions",
+    "empty_title": "Nothing here yet",
+    "empty_desc": "This folder is empty — you can create one first",
+    "empty_picker_title": "No folders available",
+    "empty_picker_desc": "There are no subfolders here, you can choose this folder",
+    "login_title": "Sign in to get started",
+    "login_desc": "Scan the QR code with the Quark app to browse your drive",
+    "login_action": "Sign in",
+    "error_title": "Could not load",
+    "error_desc": "Check your network connection and try again",
+    "retry": "Retry",
+    "unsupported": "This file type cannot be previewed",
+    "delete_confirm": "Delete",
+    "type": {
+      "dir": "Folder",
+      "video": "Video",
+      "audio": "Audio",
+      "image": "Image",
+      "other": "File"
+    },
+    "action": {
+      "rename": "Rename",
+      "delete": "Delete",
+      "move": "Move to…",
+      "cancel": "Cancel"
+    }
+  },
+  "player": {
+    "loading": "Loading…",
+    "unavailable": "Playback is not supported in this build",
+    "no_stream": "No playable stream found",
+    "error": "Playback error",
+    "paused": "Paused",
+    "quality": "Quality",
+    "hint_video": "A Play/Pause  ←/→ Seek  Y Quality  B Exit",
+    "hint_audio": "A Play/Pause  ←/→ Seek  B Exit"
+  },
+  "image": {
+    "loading": "Loading…",
+    "error": "Failed to load image",
+    "prev": "Previous",
+    "next": "Next"
+  },
+  "profile": {
+    "section": {
+      "provider": "Drive",
+      "account": "Account",
+      "about": "About"
+    },
+    "provider": "Current drive",
+    "nickname": "Nickname",
+    "member": "Membership",
+    "capacity": "Storage",
+    "unknown": "Unknown user",
+    "login": "Sign in with QR code",
+    "logout": "Sign out",
+    "logged_out": "Signed out",
+    "version": "Version",
+    "refresh": "Refresh account",
+    "refreshing": "Refreshing…"
+  }
+}

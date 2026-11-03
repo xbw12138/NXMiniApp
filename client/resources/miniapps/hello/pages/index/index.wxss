@@ -1,0 +1,64 @@
+.page {
+  background-color: #0E1116;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero {
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 48rpx;
+}
+
+.brand {
+  color: #0FDC78;
+  font-size: 22rpx;
+  font-weight: bold;
+  margin-bottom: 18rpx;
+}
+
+.title {
+  color: #F5F6F7;
+  font-size: 56rpx;
+  font-weight: bold;
+  margin-bottom: 14rpx;
+}
+
+.desc {
+  color: #8A9099;
+  font-size: 24rpx;
+}
+
+.stats {
+  flex-direction: row;
+  gap: 18rpx;
+  margin-bottom: 44rpx;
+}
+
+.stat {
+  width: 200rpx;
+  flex-direction: column;
+  align-items: center;
+  background-color: #1B1F24;
+  border: 1rpx solid #2A2F36;
+  border-radius: 20rpx;
+  padding: 22rpx 0;
+}
+
+.value {
+  color: #F5F6F7;
+  font-size: 32rpx;
+  font-weight: bold;
+  margin-bottom: 6rpx;
+}
+
+.label {
+  color: #8A9099;
+  font-size: 20rpx;
+}
+
+.footer {
+  color: #5D646C;
+  font-size: 18rpx;
+}

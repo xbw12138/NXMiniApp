@@ -1,0 +1,40 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: nxkit_store
+      MYSQL_USER: nxkit
+      MYSQL_PASSWORD: nxkit
+      MYSQL_ROOT_PASSWORD: nxkit-root
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pnxkit-root"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DB_DSN: nxkit:nxkit@tcp(mysql:3306)/nxkit_store?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci
+      NXKIT_ADMIN_TOKEN: ${NXKIT_ADMIN_TOKEN:-nxkit-store-admin}
+      NXKIT_DATA_DIR: /data
+    volumes:
+      - server-data:/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  mysql-data:
+  server-data:

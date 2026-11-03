@@ -1,0 +1,10 @@
+{
+  "title": "你好小程序",
+  "summary": "一个通过商店接口下载安装的最小示例",
+  "description": "用于验证「列表 → 下载 → 安装 → 进入 → 返回」整条链路。",
+  "category": "示例",
+  "developer": "NXKit",
+  "version": "0.1.0",
+  "icon": "icon.png",
+  "published": true
+}

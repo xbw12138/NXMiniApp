@@ -1,0 +1,18 @@
+# builds
+client/build_desktop/
+client/build_switch/
+client/build_*/
+
+# node
+server/web/admin/node_modules/
+server/web/admin/dist/
+
+# runtime data
+server/data/
+data/
+
+# env
+.env
+
+# macOS
+.DS_Store

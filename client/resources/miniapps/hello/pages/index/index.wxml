@@ -1,0 +1,16 @@
+<view class="page">
+  <view class="hero">
+    <text class="brand">NX MINIAPP</text>
+    <text class="title">你好，Switch</text>
+    <text class="desc">这是一个从商店接口下载并安装的小程序。</text>
+  </view>
+
+  <view class="stats">
+    <view class="stat" wx:for="{{stats}}" wx:for-item="item">
+      <text class="value">{{item.value}}</text>
+      <text class="label">{{item.label}}</text>
+    </view>
+  </view>
+
+  <text class="footer">按 B 返回商店</text>
+</view>

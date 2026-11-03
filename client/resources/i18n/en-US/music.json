@@ -1,0 +1,53 @@
+{
+  "title": "NXKit Music",
+  "tab": {
+    "recommend": "Recommend",
+    "ranking": "Ranking",
+    "search": "Search",
+    "profile": "Me"
+  },
+  "search": {
+    "button": "Search songs",
+    "hint": "Press A to enter a keyword",
+    "empty": "Type a keyword to search",
+    "title": "Search songs",
+    "placeholder": "Song / artist / album"
+  },
+  "login": {
+    "title": "QR code login",
+    "requesting": "Requesting QR code...",
+    "scan": "Scan with the Netease Cloud Music app",
+    "waiting": "Waiting for scan",
+    "scanned": "Scanned, confirm on your phone",
+    "expired": "QR code expired, tap refresh",
+    "success": "Logged in"
+  },
+  "profile": {
+    "section": {
+      "account": "Account",
+      "server": "Server",
+      "about": "About"
+    },
+    "nickname": "Nickname",
+    "unknown": "Unknown user",
+    "login": "QR code login",
+    "logout": "Log out",
+    "logged_out": "Logged out",
+    "api_server": "API server",
+    "api_server_hint": "NeteaseCloudMusicApiEnhanced url",
+    "server_saved": "Server url saved",
+    "version": "Version",
+    "refresh": "Refresh account",
+    "refreshing": "Refreshing..."
+  },
+  "toast": {
+    "playback_todo": "Playback will be available in a later version"
+  },
+  "label": {
+    "play_count": "plays",
+    "track_count": "tracks"
+  },
+  "error": {
+    "empty": "Nothing here yet"
+  }
+}

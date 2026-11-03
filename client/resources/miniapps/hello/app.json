@@ -1,0 +1,4 @@
+{
+  "pages": ["pages/index/index"],
+  "window": { "backgroundColor": "#0E1116" }
+}
