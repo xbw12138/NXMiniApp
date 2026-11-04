@@ -8,7 +8,7 @@ Page({
     nick: '',
     saved: '尚未写入存储',
     systemLine: '',
-    videoSrc: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    videoSrc: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
     videoStatus: '点击视频或按 A 播放',
     richNodes: '<b>富文本</b>：标签已剥离，仅保留文字内容',
     items: [
