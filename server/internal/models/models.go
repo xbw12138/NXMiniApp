@@ -52,3 +52,14 @@ type MiniApp struct {
 }
 
 func (MiniApp) TableName() string { return "miniapps" }
+
+// DocPage 是文档站的一个页面；Content 为主内容区 HTML（不含页面骨架）。
+type DocPage struct {
+	Path      string `gorm:"primaryKey;size:128"`
+	Title     string `gorm:"size:255;not null;default:''"`
+	Meta      string `gorm:"size:255;not null;default:''"`
+	Content   string `gorm:"type:longtext;not null"`
+	UpdatedAt int64  `gorm:"not null;autoUpdateTime:false"`
+}
+
+func (DocPage) TableName() string { return "doc_pages" }

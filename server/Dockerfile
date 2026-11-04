@@ -25,6 +25,7 @@ RUN sed -i "s#https://dl-cdn.alpinelinux.org#${APK_MIRROR}#g" /etc/apk/repositor
     && apk add --no-cache ca-certificates wget
 COPY --from=server /bin/server /bin/server
 COPY client/resources/miniapps /seed/miniapps
+COPY docs /seed/docs
 ENV NXKIT_DATA_DIR=/data
 VOLUME /data
 EXPOSE 8080

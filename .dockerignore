@@ -1,0 +1,10 @@
+# 版本控制与本地产物
+.git
+**/node_modules
+**/build_desktop
+**/build_switch
+**/.trae
+
+# 数据与临时产物
+server/data
+*.log

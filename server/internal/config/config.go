@@ -11,6 +11,7 @@ type Config struct {
 	AdminToken string
 	DBDSN      string
 	SeedDir    string
+	DocsDir    string
 }
 
 func getenv(key, fallback string) string {
@@ -28,6 +29,7 @@ func Load() Config {
 		DBDSN: getenv("DB_DSN",
 			"nxkit:nxkit@tcp(127.0.0.1:3306)/nxkit_store?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci"),
 		SeedDir: getenv("NXKIT_SEED_DIR", "/seed/miniapps"),
+		DocsDir: getenv("NXKIT_DOCS_DIR", "/seed/docs"),
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nxminiapp/server/internal/api"
+	"nxminiapp/server/internal/docs"
 	"nxminiapp/server/internal/miniappstore"
 	"nxminiapp/server/internal/models"
 )
@@ -44,6 +45,8 @@ func Register(r *gin.Engine, e *api.Env) {
 	auth.PATCH("/miniapps/:id/flags", patchMiniAppFlags(e))
 	auth.POST("/miniapps/:id/icon", uploadMiniAppIcon(e))
 	auth.POST("/miniapps/:id/package", uploadMiniAppPackage(e))
+
+	docs.RegisterAdmin(auth, e.DB, e.Cfg.DocsDir)
 }
 
 func authMiddleware(e *api.Env) gin.HandlerFunc {

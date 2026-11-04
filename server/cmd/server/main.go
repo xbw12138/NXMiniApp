@@ -7,6 +7,7 @@ import (
 	"nxminiapp/server/internal/api"
 	"nxminiapp/server/internal/config"
 	"nxminiapp/server/internal/database"
+	"nxminiapp/server/internal/docs"
 	"nxminiapp/server/internal/miniappstore"
 )
 
@@ -25,6 +26,9 @@ func main() {
 	}
 	if err := miniappstore.Seed(db, cfg.DataDir, cfg.SeedDir); err != nil {
 		log.Printf("种子数据导入失败: %v", err)
+	}
+	if err := docs.Seed(db, cfg.DocsDir); err != nil {
+		log.Printf("文档种子导入失败: %v", err)
 	}
 
 	router, env := api.NewRouter(cfg, db)

@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"nxminiapp/server/internal/config"
+	"nxminiapp/server/internal/docs"
 )
 
 func corsMiddleware() gin.HandlerFunc {
@@ -51,6 +52,9 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 	r.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/admin")
 	})
+
+	// 文档站：页面内容在数据库，assets 静态文件在 DocsDir。
+	docs.Register(r, db, cfg.DocsDir)
 
 	registerSPA(r)
 	return r, e

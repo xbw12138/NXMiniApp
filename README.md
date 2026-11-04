@@ -39,8 +39,9 @@ docker compose up --build -d
 
 - API：`http://127.0.0.1:8080/api/v1/…`
 - 管理后台：`http://127.0.0.1:8080/admin`
+- 文档站：`http://127.0.0.1:8080/docs`（内容存 MySQL，可在后台「文档」页在线编辑；编辑后即时生效）
 - 管理令牌：环境变量 `NXKIT_ADMIN_TOKEN`（默认 `nxkit-store-admin`）
-- 首次启动自动建表，并把 `client/resources/miniapps` 下的示例小程序写入 MySQL 与数据卷（仅在小程序表为空时执行）。
+- 首次启动自动建表，并把 `client/resources/miniapps` 下的示例小程序、`docs/` 下的文档页写入 MySQL（仅在对应表为空时执行；后台「文档」页的「恢复默认」可从镜像内置的 docs 目录还原单页）。
 
 数据：MySQL 存元数据，`server-data` 卷存安装包/图标/截图。
 
