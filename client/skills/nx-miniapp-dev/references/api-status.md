@@ -69,7 +69,7 @@
 | `progress` | 已实现 | `percent` / `activeColor` / `backgroundColor` |
 | `rich-text` | 部分实现 | 读取 `nodes`，剥离标签后按纯文本渲染 |
 | `icon` | 已实现 | `type` / `size`，成功、警告、取消、等待、搜索、下载 |
-| `video` | 部分实现 | `src` / `poster` / `autoplay` / `loop` / `muted` / `controls` / `object-fit`，点击或 A 播放暂停；MPV 构建可真实播放 |
+| `video` | 部分实现 | `src` / `poster` / `autoplay` / `loop` / `muted` / `controls` / `object-fit`，点击或 A 播放暂停；通过 `nxkit::VideoView`（wiliwili 风格播放器，底层 libmpv）真实播放 |
 | `form` / `label` / `checkbox-group` / `radio-group` | 部分实现 | 容器语义，正常排版；不汇总提交 |
 | `picker` / `picker-view` | 未支持 | 退化为 `view` |
 | `canvas` / `audio` / `map` / `web-view` | 未支持 | 退化为 `view` |

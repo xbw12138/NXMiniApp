@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include <nxkit/media/video_view.hpp>
+
 #include "miniapp/js_runtime.hpp"
 #include "miniapp/json.hpp"
 #include "miniapp/render_node.hpp"
@@ -241,10 +243,13 @@ private:
     bool focusInitialized = false;
     std::shared_ptr<bool> aliveToken = std::make_shared<bool>(true);
 
-    // video：全局只允许一个播放器实例。
+    // video：全局只允许一个播放器实例。通过 nxkit::VideoView 对接
+    // wiliwili 风格的播放器，不再直接调用 mpv。
     std::string activeVideoPath;
     std::string activeVideoSrc;
     brls::VoidEvent::Subscription postDrawToken;
+
+    void onVideoState(const nxkit::VideoState& vs);
 };
 
 }  // namespace miniapp

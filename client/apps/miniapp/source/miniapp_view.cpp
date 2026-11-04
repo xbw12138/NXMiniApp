@@ -12,9 +12,7 @@
 #include <borealis/core/touch/tap_gesture.hpp>
 #include <nxkit/http_client.hpp>
 #include <nxkit/paths.hpp>
-#ifdef NXKIT_WITH_MPV
-#include <nxkit/media/mpv_core.hpp>
-#endif
+#include <nxkit/media/video_view.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -278,6 +276,10 @@ MiniappView::MiniappView(std::string packagePath)
     postDrawToken = brls::Application::getPostDrawEvent()->subscribe([this]() {
         this->drawVideoSurface();
     });
+
+    // 对接 wiliwili 风格播放器：用 MpvEvent 回调驱动状态，不轮询 mpv。
+    nxkit::VideoView::instance().setStateCallback(
+        [this](const nxkit::VideoState& vs) { this->onVideoState(vs); });
 }
 
 MiniappView::~MiniappView() {
@@ -287,6 +289,7 @@ MiniappView::~MiniappView() {
         runLoopActive = false;
     }
     brls::Application::getPostDrawEvent()->unsubscribe(postDrawToken);
+    nxkit::VideoView::instance().setStateCallback(nullptr);
     stopVideo();
     for (auto& page : pages) {
         cleanupPage(*page);
@@ -1583,11 +1586,7 @@ void MiniappView::drawVideo(NVGcontext* vg, RenderNode& node, float alpha) {
         if (node.videoError) {
             status = "播放失败";
         } else {
-#ifdef NXKIT_WITH_MPV
             status = node.videoPlaying ? "播放中" : "已暂停";
-#else
-            status = node.videoPlaying ? "播放中" : "未启用 MPV";
-#endif
         }
 
         nvgFontFaceId(vg, fontId);
@@ -1605,7 +1604,6 @@ void MiniappView::drawVideo(NVGcontext* vg, RenderNode& node, float alpha) {
 }
 
 void MiniappView::drawVideoSurface() {
-#ifdef NXKIT_WITH_MPV
     if (activeVideoPath.empty() || !current || !current->root) return;
     RenderNode* node = findNodeByPath(*current->root, activeVideoPath);
     if (!node || !node->videoPlaying || node->videoError) return;
@@ -1634,8 +1632,7 @@ void MiniappView::drawVideoSurface() {
 
     brls::Rect rect(node->absLeft, node->absTop, node->absWidth,
                     std::max(1.0f, node->absHeight - barHeight));
-    nxkit::MPVCore::instance().draw(rect, node->style.opacity);
-#endif
+    nxkit::VideoView::instance().draw(rect, node->style.opacity);
 }
 
 float MiniappView::valueOf(RenderNode* node) const {
@@ -2088,9 +2085,7 @@ void MiniappView::toggleVideo(RenderNode* node) {
     current->dirty = true;
 
     if (!next) {
-#ifdef NXKIT_WITH_MPV
-        if (activeVideoPath == node->path) nxkit::MPVCore::instance().pause();
-#endif
+        nxkit::VideoView::instance().pause();
         dispatchVideoEvent(node, node->bindPause, "pause");
         return;
     }
@@ -2119,13 +2114,13 @@ void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
     std::string resolved = resolveLocalPath(node->videoSrc, current->dir);
     activeVideoPath = node->path;
 
-#ifdef NXKIT_WITH_MPV
-    auto& player = nxkit::MPVCore::instance();
+    auto& player = nxkit::VideoView::instance();
     if (!player.isValid()) {
         node->videoError = true;
         node->videoErrorText = "视频播放器未初始化";
         node->videoPlaying = false;
         current->videoPlaying[node->path] = false;
+        showToast("视频播放需要启用 libmpv 的构建", "none", 2000);
         dispatchVideoEvent(node, node->bindError, "error");
         return;
     }
@@ -2136,26 +2131,13 @@ void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
         loaded = resolved;
         activeVideoSrc = resolved;
     }
-    player.command_async("set", "loop-file", node->videoLoop ? "inf" : "no");
-    player.command_async("set", "mute", node->videoMuted ? "yes" : "no");
+    player.setLoop(node->videoLoop);
+    player.setMute(node->videoMuted);
     player.resume();
-#else
-    (void)forceLoad;
-    activeVideoSrc = resolved;
-    node->videoError = true;
-    node->videoErrorText = "当前构建未启用 MPV";
-    node->videoPlaying = false;
-    current->videoPlaying[node->path] = false;
-    showToast("视频播放需要启用 libmpv 的构建", "none", 2000);
-    dispatchVideoEvent(node, node->bindError, "error");
-#endif
 }
 
 void MiniappView::stopVideo() {
-#ifdef NXKIT_WITH_MPV
-    auto& player = nxkit::MPVCore::instance();
-    if (player.isValid()) player.stop();
-#endif
+    nxkit::VideoView::instance().stop();
     activeVideoPath.clear();
     activeVideoSrc.clear();
 }
@@ -2190,11 +2172,9 @@ bool MiniappView::videoControl(const std::string& id, const std::string& action,
         if (value < 0.0) value = 0.0;
         node->videoTime = value;
         current->videoTime[node->path] = value;
-#ifdef NXKIT_WITH_MPV
         if (activeVideoPath == node->path) {
-            nxkit::MPVCore::instance().seek(static_cast<int64_t>(value));
+            nxkit::VideoView::instance().seek(value);
         }
-#endif
     }
     return true;
 }
@@ -2413,6 +2393,7 @@ void MiniappView::pumpVideo(PageState& page, RenderNode& node, double now) {
     (void)now;
     if (node.videoSrc.empty()) return;
 
+    // autoplay：首次布局时触发一次加载，之后状态由 VideoView 回调驱动。
     if (node.videoAutoplay && page.videoStarted.find(node.path) == page.videoStarted.end()) {
         page.videoStarted[node.path] = true;
         node.videoPlaying = true;
@@ -2423,41 +2404,60 @@ void MiniappView::pumpVideo(PageState& page, RenderNode& node, double now) {
         startVideo(&node, true);
         if (node.videoPlaying) dispatchVideoEvent(&node, node.bindPlay, "play");
     }
+}
 
-    if (node.videoPlaying && activeVideoPath == node.path) {
-#ifdef NXKIT_WITH_MPV
-        auto& player = nxkit::MPVCore::instance();
-        if (!player.isValid()) {
-            node.videoPlaying = false;
-            page.videoPlaying[node.path] = false;
-            node.videoError = true;
-            node.videoErrorText = "视频播放器未初始化";
-            page.dirty = true;
-            dispatchVideoEvent(&node, node.bindError, "error");
-            return;
+// 由 nxkit::VideoView（wiliwili 风格播放器）的 MpvEvent 回调驱动，
+// 替代原先每帧轮询 mpv 的 pumpVideo 状态同步。
+void MiniappView::onVideoState(const nxkit::VideoState& vs) {
+    if (!current || activeVideoPath.empty()) return;
+    RenderNode* node = findNodeByPath(*current->root, activeVideoPath);
+    if (!node || node->tag != "video") return;
+
+    bool dirty = false;
+
+    if (vs.currentTime != node->videoTime) {
+        node->videoTime = vs.currentTime;
+        current->videoTime[node->path] = vs.currentTime;
+        dirty = true;
+        auto last = current->videoLastUpdate.find(node->path);
+        if (last == current->videoLastUpdate.end() ||
+            std::abs(static_cast<int>(vs.currentTime) - static_cast<int>(last->second)) >= 1.0) {
+            current->videoLastUpdate[node->path] = vs.currentTime;
+            dispatchVideoEvent(node, node->bindTimeUpdate, "timeupdate");
         }
-
-        node.videoTime = player.getPlaybackTime();
-        node.videoDuration = static_cast<double>(player.duration);
-        page.videoTime[node.path] = node.videoTime;
-
-        auto last = page.videoLastUpdate.find(node.path);
-        if (last == page.videoLastUpdate.end() ||
-            std::abs(static_cast<int>(node.videoTime) - static_cast<int>(last->second)) >= 1.0) {
-            page.videoLastUpdate[node.path] = node.videoTime;
-            dispatchVideoEvent(&node, node.bindTimeUpdate, "timeupdate");
-        }
-
-        if (player.video_eof && !node.videoLoop) {
-            node.videoPlaying = false;
-            page.videoPlaying[node.path] = false;
-            node.videoError = false;
-            node.videoTime = node.videoDuration;
-            page.dirty = true;
-            dispatchVideoEvent(&node, node.bindEnded, "ended");
-        }
-#endif
     }
+
+    if (vs.duration != node->videoDuration) {
+        node->videoDuration = vs.duration;
+        dirty = true;
+    }
+
+    if (vs.playing != node->videoPlaying) {
+        node->videoPlaying = vs.playing;
+        current->videoPlaying[node->path] = vs.playing;
+        dirty = true;
+    }
+
+    if (vs.error && !node->videoError) {
+        node->videoError = true;
+        node->videoErrorText = vs.errorText;
+        node->videoPlaying = false;
+        current->videoPlaying[node->path] = false;
+        dirty = true;
+        dispatchVideoEvent(node, node->bindError, "error");
+    }
+
+    if (vs.ended && !node->videoLoop) {
+        if (node->videoPlaying) {
+            node->videoPlaying = false;
+            current->videoPlaying[node->path] = false;
+            dirty = true;
+        }
+        node->videoTime = node->videoDuration;
+        dispatchVideoEvent(node, node->bindEnded, "ended");
+    }
+
+    if (dirty) current->dirty = true;
 }
 
 // ---------------- 宿主能力 ----------------

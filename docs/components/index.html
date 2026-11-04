@@ -147,7 +147,7 @@
       底部控制条显示进度、时间与状态。
     </p>
     <p>
-      播放后端是 <code>nxkit::MPVCore</code>：
+      播放通过 <code>nxkit::VideoView</code>（wiliwili 风格播放器，底层封装 libmpv）：
     </p>
     <ul>
       <li>Switch 构建默认开启 <code>NXKIT_WITH_MPV</code>，可加载包内文件路径或 HTTP(S) 地址。</li>
@@ -167,7 +167,7 @@ ctx.pause();
 ctx.seek(30);
 ctx.stop();</code></pre>
     <div class="warn">
-      <strong>限制：</strong>全局只有一个 MPV 实例，同一时间只播放一个 <code>video</code>；
+      <strong>限制：</strong>全局只有一个播放器实例，同一时间只播放一个 <code>video</code>；
       视频直出层不参与 NanoVG 合成，被 <code>scroll-view</code> 裁剪或完全移出屏幕时暂停绘制。
     </div>
 
