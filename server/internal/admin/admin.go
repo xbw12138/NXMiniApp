@@ -45,6 +45,10 @@ func Register(r *gin.Engine, e *api.Env) {
 	auth.PATCH("/miniapps/:id/flags", patchMiniAppFlags(e))
 	auth.POST("/miniapps/:id/icon", uploadMiniAppIcon(e))
 	auth.POST("/miniapps/:id/package", uploadMiniAppPackage(e))
+	auth.GET("/releases", listReleases(e))
+	auth.POST("/releases", uploadRelease(e))
+	auth.PATCH("/releases/:id/flags", patchReleaseFlags(e))
+	auth.DELETE("/releases/:id", deleteRelease(e))
 
 	docs.RegisterAdmin(auth, e.DB, e.Cfg.DocsDir)
 }

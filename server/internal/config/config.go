@@ -37,10 +37,11 @@ func (c Config) FilesDir() string       { return filepath.Join(c.DataDir, "files
 func (c Config) IconsDir() string       { return filepath.Join(c.DataDir, "icons") }
 func (c Config) ScreenshotsDir() string { return filepath.Join(c.DataDir, "screenshots") }
 func (c Config) MiniAppsDir() string    { return filepath.Join(c.DataDir, "miniapps") }
+func (c Config) ReleasesDir() string    { return filepath.Join(c.DataDir, "releases") }
 
 // EnsureDirs creates the data directory layout used by the server.
 func (c Config) EnsureDirs() error {
-	dirs := []string{c.DataDir, c.FilesDir(), c.IconsDir(), c.ScreenshotsDir(), c.MiniAppsDir()}
+	dirs := []string{c.DataDir, c.FilesDir(), c.IconsDir(), c.ScreenshotsDir(), c.MiniAppsDir(), c.ReleasesDir()}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err

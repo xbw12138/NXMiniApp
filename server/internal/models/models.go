@@ -53,6 +53,23 @@ type MiniApp struct {
 
 func (MiniApp) TableName() string { return "miniapps" }
 
+// ContainerRelease 是容器本体（NXMiniApp NRO）的一个可下载版本，
+// 文件存于 <DATA_DIR>/releases/ 下。Published/Downloads 不带 default 标签，
+// 保证零值也会显式写入（避免被数据库默认值覆盖）。
+type ContainerRelease struct {
+	ID        uint   `gorm:"primaryKey;autoIncrement"`
+	Version   string `gorm:"size:64;not null;uniqueIndex"`
+	Notes     string `gorm:"type:text;not null"`
+	Filename  string `gorm:"size:255;not null;default:''"`
+	Size      int64  `gorm:"not null"`
+	SHA256    string `gorm:"size:64;not null;default:''"`
+	Downloads int64  `gorm:"not null"`
+	Published bool   `gorm:"not null"`
+	CreatedAt int64  `gorm:"not null;autoCreateTime:false"`
+}
+
+func (ContainerRelease) TableName() string { return "container_releases" }
+
 // DocPage 是文档站的一个页面；Content 为主内容区 HTML（不含页面骨架）。
 type DocPage struct {
 	Path      string `gorm:"primaryKey;size:128"`

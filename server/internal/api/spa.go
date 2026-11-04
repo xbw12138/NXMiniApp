@@ -13,6 +13,21 @@ import (
 	"nxminiapp/server/web"
 )
 
+// servePortal serves one embedded portal page (index.html / submit.html).
+func servePortal(c *gin.Context, name string) {
+	portal, err := web.Portal()
+	if err != nil {
+		c.String(http.StatusServiceUnavailable, "portal not built")
+		return
+	}
+	data, err := fs.ReadFile(portal, name)
+	if err != nil {
+		Abort(c, http.StatusNotFound, "Not Found")
+		return
+	}
+	http.ServeContent(c.Writer, c.Request, name, time.Time{}, bytes.NewReader(data))
+}
+
 // registerSPA serves the embedded admin SPA: any GET that is neither /api nor
 // /media falls back to index.html so history-mode routing works.
 func registerSPA(r *gin.Engine) {

@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>下载容器 · NXMiniApp</title>
+<style>
+:root {
+  --accent: #07c160;
+  --accent-soft: #e8f8ee;
+  --text: #1f2328;
+  --text-2: #57606a;
+  --text-3: #8b949e;
+  --bg: #ffffff;
+  --bg-side: #fafafa;
+  --border: #e6e8eb;
+  --code-bg: #f6f8fa;
+  --radius: 10px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg-side);
+  color: var(--text);
+  font: 15px/1.75 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 60px;
+  padding: 0 28px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #0ddc78, #07a34b);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.nav a {
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: var(--text-2);
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s;
+}
+.nav a:hover { background: var(--bg-side); color: var(--text); }
+.nav a.active { background: var(--accent-soft); color: #067a3f; font-weight: 600; }
+.nav a.cta { margin-left: 8px; background: var(--accent); color: #fff; font-weight: 600; }
+.nav a.cta:hover { background: #06ad57; }
+
+/* ---------- 主体 ---------- */
+.wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 96px; }
+.page-head { margin-bottom: 28px; }
+.page-head h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -0.2px; }
+.page-head p { margin: 0; color: var(--text-2); font-size: 14.5px; }
+
+/* 最新版卡片 */
+.latest {
+  position: relative;
+  overflow: hidden;
+  padding: 30px;
+  border: 1px solid #bfe8d0;
+  border-radius: 14px;
+  background:
+    radial-gradient(480px 220px at 100% 0%, rgba(13, 220, 120, 0.14), transparent 60%),
+    #fff;
+}
+.latest .tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.latest h2 { margin: 12px 0 4px; font-size: 30px; letter-spacing: -0.3px; }
+.latest .meta { color: var(--text-3); font-size: 13px; }
+.latest .meta span + span::before { content: "·"; margin: 0 8px; }
+.latest .notes {
+  margin: 16px 0 22px;
+  color: var(--text-2);
+  font-size: 14px;
+  white-space: pre-wrap;
+  max-width: 640px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 26px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 6px 18px rgba(7, 193, 96, 0.24);
+}
+.btn:hover { background: #06ad57; transform: translateY(-1px); }
+.latest .sha {
+  margin-top: 14px;
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-3);
+  word-break: break-all;
+}
+
+/* 历史版本 */
+.section-title {
+  margin: 44px 0 14px;
+  font-size: 19px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.section-title .count { font-size: 13px; color: var(--text-3); font-weight: 400; }
+.history {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  overflow: hidden;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+}
+.row + .row { border-top: 1px solid var(--border); }
+.row .ver {
+  flex: 0 0 auto;
+  min-width: 110px;
+  font-weight: 600;
+  font-size: 15px;
+}
+.row .ver .badge-latest {
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: #067a3f;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+.row .info { flex: 1 1 auto; min-width: 0; }
+.row .info .notes {
+  color: var(--text-2);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.row .info .meta { font-size: 12px; color: var(--text-3); }
+.row .info .meta span + span::before { content: "·"; margin: 0 6px; }
+.row .dl {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: border-color 0.15s, color 0.15s;
+}
+.row .dl:hover { border-color: var(--accent); color: #067a3f; }
+
+/* 空状态 / 加载 */
+.state {
+  padding: 56px 24px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.state .big { font-size: 16px; color: var(--text-2); font-weight: 600; margin-bottom: 6px; }
+
+/* 安装说明 */
+.guide {
+  margin-top: 44px;
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.guide h3 { margin: 0 0 10px; font-size: 16px; }
+.guide ol { margin: 0; padding-left: 20px; color: var(--text-2); font-size: 14px; }
+.guide li { margin: 6px 0; }
+.guide code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  color: #b3195b;
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+@media (max-width: 640px) {
+  .wrap { padding: 32px 16px 72px; }
+  .latest { padding: 22px 18px; }
+  .row { flex-wrap: wrap; gap: 8px 14px; }
+  .nav a:not(.active):not(.cta) { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="/"><span class="logo">NX</span> NXMiniApp</a>
+  <nav class="nav">
+    <a href="/">首页</a>
+    <a class="active" href="/download">下载容器</a>
+    <a href="/docs/index.html">开发文档</a>
+    <a class="cta" href="/submit">我要投稿</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <div class="page-head">
+    <h1>下载 NXMiniApp 容器</h1>
+    <p>容器以 NRO 形式分发，放入 Switch 的 <code style="padding:1px 5px;border-radius:4px;background:var(--code-bg);color:#b3195b;font-family:ui-monospace,Consolas,monospace;font-size:12.5px">/switch/</code> 目录即可在 Homebrew 菜单启动。</p>
+  </div>
+
+  <div id="latestBox"></div>
+
+  <h2 class="section-title" id="historyTitle" style="display:none">历史版本 <span class="count" id="historyCount"></span></h2>
+  <div class="history" id="historyBox" style="display:none"></div>
+
+  <div class="state" id="emptyBox" style="display:none">
+    <div class="big">暂未发布容器版本</div>
+    管理员上传 NRO 后会展示在这里，也可前往
+    <a href="https://github.com/xbw12138/NXMiniApp/releases" target="_blank" rel="noopener">GitHub Releases</a> 获取。
+  </div>
+
+  <div class="state" id="loadingBox">加载中…</div>
+
+  <div class="guide">
+    <h3>安装与更新</h3>
+    <ol>
+      <li>下载最新版 <code>.nro</code> 文件，重命名为 <code>NXMiniApp.nro</code>。</li>
+      <li>拷贝到 Switch TF 卡的 <code>/switch/</code> 目录（旧版本直接覆盖即完成升级）。</li>
+      <li>通过 Homebrew 菜单启动，容器会自动连接商店检查小程序更新。</li>
+      <li>下载后可对照页面上展示的 SHA-256 校验文件完整性。</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+(function () {
+  var latestBox = document.getElementById("latestBox");
+  var historyBox = document.getElementById("historyBox");
+  var historyTitle = document.getElementById("historyTitle");
+  var historyCount = document.getElementById("historyCount");
+  var emptyBox = document.getElementById("emptyBox");
+  var loadingBox = document.getElementById("loadingBox");
+
+  function fmtSize(n) {
+    n = Number(n) || 0;
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+    if (n >= 1024) return (n / 1024).toFixed(0) + " KB";
+    return n + " B";
+  }
+  function fmtDate(ms) {
+    var d = new Date(Number(ms));
+    var p = function (v) { return String(v).padStart(2, "0"); };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  }
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function renderLatest(r) {
+    latestBox.innerHTML =
+      '<div class="latest">' +
+        '<span class="tag">最新版</span>' +
+        '<h2>v' + esc(r.version) + '</h2>' +
+        '<div class="meta"><span>' + fmtDate(r.created_at) + '</span>' +
+          '<span>' + fmtSize(r.size) + '</span>' +
+          '<span>' + (r.downloads || 0) + ' 次下载</span></div>' +
+        (r.notes ? '<div class="notes">' + esc(r.notes) + '</div>' : '') +
+        '<a class="btn" href="' + r.download_url + '">' +
+          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' +
+          '下载 .nro</a>' +
+        (r.sha256 ? '<div class="sha">SHA-256: ' + esc(r.sha256) + '</div>' : '') +
+      '</div>';
+  }
+
+  function renderHistory(items) {
+    historyBox.innerHTML = items.map(function (r, i) {
+      return '<div class="row">' +
+        '<span class="ver">v' + esc(r.version) + (i === 0 ? '<span class="badge-latest">最新</span>' : '') + '</span>' +
+        '<span class="info">' +
+          (r.notes ? '<div class="notes">' + esc(r.notes) + '</div>' : '') +
+          '<div class="meta"><span>' + fmtDate(r.created_at) + '</span>' +
+            '<span>' + fmtSize(r.size) + '</span>' +
+            '<span>' + (r.downloads || 0) + ' 次下载</span></div>' +
+        '</span>' +
+        '<a class="dl" href="' + r.download_url + '">下载</a>' +
+      '</div>';
+    }).join("");
+  }
+
+  fetch("/api/v1/container/releases")
+    .then(function (r) { return r.ok ? r.json() : { items: [] }; })
+    .then(function (d) {
+      loadingBox.style.display = "none";
+      var items = (d && d.items) || [];
+      if (!items.length) {
+        emptyBox.style.display = "block";
+        return;
+      }
+      renderLatest(items[0]);
+      historyTitle.style.display = "flex";
+      historyCount.textContent = "共 " + items.length + " 个版本";
+      historyBox.style.display = "block";
+      renderHistory(items);
+    })
+    .catch(function () {
+      loadingBox.textContent = "加载失败，请稍后刷新重试";
+    });
+})();
+</script>
+</body>
+</html>

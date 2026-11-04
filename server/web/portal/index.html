@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NXMiniApp · Switch 小程序容器</title>
+<style>
+:root {
+  --accent: #07c160;
+  --accent-soft: #e8f8ee;
+  --text: #1f2328;
+  --text-2: #57606a;
+  --text-3: #8b949e;
+  --bg: #ffffff;
+  --bg-side: #fafafa;
+  --border: #e6e8eb;
+  --code-bg: #f6f8fa;
+  --radius: 10px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.75 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 60px;
+  padding: 0 28px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #0ddc78, #07a34b);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.nav a {
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: var(--text-2);
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s;
+}
+.nav a:hover { background: var(--bg-side); color: var(--text); }
+.nav a.active { background: var(--accent-soft); color: #067a3f; font-weight: 600; }
+.nav a.cta {
+  margin-left: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.nav a.cta:hover { background: #06ad57; }
+
+/* ---------- Hero ---------- */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 96px 28px 88px;
+  text-align: center;
+  background:
+    radial-gradient(640px 320px at 18% 0%, rgba(13, 220, 120, 0.12), transparent 65%),
+    radial-gradient(720px 360px at 85% 12%, rgba(7, 193, 96, 0.10), transparent 60%),
+    var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.hero .badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+  border: 1px solid #bfe8d0;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: #067a3f;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.hero .badge-pill .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(7, 193, 96, 0.18);
+}
+.hero h1 {
+  margin: 22px 0 14px;
+  font-size: 46px;
+  line-height: 1.25;
+  letter-spacing: -0.5px;
+}
+.hero h1 .grad {
+  background: linear-gradient(120deg, #0ddc78, #07a34b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero .lead {
+  max-width: 680px;
+  margin: 0 auto;
+  color: var(--text-2);
+  font-size: 16px;
+}
+.hero .actions {
+  margin-top: 34px;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 26px;
+  border-radius: 9px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn.primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(7, 193, 96, 0.28);
+}
+.btn.primary:hover { background: #06ad57; box-shadow: 0 8px 22px rgba(7, 193, 96, 0.34); }
+.btn.ghost {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+}
+.btn.ghost:hover { border-color: var(--accent); color: #067a3f; }
+.hero .stats {
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+  gap: 36px;
+  flex-wrap: wrap;
+}
+.stat { text-align: center; }
+.stat .num { font-size: 26px; font-weight: 700; line-height: 1.2; }
+.stat .cap { margin-top: 2px; font-size: 13px; color: var(--text-3); }
+.stat .num.loading { color: var(--text-3); }
+
+/* ---------- 分区 ---------- */
+.section {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 72px 28px 0;
+}
+.section h2 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  letter-spacing: -0.2px;
+  text-align: center;
+}
+.section .sub {
+  margin: 0 0 36px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+/* 渲染管线 */
+.pipeline {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+.pipe {
+  flex: 1 1 150px;
+  max-width: 200px;
+  padding: 18px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  text-align: center;
+}
+.pipe .t { font-size: 15px; font-weight: 600; }
+.pipe .d { margin-top: 4px; font-size: 12.5px; color: var(--text-3); }
+.pipe-arrow {
+  align-self: center;
+  padding: 0 10px;
+  color: var(--text-3);
+  font-size: 18px;
+}
+
+/* 能力卡片 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.card {
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.card:hover {
+  border-color: #bfe8d0;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(31, 35, 40, 0.06);
+}
+.card .icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: #07a34b;
+}
+.card .icon svg { width: 21px; height: 21px; }
+.card h3 { margin: 14px 0 6px; font-size: 16px; }
+.card p { margin: 0; color: var(--text-2); font-size: 13.5px; line-height: 1.7; }
+
+/* 上架流程 */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  counter-reset: step;
+}
+.step {
+  position: relative;
+  padding: 22px 20px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.step::before {
+  counter-increment: step;
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #e3f5ea;
+}
+.step .t { font-size: 15px; font-weight: 600; }
+.step .d { margin-top: 6px; font-size: 13px; color: var(--text-2); line-height: 1.7; }
+.step code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  color: #b3195b;
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+/* AI Skill 区 */
+.skill {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin-top: 16px;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+.skill .txt { flex: 1 1 auto; min-width: 0; }
+.skill .txt h3 { margin: 0 0 8px; font-size: 18px; }
+.skill .txt p { margin: 0 0 14px; color: var(--text-2); font-size: 14px; }
+.skill .txt .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.skill .code {
+  flex: 0 0 320px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--code-bg);
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #24292f;
+  overflow-x: auto;
+}
+@media (max-width: 900px) {
+  .skill { flex-direction: column; align-items: stretch; }
+  .skill .code { flex-basis: auto; }
+}
+
+/* CTA 横幅 */
+.banner {
+  margin-top: 72px;
+  padding: 44px 32px;
+  border-radius: 14px;
+  background: linear-gradient(120deg, #07a34b, #0ddc78);
+  color: #fff;
+  text-align: center;
+}
+.banner h2 { margin: 0 0 8px; font-size: 24px; }
+.banner p { margin: 0 0 24px; opacity: 0.92; font-size: 14.5px; }
+.banner .btn {
+  background: #fff;
+  color: #067a3f;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+.banner .btn:hover { transform: translateY(-1px); }
+
+/* ---------- 页脚 ---------- */
+.footer {
+  margin-top: 80px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-side);
+}
+.footer-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.footer a { color: var(--text-2); }
+.footer a:hover { color: var(--accent); }
+.footer .links { display: flex; gap: 18px; }
+
+@media (max-width: 900px) {
+  .hero { padding: 64px 20px 56px; }
+  .hero h1 { font-size: 32px; }
+  .grid, .steps { grid-template-columns: 1fr 1fr; }
+  .pipe-arrow { display: none; }
+  .pipeline { gap: 12px; }
+}
+@media (max-width: 560px) {
+  .grid, .steps { grid-template-columns: 1fr; }
+  .nav a:not(.cta):not(.active) { display: none; }
+  .hero .stats { gap: 22px; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="/"><span class="logo">NX</span> NXMiniApp</a>
+  <nav class="nav">
+    <a class="active" href="/">首页</a>
+    <a href="/download">下载容器</a>
+    <a href="/docs/index.html">开发文档</a>
+    <a href="/admin">管理后台</a>
+    <a class="cta" href="/submit">我要投稿</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <span class="badge-pill"><span class="dot"></span>Nintendo Switch / 桌面端小程序容器</span>
+  <h1>把<span class="grad">小程序</span>带进 Switch</h1>
+  <p class="lead">
+    NXMiniApp 是一个免 webview 的小程序容器：用 WXML 描述结构、WXSS 子集描述样式，
+    JS 由 QuickJS 常驻执行，经 Yoga 排版、NanoVG 原生绘制。
+    写一次微信小程序风格的代码，就能在 Switch 上以原生性能运行。
+  </p>
+  <div class="actions">
+    <a class="btn primary" href="/docs/index.html">
+      浏览开发文档
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+    <a class="btn ghost" href="/submit">投稿我的小程序</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="num">22</div><div class="cap">内置标签 / 组件</div></div>
+    <div class="stat"><div class="num">36</div><div class="cap">可用 wx.* API</div></div>
+    <div class="stat"><div class="num">6</div><div class="cap">页面生命周期</div></div>
+    <div class="stat"><div class="num loading" id="publishedCount">–</div><div class="cap">已上架小程序</div></div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>原生渲染管线</h2>
+  <p class="sub">不经过浏览器内核，每一步都在设备上原生执行</p>
+  <div class="pipeline">
+    <div class="pipe"><div class="t">WXML / WXSS</div><div class="d">微信小程序子集语法</div></div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe"><div class="t">QuickJS</div><div class="d">常驻 JS 运行时</div></div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe"><div class="t">Yoga</div><div class="d">Flex 布局排版</div></div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe"><div class="t">NanoVG</div><div class="d">GPU 原生绘制</div></div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe"><div class="t">Switch / 桌面</div><div class="d">60fps 流畅运行</div></div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>容器能力</h2>
+  <p class="sub">覆盖小程序开发的常用场景，行为以开发文档为准</p>
+  <div class="grid">
+    <div class="card">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/></svg></span>
+      <h3>22 类内置标签</h3>
+      <p>view、text、image、button、scroll-view、swiper、video 等常用组件开箱即用，未知标签自动降级为 view。</p>
+    </div>
+    <div class="card">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none"><path d="M8 6 3 12l5 6M16 6l5 6-5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <h3>模板与数据绑定</h3>
+      <p>支持 {{ }} 插值、wx:if / wx:for 指令、模板表达式，通过 setData 增量驱动界面重绘。</p>
+    </div>
+    <div class="card">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-10.8-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></span>
+      <h3>QuickJS 常驻运行时</h3>
+      <p>每个页面独立 JS 上下文，支持 Page / App、async / await、Promise 与定时器，生命周期完整。</p>
+    </div>
+    <div class="card">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 17V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" stroke="currentColor" stroke-width="1.8"/><path d="m9 9-2.5 3L9 15m6-6 2.5 3L15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <h3>36 个 wx.* API</h3>
+      <p>网络、存储、导航、振动、系统信息等接口真实可用，另有 18 个兼容占位接口便于迁移。</p>
+    </div>
+    <div class="card">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="m10.5 9.5 4.5 2.5-4.5 2.5v-5Z" fill="currentColor"/></svg></span>
+      <h3>视频播放</h3>
+      <p>内置 video 组件，支持播放 / 暂停 / 进度事件，在启用 MPV 的构建上可真实播放视频流。</p>
+    </div>
+    <div class="card">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16l-1.2 12.2a2 2 0 0 1-2 1.8H7.2a2 2 0 0 1-2-1.8L4 7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.5 10V6a3.5 3.5 0 0 1 7 0v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+      <h3>商店式启动器</h3>
+      <p>商店与启动器一体，HOME 菜单即开即玩；自动检查更新，上架后全平台用户即时可见。</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>四步上架你的小程序</h2>
+  <p class="sub">投稿免登录，管理员审核通过后自动出现在商店</p>
+  <div class="steps">
+    <div class="step">
+      <div class="t">按子集开发</div>
+      <div class="d">参照<a href="/docs/index.html">开发文档</a>编写页面：WXML 结构 + WXSS 样式 + JS 逻辑，入口配置在 <code>app.json</code>。</div>
+    </div>
+    <div class="step">
+      <div class="t">打包</div>
+      <div class="d">把整个目录（含 <code>app.json</code> 于包根）压缩为 <code>.zip</code> 或 <code>.nxpkg</code>，大小不超过 32MB。</div>
+    </div>
+    <div class="step">
+      <div class="t">在线投稿</div>
+      <div class="d">打开<a href="/submit">投稿页</a>填写名称、简介并上传安装包，无需注册账号。</div>
+    </div>
+    <div class="step">
+      <div class="t">审核上架</div>
+      <div class="d">管理员在后台审核内容，通过后设为已发布，Switch 商店内即刻可下载体验。</div>
+    </div>
+  </div>
+
+</section>
+
+<section class="section">
+  <h2>用 AI 辅助开发</h2>
+  <p class="sub">配套 Skill 已内置容器全部子集规范，让 AI 帮你写对的小程序</p>
+  <div class="skill">
+    <div class="txt">
+      <h3>nxminiapp-dev 开发技能</h3>
+      <p>
+        把 Skill 装进 Trae / Claude Code 等支持技能的 IDE，AI 即可按容器规范工作：
+        只使用 22 类可用标签与 36 个 wx.* API，按 app.json 规范组织目录，
+        自动完成打包与投稿，避开 webview / canvas 等不支持的特性。
+      </p>
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/xbw12138/NXMiniApp/tree/main/skill/nxminiapp-dev" target="_blank" rel="noopener">获取 Skill</a>
+        <a class="btn ghost" href="/docs/index.html">查看开发文档</a>
+      </div>
+    </div>
+    <pre class="code"># 安装到当前项目
+cp -r skill/nxminiapp-dev \
+  your-project/.trae/skills/
+
+# 然后直接告诉 AI
+"帮我做一个 Switch 小程序：
+ 一个记账本"  </pre>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="banner">
+    <h2>准备好你的小程序了吗？</h2>
+    <p>打包上传，让 Switch 玩家在商店里看到你的作品。</p>
+    <a class="btn" href="/submit">立即投稿</a>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>NXMiniApp · 开源 Switch 小程序容器</span>
+    <span class="links">
+      <a href="/download">下载容器</a>
+      <a href="/docs/index.html">开发文档</a>
+      <a href="/docs/guide/structure.html">目录结构</a>
+      <a href="/docs/reference/store.html">商店规范</a>
+      <a href="/admin">管理后台</a>
+      <a href="https://github.com/xbw12138/NXMiniApp" target="_blank" rel="noopener">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+fetch("/api/v1/miniapps")
+  .then(function (r) { return r.ok ? r.json() : null; })
+  .then(function (d) {
+    var el = document.getElementById("publishedCount");
+    if (d && Array.isArray(d.items)) {
+      el.textContent = d.items.length;
+      el.classList.remove("loading");
+    }
+  })
+  .catch(function () {});
+</script>
+</body>
+</html>

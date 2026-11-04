@@ -23,6 +23,7 @@
       <OverviewTab v-if="tab === 'overview'" />
       <AppsTab v-else-if="tab === 'apps'" />
       <MiniAppsTab v-else-if="tab === 'miniapps'" />
+      <ReleasesTab v-else-if="tab === 'releases'" />
       <DocsTab v-else />
     </main>
   </div>
@@ -35,12 +36,14 @@ import LoginView from './components/LoginView.vue'
 import OverviewTab from './components/OverviewTab.vue'
 import AppsTab from './components/AppsTab.vue'
 import MiniAppsTab from './components/MiniAppsTab.vue'
+import ReleasesTab from './components/ReleasesTab.vue'
 import DocsTab from './components/DocsTab.vue'
 
 const tabs = [
   { key: 'overview', label: '概览' },
   { key: 'apps', label: '商店应用' },
   { key: 'miniapps', label: '小程序' },
+  { key: 'releases', label: '容器版本' },
   { key: 'docs', label: '文档' }
 ]
 

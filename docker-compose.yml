@@ -19,10 +19,10 @@ services:
       context: .
       dockerfile: server/Dockerfile
     ports:
-      - "8080:8080"
+      - "80:8080"
     environment:
       DB_DSN: nxkit:nxkit@tcp(mysql:3306)/nxkit_store?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci
-      NXKIT_ADMIN_TOKEN: ${NXKIT_ADMIN_TOKEN:-nxkit-store-admin}
+      NXKIT_ADMIN_TOKEN: ${NXKIT_ADMIN_TOKEN:-xbw12138}
       NXKIT_DATA_DIR: /data
     volumes:
       - server-data:/data

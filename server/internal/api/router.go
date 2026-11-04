@@ -45,13 +45,17 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 	v1.GET("/miniapps/:id", e.MiniAppDetail)
 	v1.GET("/miniapps/:id/download", e.DownloadMiniApp)
 	v1.GET("/miniapps/:id/icon", e.MiniAppIcon)
+	v1.POST("/submissions", e.SubmitMiniApp)
+	v1.GET("/container/releases", e.ListContainerReleases)
+	v1.GET("/container/releases/:id/download", e.DownloadContainerRelease)
 
 	r.Static("/media/icons", cfg.IconsDir())
 	r.Static("/media/screenshots", cfg.ScreenshotsDir())
 
-	r.GET("/", func(c *gin.Context) {
-		c.Redirect(http.StatusFound, "/admin")
-	})
+	// 门户首页与投稿页（嵌入静态页，优先于 SPA 兜底路由）。
+	r.GET("/", func(c *gin.Context) { servePortal(c, "index.html") })
+	r.GET("/submit", func(c *gin.Context) { servePortal(c, "submit.html") })
+	r.GET("/download", func(c *gin.Context) { servePortal(c, "download.html") })
 
 	// 文档站：页面内容在数据库，assets 静态文件在 DocsDir。
 	docs.Register(r, db, cfg.DocsDir)

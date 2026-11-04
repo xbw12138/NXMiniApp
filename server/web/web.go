@@ -10,7 +10,15 @@ import (
 //go:embed admin/dist
 var dist embed.FS
 
+//go:embed portal
+var portal embed.FS
+
 // Dist returns the admin SPA build output rooted at the dist directory.
 func Dist() (fs.FS, error) {
 	return fs.Sub(dist, "admin/dist")
+}
+
+// Portal returns the embedded landing/submission pages rooted at portal.
+func Portal() (fs.FS, error) {
+	return fs.Sub(portal, "portal")
 }
