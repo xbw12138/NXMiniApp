@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WXSS 子集 · NXMiniApp 小程序开发文档</title>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="logo">NX</span> 小程序开发文档</a>
+  <span class="topbar-meta">Flex · rpx · 选择器</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <h1>WXSS 子集</h1>
+    <p class="lead">
+      样式由容器自己解析并映射到 Yoga / NanoVG。<code>app.wxss</code> 全局生效，
+      页面 <code>.wxss</code> 后应用，内联 <code>style</code> 优先级最高。
+    </p>
+
+    <h2>选择器</h2>
+    <table>
+      <thead><tr><th>写法</th><th>示例</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>标签</td><td><code>text</code></td><td>按标签名匹配</td></tr>
+        <tr><td>类</td><td><code>.card</code></td><td>支持多个类名</td></tr>
+        <tr><td>ID</td><td><code>#hero</code></td><td>匹配 <code>id</code></td></tr>
+        <tr><td>后代</td><td><code>.card .btn</code></td><td>空格分隔，逐级向上查找</td></tr>
+      </tbody>
+    </table>
+    <div class="warn">
+      <strong>不支持：</strong>子代选择器 <code>&gt;</code>、逗号分组 <code>.a, .b</code>、伪类
+      <code>:first-child</code>、<code>::before</code>、媒体查询、动画、<code>@import</code>。
+    </div>
+
+    <h2>单位</h2>
+    <p>
+      <code>rpx</code> 以 750 设计稿为基准，逻辑画布固定 1280×720，换算比例约 0.853。
+      也支持 <code>px</code>（逻辑像素）与百分比 <code>%</code>，百分比用于宽高、flex-basis、min/max 尺寸。
+    </p>
+
+    <h2>布局属性</h2>
+    <table>
+      <thead><tr><th>属性</th><th>取值</th></tr></thead>
+      <tbody>
+        <tr><td><code>display</code></td><td><code>flex</code>、<code>none</code></td></tr>
+        <tr><td><code>flex-direction</code></td><td><code>row</code>、<code>column</code>（默认）</td></tr>
+        <tr><td><code>justify-content</code></td><td><code>flex-start</code>、<code>center</code>、<code>flex-end</code>、<code>space-between</code>、<code>space-around</code></td></tr>
+        <tr><td><code>align-items</code> / <code>align-self</code></td><td><code>stretch</code>、<code>flex-start</code>、<code>center</code>、<code>flex-end</code></td></tr>
+        <tr><td><code>flex</code></td><td>CSS 语义简写：<code>flex: 1</code> → grow 1 / shrink 1 / basis 0</td></tr>
+        <tr><td><code>flex-grow</code> / <code>flex-shrink</code> / <code>flex-basis</code></td><td>数值或长度</td></tr>
+        <tr><td><code>gap</code> / <code>column-gap</code></td><td>子元素间距</td></tr>
+        <tr><td><code>width</code> / <code>height</code></td><td>长度或百分比</td></tr>
+        <tr><td><code>min-width</code> / <code>min-height</code> / <code>max-width</code> / <code>max-height</code></td><td>长度或百分比</td></tr>
+        <tr><td><code>padding</code> 及四边</td><td>1–4 值简写，长度</td></tr>
+        <tr><td><code>margin</code> 及四边</td><td>1–4 值简写，长度</td></tr>
+        <tr><td><code>position</code></td><td><code>absolute</code>（配合 <code>top/right/bottom/left</code>）</td></tr>
+        <tr><td><code>overflow</code> / <code>overflow-x</code> / <code>overflow-y</code></td><td><code>hidden</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>外观属性</h2>
+    <table>
+      <thead><tr><th>属性</th><th>取值</th></tr></thead>
+      <tbody>
+        <tr><td><code>background</code> / <code>background-color</code></td><td>颜色（<code>#RGB</code>、<code>#RRGGBB</code>、<code>#RRGGBBAA</code>、<code>rgb()</code>、<code>rgba()</code>、常用命名色）</td></tr>
+        <tr><td><code>border</code></td><td><code>[width] [style] [color]</code>，style 仅保留宽度与颜色</td></tr>
+        <tr><td><code>border-color</code> / <code>border-width</code></td><td>颜色 / 长度</td></tr>
+        <tr><td><code>border-radius</code></td><td>长度，支持四角简写</td></tr>
+        <tr><td><code>opacity</code></td><td>0–1</td></tr>
+        <tr><td><code>box-shadow</code></td><td><code>x y blur color</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>文本属性</h2>
+    <table>
+      <thead><tr><th>属性</th><th>取值</th></tr></thead>
+      <tbody>
+        <tr><td><code>color</code></td><td>颜色</td></tr>
+        <tr><td><code>font-size</code></td><td>长度，默认 28rpx</td></tr>
+        <tr><td><code>font-weight</code></td><td><code>bold</code> 或数值 ≥ 600</td></tr>
+        <tr><td><code>line-height</code></td><td>倍数或无单位数值</td></tr>
+        <tr><td><code>text-align</code></td><td><code>left</code>、<code>center</code>、<code>right</code></td></tr>
+      </tbody>
+    </table>
+    <p>文本相关属性会沿节点树继承；布局与外观属性不会继承。</p>
+
+    <h2>命名颜色</h2>
+    <p>
+      除 <code>#hex</code> 与 <code>rgb()/rgba()</code> 外，还支持
+      <code>white</code>、<code>black</code>、<code>red</code>、<code>green</code>、
+      <code>blue</code>、<code>gray</code>、<code>lightgray</code>、<code>darkgray</code>、
+      <code>orange</code>、<code>yellow</code>、<code>purple</code>、<code>pink</code>、
+      <code>cyan</code>、<code>teal</code>、<code>brown</code> 等。
+    </p>
+
+    <h2>示例</h2>
+<pre><code>.card {
+  background: #1c1e22;
+  border-radius: 18rpx;
+  padding: 24rpx;
+  margin-bottom: 18rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.35);
+}
+
+.row {
+  flex-direction: row;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.panel {
+  flex: 1;
+  min-width: 0;
+}</code></pre>
+
+    <div class="foot">属性解析位于 <code>client/apps/miniapp/source/style.cpp</code>，
+      选择器位于 <code>wxss.cpp</code>。</div>
+  </main>
+</div>
+
+<script src="../assets/nav.js"></script>
+</body>
+</html>

@@ -9,9 +9,24 @@ NXMiniApp/
 │   ├── core/          # NXKit 核心（HTTP、配置、UI 组件）
 │   ├── library/       # borealis / QuickJS / Yoga 等
 │   └── resources/     # 字体、图标、示例小程序包
+├── docs/              # 小程序开发文档站（组件 / 样式 / API / 指南）
 ├── server/            # Go + Gin + GORM + MySQL 服务端与管理后台
 └── docker-compose.yml # MySQL + 服务端一键启动
 ```
+
+## 开发文档
+
+小程序能力手册在 [docs/index.html](docs/index.html)，按微信官方文档的结构组织：指南、组件、样式、API、参考。
+直接双击打开即可，也可以起一个静态服务：
+
+```bash
+python3 -m http.server 8090 --directory docs
+# 打开 http://127.0.0.1:8090
+```
+
+当前对齐范围（与微信对比）：21 类内置标签（含 scroll-view / swiper / 表单控件 / progress / rich-text / icon）、
+模板指令 `wx:for` / `wx:if` / `wx:elif` / `wx:else`、完整 JS 运行时常驻与 `setData`、页面栈与路由、
+35 个可用的 `wx.*` API 和 18 个兼容占位接口。详细边界见文档的「与微信的差异」。
 
 ## 服务端（Docker，推荐）
 

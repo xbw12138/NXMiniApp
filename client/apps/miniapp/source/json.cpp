@@ -6,8 +6,10 @@
 
 #include <cctype>
 #include <cerrno>
+#include <cstdio>
 #include <cmath>
 #include <cstdlib>
+#include <sstream>
 #include <utility>
 
 namespace miniapp {
@@ -355,9 +357,101 @@ const JsonValue* JsonValue::find(const std::string& key) const {
     return it == objectValue.end() ? nullptr : &it->second;
 }
 
+void JsonValue::setMember(const std::string& key, JsonValue value) {
+    if (valueType != Type::Object) {
+        valueType = Type::Object;
+        objectValue.clear();
+    }
+    objectValue[key] = std::move(value);
+}
+
 JsonValue parseJson(const std::string& source, std::string* error) {
     Parser parser(source);
     return parser.parse(error);
+}
+
+namespace {
+
+void appendJsonString(std::string& out, const std::string& text) {
+    out.push_back('"');
+    for (char c : text) {
+        switch (c) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\b': out += "\\b"; break;
+            case '\f': out += "\\f"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char buffer[7];
+                    std::snprintf(buffer, sizeof(buffer), "\\u%04x",
+                                  static_cast<unsigned>(c));
+                    out += buffer;
+                } else {
+                    out.push_back(c);
+                }
+        }
+    }
+    out.push_back('"');
+}
+
+void appendJson(std::string& out, const JsonValue& value) {
+    switch (value.type()) {
+        case JsonValue::Type::Null:
+            out += "null";
+            break;
+        case JsonValue::Type::Bool:
+            out += value.asBool() ? "true" : "false";
+            break;
+        case JsonValue::Type::Number: {
+            double number = value.asNumber();
+            if (!std::isfinite(number)) {
+                out += "null";
+                break;
+            }
+            std::ostringstream stream;
+            stream.precision(15);
+            stream << number;
+            out += stream.str();
+            break;
+        }
+        case JsonValue::Type::String:
+            appendJsonString(out, value.asString());
+            break;
+        case JsonValue::Type::Array: {
+            out.push_back('[');
+            const auto& items = value.asArray();
+            for (size_t i = 0; i < items.size(); ++i) {
+                if (i) out.push_back(',');
+                appendJson(out, items[i]);
+            }
+            out.push_back(']');
+            break;
+        }
+        case JsonValue::Type::Object: {
+            out.push_back('{');
+            bool first = true;
+            for (const auto& entry : value.asObject()) {
+                if (!first) out.push_back(',');
+                first = false;
+                appendJsonString(out, entry.first);
+                out.push_back(':');
+                appendJson(out, entry.second);
+            }
+            out.push_back('}');
+            break;
+        }
+    }
+}
+
+}  // namespace
+
+std::string toJsonString(const JsonValue& value) {
+    std::string out;
+    appendJson(out, value);
+    return out;
 }
 
 }  // namespace miniapp

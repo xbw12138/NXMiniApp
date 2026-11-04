@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WXML 与数据绑定 · NXMiniApp 小程序开发文档</title>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="logo">NX</span> 小程序开发文档</a>
+  <span class="topbar-meta">模板 · 指令 · 事件</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <h1>WXML 与数据绑定</h1>
+    <p class="lead">
+      WXML 描述页面结构。容器解析标签、属性与文本，把 <code>{{}}</code> 表达式求值后生成渲染节点，
+      再交给 Yoga 与 NanoVG。没有自定义组件与 <code>&lt;template&gt;</code> / <code>&lt;import&gt;</code>。
+    </p>
+
+    <h2>数据绑定</h2>
+    <p>属性值与文本都可以使用 <code>{{}}</code>，表达式在页面数据作用域内求值：</p>
+<pre><code>&lt;text&gt;{{title}}&lt;/text&gt;
+&lt;text&gt;{{count + 1}}&lt;/text&gt;
+&lt;text&gt;{{user.name}}&lt;/text&gt;
+&lt;image src="{{avatar}}" mode="aspectFit"/&gt;
+&lt;view style="width: {{width}}rpx;"&gt;&lt;/view&gt;</code></pre>
+    <p>
+      支持点路径、数组下标、<code>.length</code>、四则运算、比较、逻辑运算与三元表达式。
+      由于使用 JS 表达式求值，也可以调用 <code>JSON.stringify</code> 等全局函数。
+    </p>
+
+    <h2>条件渲染</h2>
+    <p>
+      <code>wx:if</code>、<code>wx:elif</code>、<code>wx:else</code> 按同级顺序组成条件链。
+      条件为假时不创建节点，也不参与布局。没有 <code>hidden</code> 属性。
+    </p>
+<pre><code>&lt;view wx:if="{{score &gt;= 90}}"&gt;优秀&lt;/view&gt;
+&lt;view wx:elif="{{score &gt;= 70}}"&gt;良好&lt;/view&gt;
+&lt;view wx:else&gt;继续加油&lt;/view&gt;</code></pre>
+
+    <h2>列表渲染</h2>
+    <p>
+      <code>wx:for</code> 遍历数组，默认变量名为 <code>item</code>、<code>index</code>，
+      可用 <code>wx:for-item</code> / <code>wx:for-index</code> 改名。
+      <code>wx:key</code> 可以写但当前不影响 diff —— 容器每次按数据重建节点树。
+    </p>
+<pre><code>&lt;view wx:for="{{items}}" wx:key="id" wx:for-item="row" wx:for-index="i"&gt;
+  &lt;text&gt;{{i + 1}}. {{row.name}} — {{row.score}}&lt;/text&gt;
+&lt;/view&gt;</code></pre>
+
+    <h2>事件绑定</h2>
+    <table>
+      <thead><tr><th>属性</th><th>事件类型</th><th>适用组件</th></tr></thead>
+      <tbody>
+        <tr><td><code>bindtap</code></td><td><code>tap</code></td><td>所有组件</td></tr>
+        <tr><td><code>bindchange</code></td><td><code>change</code></td><td>switch / checkbox / radio / slider</td></tr>
+        <tr><td><code>bindinput</code></td><td><code>input</code></td><td>input / textarea</td></tr>
+        <tr><td><code>bindconfirm</code></td><td><code>confirm</code></td><td>input / textarea</td></tr>
+      </tbody>
+    </table>
+    <p>
+      <code>data-*</code> 会挂到事件对象的 <code>dataset</code> 上，属性名转为 camelCase：
+      <code>data-user-id</code> → <code>dataset.userId</code>。
+    </p>
+<pre><code>&lt;view data-id="{{item.id}}" bindtap="onPick"&gt;选择&lt;/view&gt;
+
+onPick(e) {
+  this.setData({ picked: e.currentTarget.dataset.id });
+}</code></pre>
+    <div class="warn">
+      <strong>限制：</strong>没有冒泡与捕获阶段的区分，<code>catchtap</code> 与
+      <code>bind:tap</code> 写法未实现；请使用 <code>bindtap</code>。
+    </div>
+
+    <h2>class 与 style</h2>
+    <p>
+      <code>class</code> 支持多个类名与 <code>{{}}</code> 插值，按 WXSS 选择器匹配；
+      <code>style</code> 为内联声明，同样支持插值。内联样式优先级最高。
+    </p>
+<pre><code>&lt;view class="card {{active ? 'card-active' : ''}}" style="opacity: {{dim}};"&gt;&lt;/view&gt;</code></pre>
+
+    <h2>未知标签</h2>
+    <p>
+      未在组件表中登记的标签会降级为 <code>view</code>，子节点照常渲染。
+      <code>block</code> 不生成节点，只展开子节点。
+    </p>
+
+    <div class="foot">解析器位于 <code>client/apps/miniapp/source/wxml_parser.cpp</code>，
+      构建逻辑位于 <code>miniapp_view.cpp</code> 的 <code>buildElement</code>。</div>
+  </main>
+</div>
+
+<script src="../assets/nav.js"></script>
+</body>
+</html>

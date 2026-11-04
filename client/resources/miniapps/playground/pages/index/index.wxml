@@ -1,0 +1,106 @@
+<view class="page">
+  <view class="header">
+    <view class="header-row">
+      <text class="title">NX MiniApp Playground</text>
+      <text class="badge">{{count}}</text>
+    </view>
+    <text class="hint">A 触发 / B 返回 / 十字键切换焦点</text>
+  </view>
+
+  <view class="body">
+    <scroll-view class="panel" scroll-y="{{true}}" style="height: 100%;">
+      <view class="card">
+        <text class="card-title">事件与 setData</text>
+        <view class="row">
+          <button class="btn" bindtap="onAdd">+1 计数</button>
+          <button class="btn btn-ghost" bindtap="onToast">Toast</button>
+        </view>
+        <view class="row">
+          <button class="btn btn-ghost" bindtap="onModal">Modal</button>
+          <button class="btn btn-ghost" bindtap="onLoading">Loading</button>
+        </view>
+        <text class="hint">count = {{count}} · 定时器 2 秒自增</text>
+      </view>
+
+      <view class="card">
+        <text class="card-title">表单组件</text>
+        <view class="row">
+          <text class="label">开关</text>
+          <switch checked="{{enabled}}" bindchange="onSwitch"/>
+          <text class="tiny">{{enabled ? '已开启' : '已关闭'}}</text>
+        </view>
+        <view class="row">
+          <text class="label">复选框</text>
+          <checkbox checked="{{accept}}" bindchange="onCheckbox"/>
+          <text class="tiny">{{accept ? '已同意' : '未同意'}}</text>
+        </view>
+        <view class="row">
+          <text class="label">单选</text>
+          <radio-group class="row">
+            <radio name="plan" checked="{{plan === 'a'}}" data-value="a" bindchange="onRadio"/>
+            <text class="tiny">方案 A</text>
+            <radio name="plan" checked="{{plan === 'b'}}" data-value="b" bindchange="onRadio"/>
+            <text class="tiny">方案 B</text>
+          </radio-group>
+        </view>
+        <view class="row">
+          <text class="label">音量</text>
+          <slider min="{{0}}" max="{{100}}" step="{{10}}" value="{{volume}}" bindchange="onSlider"/>
+        </view>
+        <input class="input" value="{{nick}}" placeholder="输入昵称" bindinput="onInput" bindconfirm="onConfirm"/>
+      </view>
+
+      <view class="card">
+        <text class="card-title">列表与表达式</text>
+        <view wx:for="{{items}}" wx:key="name"
+              class="list-item {{index % 2 === 0 ? 'list-even' : ''}}">
+          <text class="list-name">{{index + 1}}. {{item.name}}</text>
+          <text class="list-value">{{item.score >= 90 ? '优秀' : item.score >= 70 ? '良好' : '加油'}}</text>
+        </view>
+        <view wx:if="{{items.length === 0}}">
+          <text class="hint">暂无数据</text>
+        </view>
+        <view wx:else>
+          <text class="hint">共 {{items.length}} 项</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <scroll-view class="panel panel-right" scroll-y="{{true}}" style="height: 100%;">
+      <view class="card">
+        <text class="card-title">Swiper 自动轮播</text>
+        <swiper autoplay="{{true}}" interval="{{3000}}" class="swiper">
+          <swiper-item><view class="slide slide-a"><text>第一屏</text></view></swiper-item>
+          <swiper-item><view class="slide slide-b"><text>第二屏</text></view></swiper-item>
+          <swiper-item><view class="slide slide-c"><text>第三屏</text></view></swiper-item>
+        </swiper>
+      </view>
+
+      <view class="card">
+        <text class="card-title">更多基础组件</text>
+        <view class="row">
+          <icon type="success" size="48"/>
+          <icon type="warn" size="48"/>
+          <icon type="cancel" size="48"/>
+          <icon type="download" size="48"/>
+        </view>
+        <progress percent="{{volume}}" activeColor="#22c55e" class="progress"/>
+        <rich-text nodes="{{richNodes}}" class="hint"/>
+        <textarea class="input area-input" placeholder="多行输入（textarea）" bindinput="onInput" bindconfirm="onConfirm"/>
+      </view>
+
+      <view class="card">
+        <text class="card-title">图片 / 存储 / 系统</text>
+        <image class="logo" src="/images/logo.png" mode="aspectFit"/>
+        <text class="hint">{{systemLine}}</text>
+        <text class="hint">{{saved}}</text>
+        <view class="row">
+          <button class="btn btn-ghost" bindtap="onSave">写入存储</button>
+          <button class="btn btn-ghost" bindtap="onRead">读取存储</button>
+        </view>
+      </view>
+
+      <navigator url="/pages/detail/detail" class="nav">打开二级页面</navigator>
+    </scroll-view>
+  </view>
+</view>

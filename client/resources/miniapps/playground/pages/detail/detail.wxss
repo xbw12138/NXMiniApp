@@ -1,0 +1,6 @@
+/* detail 页面样式 */
+.detail-header {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 16rpx;
+}

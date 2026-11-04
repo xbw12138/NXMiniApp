@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>与微信的差异 · NXMiniApp 小程序开发文档</title>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="logo">NX</span> 小程序开发文档</a>
+  <span class="topbar-meta">参考 · 兼容性</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <h1>与微信小程序的差异</h1>
+    <p class="lead">
+      多数页面逻辑可以复用，但渲染模型、交互方式与可用 API 仍然是子集。下面每一条都会影响迁移结果。
+    </p>
+
+    <h2>对照表</h2>
+    <table>
+      <thead><tr><th style="width:16%">维度</th><th style="width:38%">微信小程序</th><th>NXMiniApp</th></tr></thead>
+      <tbody>
+        <tr><td>入口</td><td>微信内的发现页 / 搜索 / 分享</td><td>独立容器，先进入商店式启动器</td></tr>
+        <tr><td>分发</td><td>微信后台，自动更新</td><td>从服务端目录下载 <code>.nxpkg</code>，点击时按版本安装</td></tr>
+        <tr><td>渲染</td><td>webview + 浏览器 CSS</td><td>Yoga 排版 + NanoVG 原生绘制</td></tr>
+        <tr><td>页面</td><td>多页面 + 路由 + 页面栈</td><td>多页面 + navigateTo / navigateBack / redirectTo / reLaunch</td></tr>
+        <tr><td>数据更新</td><td><code>setData</code> 增量更新</td><td><code>setData</code> 合并后整树重建与重绘</td></tr>
+        <tr><td>交互</td><td>触摸、滚动、输入、手势</td><td>手柄焦点导航、A 激活、B 返回；桌面键盘方向键 / Enter / Backspace</td></tr>
+        <tr><td>组件</td><td>完整组件库 + 自定义组件</td><td>21 类内置标签，无自定义组件</td></tr>
+        <tr><td>事件</td><td>冒泡 / 捕获 / 完整事件对象</td><td>tap / change / input / confirm，无冒泡捕获</td></tr>
+        <tr><td>wx.* API</td><td>200+ 接口</td><td>35 个可用 + 18 个兼容占位</td></tr>
+        <tr><td>样式</td><td>完整 CSS 能力</td><td>Flex + 定位 + 阴影 + 文本属性子集</td></tr>
+        <tr><td>选择器优先级</td><td>有</td><td>无，按源码顺序覆盖</td></tr>
+        <tr><td>布局默认值</td><td><code>view</code> 为块级元素</td><td>所有盒子默认 <code>flex-direction: column</code></td></tr>
+        <tr><td>单位</td><td><code>rpx</code> 按屏幕宽换算</td><td>固定 <code>640/750</code>，与窗口宽度无关</td></tr>
+        <tr><td>图片</td><td>真实加载、支持网络图</td><td>加载包内本地图片；远程 URL 显示占位</td></tr>
+        <tr><td>文本</td><td>无行数上限</td><td>自动换行，单段建议不超过 64 行</td></tr>
+        <tr><td>字体</td><td>可加载自定义字体</td><td>仅内置常规字体，粗体为描边模拟</td></tr>
+        <tr><td>滚动</td><td>页面级滚动 + 手势</td><td><code>scroll-view</code> 由焦点导航自动滚动；无手势与滚轮</td></tr>
+        <tr><td>横竖屏</td><td>可配置</td><td>固定 16:9 横屏，1280×720 逻辑画布</td></tr>
+      </tbody>
+    </table>
+
+    <h2>迁移检查清单</h2>
+    <ol>
+      <li>补齐 <code>app.js</code> / <code>app.wxss</code>（可选），页面路径写进 <code>app.json</code> 的 <code>pages</code>。</li>
+      <li>把依赖自定义组件、<code>template</code> / <code>import</code> 的结构改写为内置标签。</li>
+      <li><code>wx:elif</code> / <code>wx:else</code> 与 <code>wx:for</code> 可以直接使用；<code>wx:key</code> 可保留但无 diff 作用。</li>
+      <li><code>bind:tap</code>、<code>catchtap</code> 改为 <code>bindtap</code>；需要阻止父级点击时拆分结构。</li>
+      <li>把未列出的 <code>wx.*</code> 调用替换为已支持接口，或加上 <code>wx.canIUse</code> 判断。</li>
+      <li>按 <a href="../style/index.html">样式章节</a> 清理伪类、动画、渐变、媒体查询与子代选择器。</li>
+      <li>布局默认是 <code>column</code>；需要横排时显式写 <code>flex-direction: row</code>。</li>
+      <li>按 1280×720 重新排版；超出一屏的内容放进 <code>scroll-view</code>。</li>
+      <li>远程图片改为包内资源；<code>image</code> 的 <code>mode</code> 支持 <code>scaleToFill</code> / <code>aspectFit</code> / <code>aspectFill</code>。</li>
+      <li><code>textarea</code> 目前是单行输入法，多行编辑需要拆成多个 <code>input</code>。</li>
+    </ol>
+
+    <h2>设计建议</h2>
+    <ul>
+      <li><strong>焦点即光标：</strong>所有可交互控件都参与方向键导航，布局要保证焦点顺序自然。</li>
+      <li><strong>一屏一主题：</strong>内容多时用 <code>scroll-view</code>，并保证可聚焦元素能把视口带到目标位置。</li>
+      <li><strong>用色块表达层级：</strong>背景、边框、圆角与阴影是最稳定的视觉手段。</li>
+      <li><strong>尺寸按 rpx 设计：</strong>按 750 宽设计稿换算，心里记住 750rpx ≈ 640 逻辑像素。</li>
+    </ul>
+
+    <div class="foot">本页是能力边界说明；具体属性与组件规则见「组件」「样式」「API」章节。</div>
+  </main>
+</div>
+
+<script src="../assets/nav.js"></script>
+</body>
+</html>

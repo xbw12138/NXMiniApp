@@ -26,7 +26,7 @@ WXSS 使用项目内置的解析器，只支持下列选择器和声明。**未�
 | --- | --- |
 | `px` | 逻辑像素 |
 | `rpx` | 固定换算：`1rpx = 640/750 ≈ 0.853` 逻辑像素 |
-| `%` | 仅 `width` / `height` 支持，相对父节点 |
+| `%` | `width` / `height` / `min-*` / `max-*` / `flex-basis`，相对父节点 |
 | 无单位数字 | 仅长度属性可解析（等价 px）；`line-height` 可为倍数 |
 | `em` / `rem` / `vw` / `vh` | 不支持 |
 
@@ -47,6 +47,11 @@ WXSS 使用项目内置的解析器，只支持下列选择器和声明。**未�
 | `border-width` | 长度 | 四边统一 |
 | `border-color` | 颜色 | 四边统一 |
 | `border-radius` | 长度 | 统一圆角，自动限制为短边一半 |
+| `opacity` | 0–1 | 整体透明度 |
+| `box-shadow` | `x y blur color` | 单层阴影 |
+| `display` | `flex` / `none` | `none` 不参与布局 |
+| `position` | `absolute` | 配合 `top` / `right` / `bottom` / `left` |
+| `min-width` / `min-height` / `max-width` / `max-height` | 长度或百分比 | 尺寸约束 |
 
 ### Flex 布局
 
@@ -55,6 +60,10 @@ WXSS 使用项目内置的解析器，只支持下列选择器和声明。**未�
 | `flex-direction` | `row` / `column`（默认 `column`） |
 | `justify-content` | `flex-start`（默认）/ `center` / `flex-end` / `space-between` / `space-around` / `space-evenly` |
 | `align-items` | `stretch`（默认）/ `flex-start` / `center` / `flex-end` |
+| `align-self` | `stretch` / `flex-start` / `center` / `flex-end` |
+| `flex` | CSS 语义简写：`flex: 1` → grow 1 / shrink 1 / basis 0 |
+| `flex-grow` / `flex-shrink` / `flex-basis` | 数值 / 长度或百分比 |
+| `overflow` / `overflow-x` / `overflow-y` | `hidden` |
 | `gap` / `column-gap` | 长度；只在主轴方向生效，通过给第 2 个起子节点加外边距实现 |
 
 ### 文本
@@ -72,8 +81,8 @@ WXSS 使用项目内置的解析器，只支持下列选择器和声明。**未�
 
 - `#RGB`、`#RGBA`、`#RRGGBB`、`#RRGGBBAA`
 - `rgb(r, g, b)`、`rgba(r, g, b, a)`；分量可写数字或百分号
-- 命名色：`white`、`black`、`red`、`green`、`blue`、`gray` / `grey`、`transparent`
-- 不支持 `hsl()`、其他 CSS 命名色、颜色变量
+- 命名色：`white`、`black`、`red`、`green`、`blue`、`gray` / `grey`、`lightgray`、`darkgray`、`orange`、`yellow`、`purple`、`pink`、`cyan`、`teal`、`brown`、`transparent`
+- 不支持 `hsl()`、CSS 颜色变量与渐变
 
 ## 5. 继承
 
@@ -85,13 +94,11 @@ WXSS 使用项目内置的解析器，只支持下列选择器和声明。**未�
 
 ## 6. 明确不支持
 
-- 定位与层级：`position`、`top/right/bottom/left`、`z-index`
-- 显示与溢出：`display`、`overflow`、`visibility`、`opacity`
-- Flex 高级项：`flex`、`flex-grow`、`flex-shrink`、`flex-basis`、`flex-wrap`、`align-self`、`align-content`
-- 视觉特效：`box-shadow`、`transform`、`transition`、`animation`、`filter`
+- 层级与布局扩展：`z-index`、`flex-wrap`、`align-content`、`aspect-ratio`
+- 视觉特效：`transform`、`transition`、`animation`、`filter`
 - 文本扩展：`letter-spacing`、`text-decoration`、`white-space`、`text-overflow`
-- 尺寸扩展：`min-width`、`max-width`、`min-height`、`max-height`、`aspect-ratio`
 - 背景扩展：`background-image`、渐变、`background-size` / `background-position`
+- 选择器扩展：子代 `>`、属性选择器、伪类/伪元素、`@media`、`@import`、`@keyframes`
 - `!important` 会被去掉，不参与优先级
 
 ## 7. 组件默认样式
@@ -101,7 +108,12 @@ WXSS 使用项目内置的解析器，只支持下列选择器和声明。**未�
 | `view` | 无背景、无边框、flex-direction: column、align-items: stretch |
 | `text` | 继承颜色/字号，默认字号 28，行高 1.4×字号 |
 | `button` | 绿色背景 `#0FDC78`、深色文字、圆角 44rpx、默认 320×88rpx（可通过 WXSS 覆盖） |
-| `image` | 默认 200×120rpx；无背景时填充 `#2A2D31`，中间绘制文件名占位 |
+| `image` | 默认 200×120rpx；加载包内图片，默认 `scaleToFill` |
+| `input` / `textarea` | 深色背景、圆角 12rpx、左右内边距 20rpx；默认 100%×80rpx / 160rpx |
+| `switch` / `checkbox` / `radio` | 96×56rpx / 48×48rpx / 48×48rpx，原生绘制 |
+| `slider` / `progress` | 100%×80rpx / 100%×24rpx |
+| `swiper` / `swiper-item` | 100%×300rpx / 100%×100% |
+| `navigator` | 100%×80rpx |
 
 `button` 与 `image` 的默认宽高只在没有显式设置 `width` / `height` 时生效。
 

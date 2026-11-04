@@ -1,0 +1,5 @@
+{
+  "name": "NX MiniApp Playground",
+  "version": "1.0.0",
+  "description": "覆盖 wx API、事件、组件与数据绑定的示例小程序"
+}

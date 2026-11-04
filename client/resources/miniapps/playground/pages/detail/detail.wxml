@@ -1,0 +1,28 @@
+<view class="page">
+  <view class="header detail-header">
+    <button class="btn btn-ghost" bindtap="onBack">返回</button>
+    <text class="title">二级页面</text>
+    <text class="badge">detail</text>
+  </view>
+
+  <view class="card">
+    <text class="card-title">页面栈与生命周期</text>
+    <text class="hint">onLoad 参数：{{queryText}}</text>
+    <text class="hint">当前时间：{{timeText}}</text>
+    <text class="hint">进入页面 {{tick}} 秒</text>
+  </view>
+
+  <view class="card">
+    <text class="card-title">长列表滚动</text>
+    <scroll-view class="panel" scroll-y="{{true}}" style="height: 360rpx;">
+      <view wx:for="{{rows}}" wx:key="id" class="list-item {{index % 2 === 0 ? 'list-even' : ''}}">
+        <text class="list-name">第 {{item.id}} 行</text>
+        <text class="list-value">{{item.text}}</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="row">
+    <button class="btn" bindtap="onBack">navigateBack</button>
+  </view>
+</view>

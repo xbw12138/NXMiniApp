@@ -82,6 +82,63 @@ void setupNode(RenderNode& node, bool root, float rootWidth, float rootHeight,
         default: YGNodeStyleSetAlignItems(node.yoga, YGAlignStretch); break;
     }
 
+    switch (style.alignSelf) {
+        case 1: YGNodeStyleSetAlignSelf(node.yoga, YGAlignFlexStart); break;
+        case 2: YGNodeStyleSetAlignSelf(node.yoga, YGAlignCenter); break;
+        case 3: YGNodeStyleSetAlignSelf(node.yoga, YGAlignFlexEnd); break;
+        case 4: YGNodeStyleSetAlignSelf(node.yoga, YGAlignStretch); break;
+        default: YGNodeStyleSetAlignSelf(node.yoga, YGAlignAuto); break;
+    }
+
+    YGNodeStyleSetFlexGrow(node.yoga, style.flexGrow);
+    YGNodeStyleSetFlexShrink(node.yoga, style.flexShrink);
+    if (style.hasFlexBasis) {
+        if (style.flexBasisPercent) {
+            YGNodeStyleSetFlexBasisPercent(node.yoga, style.flexBasis);
+        } else {
+            YGNodeStyleSetFlexBasis(node.yoga, style.flexBasis);
+        }
+    }
+    if (style.displayNone) {
+        YGNodeStyleSetDisplay(node.yoga, YGDisplayNone);
+    }
+    if (style.absolute) {
+        YGNodeStyleSetPositionType(node.yoga, YGPositionTypeAbsolute);
+        if (style.hasLeft) YGNodeStyleSetPosition(node.yoga, YGEdgeLeft, style.left);
+        if (style.hasTop) YGNodeStyleSetPosition(node.yoga, YGEdgeTop, style.top);
+        if (style.hasRight) YGNodeStyleSetPosition(node.yoga, YGEdgeRight, style.right);
+        if (style.hasBottom) YGNodeStyleSetPosition(node.yoga, YGEdgeBottom, style.bottom);
+    }
+
+    if (style.hasMinWidth) {
+        if (style.minWidthPercent) {
+            YGNodeStyleSetMinWidthPercent(node.yoga, style.minWidth);
+        } else {
+            YGNodeStyleSetMinWidth(node.yoga, style.minWidth);
+        }
+    }
+    if (style.hasMinHeight) {
+        if (style.minHeightPercent) {
+            YGNodeStyleSetMinHeightPercent(node.yoga, style.minHeight);
+        } else {
+            YGNodeStyleSetMinHeight(node.yoga, style.minHeight);
+        }
+    }
+    if (style.hasMaxWidth) {
+        if (style.maxWidthPercent) {
+            YGNodeStyleSetMaxWidthPercent(node.yoga, style.maxWidth);
+        } else {
+            YGNodeStyleSetMaxWidth(node.yoga, style.maxWidth);
+        }
+    }
+    if (style.hasMaxHeight) {
+        if (style.maxHeightPercent) {
+            YGNodeStyleSetMaxHeightPercent(node.yoga, style.maxHeight);
+        } else {
+            YGNodeStyleSetMaxHeight(node.yoga, style.maxHeight);
+        }
+    }
+
     YGNodeStyleSetPadding(node.yoga, YGEdgeTop, style.padding.top);
     YGNodeStyleSetPadding(node.yoga, YGEdgeRight, style.padding.right);
     YGNodeStyleSetPadding(node.yoga, YGEdgeBottom, style.padding.bottom);
@@ -118,7 +175,46 @@ void setupNode(RenderNode& node, bool root, float rootWidth, float rootHeight,
         if (!style.hasWidth) YGNodeStyleSetWidth(node.yoga, 200.0f * rpxScale);
         if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 120.0f * rpxScale);
     }
-    if (node.isText() || node.isButton()) {
+    if (node.tag == "swiper") {
+        if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 300.0f * rpxScale);
+    }
+    if (node.tag == "swiper-item") {
+        if (!style.hasWidth) YGNodeStyleSetWidthPercent(node.yoga, 100.0f);
+        if (!style.hasHeight) YGNodeStyleSetHeightPercent(node.yoga, 100.0f);
+    }
+    if (node.tag == "input" || node.tag == "navigator") {
+        if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 80.0f * rpxScale);
+    }
+    if (node.tag == "textarea" && !style.hasHeight) {
+        YGNodeStyleSetHeight(node.yoga, 160.0f * rpxScale);
+    }
+    if (node.tag == "progress") {
+        if (!style.hasWidth) YGNodeStyleSetWidthPercent(node.yoga, 100.0f);
+        if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 24.0f * rpxScale);
+    }
+    if (node.tag == "icon") {
+        if (!style.hasWidth) YGNodeStyleSetWidth(node.yoga, 48.0f * rpxScale);
+        if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 48.0f * rpxScale);
+    }
+    if (node.tag == "rich-text" && !style.hasWidth) {
+        YGNodeStyleSetWidthPercent(node.yoga, 100.0f);
+    }
+    if (node.tag == "navigator" && !style.hasWidth) {
+        YGNodeStyleSetWidthPercent(node.yoga, 100.0f);
+    }
+    if (node.tag == "switch") {
+        if (!style.hasWidth) YGNodeStyleSetWidth(node.yoga, 96.0f * rpxScale);
+        if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 56.0f * rpxScale);
+    }
+    if (node.tag == "checkbox" || node.tag == "radio") {
+        if (!style.hasWidth) YGNodeStyleSetWidth(node.yoga, 48.0f * rpxScale);
+        if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 48.0f * rpxScale);
+    }
+    if (node.tag == "slider") {
+        if (!style.hasWidth) YGNodeStyleSetWidthPercent(node.yoga, 100.0f);
+        if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 80.0f * rpxScale);
+    }
+    if (node.isText() || node.isButton() || node.tag == "rich-text") {
         YGNodeSetMeasureFunc(node.yoga, measureTextNode);
     }
 
@@ -177,6 +273,35 @@ void freeYogaTree(RenderNode& root) {
         gNodeOwners.clear();
         YGNodeFreeRecursive(root.yoga);
         root.yoga = nullptr;
+    }
+}
+
+void updateGeometry(RenderNode& node, float originX, float originY) {
+    LayoutBox box = layoutBox(node);
+    node.absLeft = originX + box.left;
+    node.absTop = originY + box.top;
+    node.absWidth = box.width;
+    node.absHeight = box.height;
+
+    // scroll-view 的内容尺寸按子节点在 Yoga 中的原始位置统计。
+    if (node.isScrollView()) {
+        float contentBottom = 0.0f;
+        for (const auto& child : node.children) {
+            if (!child->yoga) continue;
+            contentBottom = std::max(contentBottom,
+                                    YGNodeLayoutGetTop(child->yoga) +
+                                        YGNodeLayoutGetHeight(child->yoga));
+        }
+        node.contentHeight = contentBottom;
+    }
+
+    const float childOriginY =
+        node.isScrollView() ? node.absTop - node.scrollOffset : node.absTop;
+    const float childOriginX =
+        node.isScrollView() && node.horizontal ? node.absLeft - node.scrollOffset
+                                               : node.absLeft;
+    for (auto& child : node.children) {
+        updateGeometry(*child, childOriginX, childOriginY);
     }
 }
 

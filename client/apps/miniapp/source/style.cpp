@@ -89,6 +89,42 @@ bool parseColorToken(const std::string& token, Rgba& color) {
         color = Rgba{0.5f, 0.5f, 0.5f, 1.0f};
         return true;
     }
+    if (text == "orange") {
+        color = Rgba{1.0f, 0.6f, 0.0f, 1.0f};
+        return true;
+    }
+    if (text == "yellow") {
+        color = Rgba{1.0f, 0.9f, 0.1f, 1.0f};
+        return true;
+    }
+    if (text == "purple") {
+        color = Rgba{0.6f, 0.3f, 0.85f, 1.0f};
+        return true;
+    }
+    if (text == "pink") {
+        color = Rgba{1.0f, 0.45f, 0.7f, 1.0f};
+        return true;
+    }
+    if (text == "cyan") {
+        color = Rgba{0.1f, 0.85f, 0.9f, 1.0f};
+        return true;
+    }
+    if (text == "teal") {
+        color = Rgba{0.0f, 0.6f, 0.55f, 1.0f};
+        return true;
+    }
+    if (text == "brown") {
+        color = Rgba{0.55f, 0.35f, 0.2f, 1.0f};
+        return true;
+    }
+    if (text == "lightgray" || text == "lightgrey") {
+        color = Rgba{0.82f, 0.82f, 0.84f, 1.0f};
+        return true;
+    }
+    if (text == "darkgray" || text == "darkgrey") {
+        color = Rgba{0.25f, 0.25f, 0.27f, 1.0f};
+        return true;
+    }
 
     if (text[0] == '#') {
         std::string hex = text.substr(1);
@@ -190,6 +226,33 @@ float parseFontSize(const std::string& value, float rpxScale) {
     float parsed = 28.0f;
     parseLength(value, rpxScale, parsed);
     return parsed;
+}
+
+void applyShadow(Style& style, const std::vector<std::string>& tokens, float rpxScale) {
+    if (tokens.size() == 1 && lower(trim(tokens[0])) == "none") {
+        style.hasShadow = false;
+        return;
+    }
+    float values[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    int count = 0;
+    Rgba color{0.0f, 0.0f, 0.0f, 0.45f};
+    for (const auto& token : tokens) {
+        Rgba parsedColor;
+        if (parseColorToken(token, parsedColor)) {
+            color = parsedColor;
+            continue;
+        }
+        float parsed = 0.0f;
+        if (count < 4 && parseLength(token, rpxScale, parsed)) {
+            values[count++] = parsed;
+        }
+    }
+    if (count == 0) return;
+    style.hasShadow = true;
+    style.shadowX = values[0];
+    style.shadowY = values[1];
+    style.shadowBlur = values[2];
+    style.shadowColor = color;
 }
 
 }  // namespace
@@ -346,6 +409,92 @@ void applyDeclaration(Style& style, const std::string& property,
             style.hasBorder = true;
             style.borderWidth = parsed;
         }
+    } else if (prop == "opacity") {
+        float parsed = 1.0f;
+        if (parseLength(val, rpxScale, parsed)) {
+            style.opacity = std::min(1.0f, std::max(0.0f, parsed));
+        }
+    } else if (prop == "display") {
+        style.displayNone = (val == "none");
+    } else if (prop == "overflow" || prop == "overflow-x" || prop == "overflow-y") {
+        style.overflowHidden = (val == "hidden" || val == "scroll" || val == "auto");
+    } else if (prop == "position") {
+        style.absolute = (val == "absolute" || val == "fixed");
+    } else if (prop == "top" || prop == "right" || prop == "bottom" || prop == "left") {
+        float parsed = 0.0f;
+        if (parseLength(val, rpxScale, parsed)) {
+            if (prop == "top") {
+                style.hasTop = true;
+                style.top = parsed;
+            } else if (prop == "right") {
+                style.hasRight = true;
+                style.right = parsed;
+            } else if (prop == "bottom") {
+                style.hasBottom = true;
+                style.bottom = parsed;
+            } else {
+                style.hasLeft = true;
+                style.left = parsed;
+            }
+        }
+    } else if (prop == "align-self") {
+        style.alignSelf = parseAlign(val);
+    } else if (prop == "flex-grow") {
+        style.flexGrow = static_cast<float>(std::atof(val.c_str()));
+    } else if (prop == "flex-shrink") {
+        style.flexShrink = static_cast<float>(std::atof(val.c_str()));
+    } else if (prop == "flex-basis") {
+        float parsed = 0.0f;
+        bool isPercent = false;
+        if (parseLength(val, rpxScale, parsed, &isPercent)) {
+            style.hasFlexBasis = true;
+            style.flexBasis = parsed;
+            style.flexBasisPercent = isPercent;
+        }
+    } else if (prop == "flex") {
+        auto tokens = splitTokens(val);
+        if (!tokens.empty() && tokens[0] != "none" && tokens[0] != "auto") {
+            style.flexGrow = static_cast<float>(std::atof(tokens[0].c_str()));
+            style.flexShrink = tokens.size() > 1
+                                   ? static_cast<float>(std::atof(tokens[1].c_str()))
+                                   : 1.0f;
+            style.hasFlexBasis = true;
+            style.flexBasis = 0.0f;
+            style.flexBasisPercent = false;
+            if (tokens.size() > 2) {
+                bool isPercent = false;
+                float parsed = 0.0f;
+                if (parseLength(tokens[2], rpxScale, parsed, &isPercent)) {
+                    style.flexBasis = parsed;
+                    style.flexBasisPercent = isPercent;
+                }
+            }
+        }
+    } else if (prop == "min-width" || prop == "min-height" || prop == "max-width" ||
+               prop == "max-height") {
+        float parsed = 0.0f;
+        bool isPercent = false;
+        if (parseLength(val, rpxScale, parsed, &isPercent)) {
+            if (prop == "min-width") {
+                style.hasMinWidth = true;
+                style.minWidth = parsed;
+                style.minWidthPercent = isPercent;
+            } else if (prop == "min-height") {
+                style.hasMinHeight = true;
+                style.minHeight = parsed;
+                style.minHeightPercent = isPercent;
+            } else if (prop == "max-width") {
+                style.hasMaxWidth = true;
+                style.maxWidth = parsed;
+                style.maxWidthPercent = isPercent;
+            } else {
+                style.hasMaxHeight = true;
+                style.maxHeight = parsed;
+                style.maxHeightPercent = isPercent;
+            }
+        }
+    } else if (prop == "box-shadow") {
+        applyShadow(style, splitTokens(rawValue), rpxScale);
     }
 }
 

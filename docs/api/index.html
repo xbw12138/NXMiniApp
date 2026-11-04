@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>API · NXMiniApp 小程序开发文档</title>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="logo">NX</span> 小程序开发文档</a>
+  <span class="topbar-meta">wx.* 支持状态</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <h1>wx.* API 支持状态</h1>
+    <p class="lead">
+      容器向页面注入全局 <code>wx</code> 对象。目前 35 个接口有真实行为，
+      18 个接口以空实现提供兼容。所有异步接口只支持回调风格，不返回 Promise。
+    </p>
+
+    <div class="warn">
+      <strong>异步回调：</strong>成功回调是 <code>success</code>，失败回调是 <code>fail</code>，
+      结束回调是 <code>complete</code>。回调在宿主主线程执行，可直接调用 <code>setData</code>。
+    </div>
+
+    <h2 id="network">网络</h2>
+    <table>
+      <thead><tr><th>接口</th><th>参数</th><th>回调</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.request</code></td><td><code>url</code>、<code>method</code>（GET/POST/PUT/DELETE）、<code>data</code>、<code>header</code></td><td><code>success({ data, statusCode, header })</code> / <code>fail({ errMsg })</code> / <code>complete()</code></td></tr>
+        <tr><td><code>wx.getNetworkType</code></td><td>—</td><td><code>success({ networkType: "wifi" })</code></td></tr>
+      </tbody>
+    </table>
+    <p>
+      GET / HEAD 会把 <code>data</code> 序列化为查询串，其他方法发送 JSON 请求体；
+      未显式设置时自动补 <code>Content-Type: application/json</code>。
+    </p>
+<pre><code>wx.request({
+  url: 'https://example.com/api/list',
+  method: 'POST',
+  data: { page: 1 },
+  success(res) {
+    this.setData({ items: res.data.items });
+  }
+});</code></pre>
+
+    <h2 id="ui">界面交互</h2>
+    <table>
+      <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.showToast</code></td><td><code>title</code>、<code>icon</code>、<code>duration</code></td><td>绘制在屏幕底部，默认 2000ms</td></tr>
+        <tr><td><code>wx.showLoading</code></td><td><code>title</code></td><td>全屏遮罩，需要手动关闭</td></tr>
+        <tr><td><code>wx.hideLoading</code></td><td>—</td><td>关闭 loading</td></tr>
+        <tr><td><code>wx.showModal</code></td><td><code>title</code>、<code>content</code>、<code>showCancel</code>、<code>confirmText</code>、<code>cancelText</code></td><td>宿主弹窗；<code>success({ confirm, cancel })</code></td></tr>
+        <tr><td><code>wx.setNavigationBarTitle</code></td><td><code>title</code></td><td>更新页面标题</td></tr>
+        <tr><td><code>wx.nextTick</code></td><td><code>callback</code></td><td>下一帧执行</td></tr>
+        <tr><td><code>wx.vibrateShort</code></td><td><code>type</code></td><td>桌面/主机暂无振动能力，空实现</td></tr>
+        <tr><td><code>wx.canIUse</code></td><td><code>schema</code></td><td>按当前已注入能力返回布尔值</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="storage">数据缓存</h2>
+    <table>
+      <thead><tr><th>接口</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.setStorageSync(key, data)</code></td><td>写入并同步落盘，值为 JSON 字符串</td></tr>
+        <tr><td><code>wx.getStorageSync(key)</code></td><td>读取并反序列化，不存在返回 <code>""</code></td></tr>
+        <tr><td><code>wx.removeStorageSync(key)</code></td><td>删除单个键</td></tr>
+        <tr><td><code>wx.clearStorageSync()</code></td><td>清空当前小程序缓存</td></tr>
+        <tr><td><code>wx.setStorage / getStorage / removeStorage / clearStorage</code></td><td>回调风格的异步版本</td></tr>
+        <tr><td><code>wx.getStorageInfoSync()</code></td><td><code>{ keys, currentSize, limitSize }</code></td></tr>
+        <tr><td><code>wx.getStorageInfo()</code></td><td>异步返回同样的结构</td></tr>
+      </tbody>
+    </table>
+    <p>缓存按小程序包隔离，保存在 <code>miniapp/storage/&lt;hash&gt;.json</code>。</p>
+
+    <h2 id="route">路由</h2>
+    <table>
+      <thead><tr><th>接口</th><th>参数</th><th>行为</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.navigateTo</code></td><td><code>url</code> 可带 query</td><td>压栈并触发 <code>onHide</code> / <code>onLoad</code> / <code>onShow</code></td></tr>
+        <tr><td><code>wx.navigateBack</code></td><td><code>delta</code></td><td>出栈并触发 <code>onUnload</code></td></tr>
+        <tr><td><code>wx.redirectTo</code></td><td><code>url</code></td><td>替换当前页</td></tr>
+        <tr><td><code>wx.reLaunch</code></td><td><code>url</code></td><td>清空页面栈后打开目标页</td></tr>
+      </tbody>
+    </table>
+<pre><code>wx.navigateTo({ url: '/pages/detail/detail?id=42' });
+
+// detail.js
+Page({
+  onLoad(query) {
+    this.setData({ id: query.id });
+  }
+});</code></pre>
+
+    <h2 id="system">系统信息与启动参数</h2>
+    <table>
+      <thead><tr><th>接口</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.getSystemInfoSync()</code></td><td>返回 <code>windowWidth</code>、<code>windowHeight</code>、<code>platform</code>、<code>SDKVersion</code> 等</td></tr>
+        <tr><td><code>wx.getSystemInfo()</code></td><td>回调风格的异步版本</td></tr>
+        <tr><td><code>wx.getWindowInfo()</code></td><td>窗口尺寸与安全区</td></tr>
+        <tr><td><code>wx.getDeviceInfo()</code></td><td>设备型号、系统、平台</td></tr>
+        <tr><td><code>wx.getAppBaseInfo()</code></td><td>语言、版本、主题、SDKVersion</td></tr>
+        <tr><td><code>wx.getMenuButtonBoundingClientRect()</code></td><td>无胶囊按钮，返回零尺寸矩形</td></tr>
+        <tr><td><code>wx.getLaunchOptionsSync()</code></td><td><code>{ path, query, scene }</code></td></tr>
+        <tr><td><code>wx.getEnterOptionsSync()</code></td><td>同启动参数</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="clipboard">剪贴板与更新</h2>
+    <table>
+      <thead><tr><th>接口</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.setClipboardData({ data })</code></td><td>写入进程内剪贴板</td></tr>
+        <tr><td><code>wx.getClipboardData()</code></td><td><code>success({ data })</code></td></tr>
+        <tr><td><code>wx.getUpdateManager()</code></td><td>返回带 <code>onCheckForUpdate</code> / <code>onUpdateReady</code> / <code>applyUpdate</code> 的空实现对象</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="compat">兼容占位接口</h2>
+    <p>以下接口存在但不会产生效果，用于让微信代码平滑运行：</p>
+    <p>
+      <code>setNavigationBarColor</code>、<code>showNavigationBarLoading</code>、
+      <code>hideNavigationBarLoading</code>、<code>setKeepScreenOn</code>、
+      <code>setPreferredFramesPerSecond</code>、<code>reportAnalytics</code>、
+      <code>reportEvent</code>、<code>onNetworkStatusChange</code>、
+      <code>onAppShow</code>、<code>onAppHide</code>、<code>onError</code>、
+      <code>onUnhandledRejection</code>、<code>pageScrollTo</code> 及对应的
+      <code>off*</code> 接口。
+    </p>
+
+    <h2>全局对象</h2>
+    <table>
+      <thead><tr><th>名称</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>Page(options)</code></td><td>注册页面，<code>data</code> 与生命周期、方法</td></tr>
+        <tr><td><code>App(options)</code></td><td>注册应用级对象，支持 <code>onLaunch</code> / <code>onShow</code> / <code>onHide</code></td></tr>
+        <tr><td><code>getApp()</code></td><td>返回 App 实例</td></tr>
+        <tr><td><code>getCurrentPages()</code></td><td>返回页面路径数组</td></tr>
+        <tr><td><code>setTimeout / setInterval / clearTimeout / clearInterval</code></td><td>由容器每帧驱动</td></tr>
+        <tr><td><code>console.log / info / warn / error</code></td><td>写入宿主日志</td></tr>
+      </tbody>
+    </table>
+
+    <div class="foot">不在上表的 <code>wx.*</code> 均为未实现；调用会得到 <code>undefined</code>。</div>
+  </main>
+</div>
+
+<script src="../assets/nav.js"></script>
+</body>
+</html>

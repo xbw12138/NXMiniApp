@@ -24,4 +24,7 @@ void calculateYogaTree(RenderNode& root, float width, float height,
 LayoutBox layoutBox(const RenderNode& node);
 void freeYogaTree(RenderNode& root);
 
+/// 依据 Yoga 结果填充每个节点的绝对矩形（考虑 scroll-view 的滚动偏移）。
+void updateGeometry(RenderNode& root, float originX, float originY);
+
 }  // namespace miniapp

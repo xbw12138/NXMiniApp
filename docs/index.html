@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NXMiniApp 小程序开发文档</title>
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="logo">NX</span> 小程序开发文档</a>
+  <span class="topbar-meta">WXML · WXSS · 长生命周期 JS · Switch / 桌面</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <h1>NXMiniApp 小程序开发文档</h1>
+    <p class="lead">
+      NXMiniApp 是运行在 Nintendo Switch 与桌面端的小程序容器。页面用 WXML 描述结构、WXSS 子集描述样式，
+      JS 由 QuickJS 常驻执行，通过 <code>setData</code> 增量驱动重绘；最终由 Yoga 排版、NanoVG 原生绘制，
+      不经过 webview。
+    </p>
+
+    <div class="warn">
+      <strong>先读这一条：</strong>这是微信小程序的一个可运行子集，不是完整实现。当前没有 webview、
+      自定义组件、<code>video</code> / <code>canvas</code> / <code>map</code>、npm 构建与开发者工具。
+      未列出的能力请以本文档为准，不要直接按微信官方文档推测行为。
+    </div>
+
+    <h2>当前能力一览</h2>
+
+    <div class="cards">
+      <div class="card"><div class="num">21</div><div class="cap">可用标签 / 组件</div></div>
+      <div class="card"><div class="num">35</div><div class="cap">可用的 wx.* API</div></div>
+      <div class="card"><div class="num">18</div><div class="cap">兼容占位 API（调用不报错）</div></div>
+      <div class="card"><div class="num">6</div><div class="cap">页面生命周期 onLoad … onUnload</div></div>
+      <div class="card"><div class="num">∞</div><div class="cap">页面栈深度（受内存限制）</div></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th style="width:20%">分类</th><th style="width:32%">微信小程序</th><th style="width:18%">NXMiniApp</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>页面结构</td><td>完整 WXML + 自定义组件</td>
+          <td><span class="badge part">子集</span></td>
+          <td>21 类内置标签；未知标签降级为 <code>view</code>，无自定义组件</td>
+        </tr>
+        <tr>
+          <td>模板语法</td><td><code>{{}}</code>、<code>wx:for</code>、<code>wx:if/elif/else</code>、<code>wx:key</code></td>
+          <td><span class="badge ok">已实现</span></td>
+          <td>支持点路径、四则/比较/逻辑/三元表达式、<code>wx:for-item</code> / <code>wx:for-index</code></td>
+        </tr>
+        <tr>
+          <td>事件</td><td>冒泡 / 捕获 / 事件对象</td>
+          <td><span class="badge part">子集</span></td>
+          <td><code>bindtap</code>、<code>bindchange</code>、<code>bindinput</code>、<code>bindconfirm</code>、<code>data-*</code></td>
+        </tr>
+        <tr>
+          <td>样式</td><td>完整 CSS + rpx + 动画</td>
+          <td><span class="badge part">子集</span></td>
+          <td>Flex 布局、rpx/px/%/vw、绝对定位、阴影、透明度、文本溢出</td>
+        </tr>
+        <tr>
+          <td>脚本</td><td>双线程 + 模块 + npm</td>
+          <td><span class="badge part">子集</span></td>
+          <td>QuickJS 常驻上下文，支持 <code>Page</code> / <code>App</code>、<code>setData</code>、定时器</td>
+        </tr>
+        <tr>
+          <td>路由</td><td>navigateTo / switchTab / reLaunch</td>
+          <td><span class="badge part">子集</span></td>
+          <td>navigateTo / navigateBack / redirectTo / reLaunch，页面栈与 query</td>
+        </tr>
+        <tr>
+          <td>交互</td><td>触摸 + 手势</td>
+          <td><span class="badge part">子集</span></td>
+          <td>手柄方向键移动焦点、A 激活、B 返回；桌面端键盘映射方向键 / Enter / Backspace</td>
+        </tr>
+        <tr>
+          <td>wx.* API</td><td>约 200+ 个接口</td>
+          <td><span class="badge part">子集</span></td>
+          <td>35 个可用接口；另有 18 个兼容占位接口，便于迁移</td>
+        </tr>
+        <tr>
+          <td>分发</td><td>微信后台 + 自动更新</td>
+          <td><span class="badge ok">已实现</span></td>
+          <td>商店式启动器：列表、下载、安装、最近使用</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>最小可用小程序</h2>
+    <p>包内必须有 <code>app.json</code>，页面三件套缺一不可（空的 <code>.wxss</code> 也要建文件）。</p>
+
+<pre><code>hello/
+├── app.json
+├── app.js
+├── app.wxss
+└── pages/index/
+    ├── index.wxml
+    ├── index.wxss
+    └── index.js</code></pre>
+
+<pre><code>// app.json
+{
+  "pages": ["pages/index/index"],
+  "window": { "backgroundColor": "#141518" }
+}
+
+&lt;!-- pages/index/index.wxml --&gt;
+&lt;view class="page"&gt;
+  &lt;text class="title"&gt;{{title}}&lt;/text&gt;
+  &lt;text class="count"&gt;count = {{count}}&lt;/text&gt;
+  &lt;button bindtap="onAdd"&gt;点我 +1&lt;/button&gt;
+&lt;/view&gt;
+
+/* pages/index/index.wxss */
+.page { flex-direction: column; justify-content: center; align-items: center; }
+.title { color: #F5F6F7; font-size: 44rpx; font-weight: bold; }
+.count { color: #0FDC78; font-size: 28rpx; margin: 16rpx 0; }
+
+// pages/index/index.js
+Page({
+  data: { title: "Hello NXMiniApp", count: 0 },
+  onAdd() {
+    this.setData({ count: this.data.count + 1 });
+  }
+})</code></pre>
+
+    <h2>本地预览</h2>
+<pre><code># 1. 构建桌面客户端（在 client/ 目录）
+cmake -S . -B build_desktop -DPLATFORM_DESKTOP=ON \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DPYTHON_EXECUTABLE=$(which python3)
+cmake --build build_desktop --target miniapp -j 8
+
+# 2. 启动服务端（在仓库根目录，需要 Docker）
+docker compose up --build -d
+
+# 3. 运行：默认进入商店启动器
+cd build_desktop/apps/miniapp && ./miniapp
+
+# 或跳过商店，直接预览本地包
+NXKIT_MINIAPP_DEV=&lt;repo&gt;/client/resources/miniapps/playground ./miniapp</code></pre>
+
+    <p>没有开发者工具与 console 面板；调试手段是启动日志与页面中央的红色错误文字。</p>
+
+    <h2>文档目录</h2>
+    <div class="entries">
+      <a class="entry" href="guide/structure.html"><div class="t">目录结构</div><div class="d">app.json 字段、app.js / app.wxss、页面加载顺序</div></a>
+      <a class="entry" href="guide/template.html"><div class="t">WXML 与数据绑定</div><div class="d">标签、<code>{{}}</code>、wx:for、wx:if/elif/else、事件与 dataset</div></a>
+      <a class="entry" href="guide/js.html"><div class="t">脚本运行时</div><div class="d">Page/App、生命周期、setData、定时器、页面栈</div></a>
+      <a class="entry" href="components/index.html"><div class="t">组件</div><div class="d">21 类标签的属性与交互行为</div></a>
+      <a class="entry" href="style/index.html"><div class="t">WXSS 子集</div><div class="d">选择器、单位、Flex、定位、阴影</div></a>
+      <a class="entry" href="api/index.html"><div class="t">API 支持状态</div><div class="d">35 个可用接口与 18 个占位接口</div></a>
+      <a class="entry" href="reference/compatibility.html"><div class="t">与微信的差异</div><div class="d">迁移前必须知道的限制</div></a>
+      <a class="entry" href="reference/errors.html"><div class="t">错误与排查</div><div class="d">红字错误对照与常见故障</div></a>
+      <a class="entry" href="reference/store.html"><div class="t">商店与上架</div><div class="d">包格式、meta.json、管理后台</div></a>
+    </div>
+
+    <div class="foot">能力以 <code>client/apps/miniapp</code> 源码为准；文档与实现不一致时以源码为准并同步修改文档。</div>
+  </main>
+</div>
+
+<script src="assets/nav.js"></script>
+</body>
+</html>

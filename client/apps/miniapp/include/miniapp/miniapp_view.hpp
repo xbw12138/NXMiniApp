@@ -6,11 +6,12 @@
 
 #include <borealis.hpp>
 
+#include <map>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
+#include "miniapp/js_runtime.hpp"
 #include "miniapp/json.hpp"
 #include "miniapp/render_node.hpp"
 #include "miniapp/wxml_parser.hpp"
@@ -18,63 +19,205 @@
 
 namespace miniapp {
 
-class MiniappView : public brls::View {
+class MiniappView : public brls::View, public JsRuntimeHost {
 public:
     explicit MiniappView(std::string packagePath = "");
     ~MiniappView() override;
 
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override;
+    brls::View* getDefaultFocus() override;
+
+    // ---- JsRuntimeHost ----
+    void onDataChanged() override;
+    void showToast(const std::string& title, const std::string& icon,
+                   int durationMs) override;
+    void showLoading(const std::string& title) override;
+    void hideLoading() override;
+    void showModal(const std::string& title, const std::string& content,
+                   bool showCancel,
+                   std::function<void(bool confirm)> done) override;
+    void setNavigationBarTitle(const std::string& title) override;
+    void httpRequest(const std::string& method, const std::string& url,
+                     const std::map<std::string, std::string>& headers,
+                     const std::string& body, HttpDone done) override;
+    bool navigateTo(const std::string& url) override;
+    bool navigateBack(int delta) override;
+    bool redirectTo(const std::string& url) override;
+    bool reLaunch(const std::string& url) override;
+    JsonValue systemInfo() override;
+    void vibrateShort() override;
+    bool storageGet(const std::string& key, std::string& value) override;
+    void storageSet(const std::string& key, const std::string& value) override;
+    void storageRemove(const std::string& key) override;
+    void storageClear() override;
+    std::vector<std::string> storageKeys() override;
+    std::string clipboardGet() override;
+    void clipboardSet(const std::string& text) override;
 
 private:
-    using LocalValue = std::pair<std::string, const JsonValue*>;
+    struct LocalValue {
+        std::string name;
+        JsonValue value;
+    };
+
+    struct PageState {
+        std::string path;      // pages/index/index
+        std::string dir;       // 页面文件目录
+        std::string wxmlText;
+        std::string wxssText;
+        std::string jsText;
+        std::string error;
+        std::string background = "#141518";
+        std::string title;
+
+        WxmlNode wxmlRoot;
+        WxssStylesheet stylesheet;
+        JsonValue data;
+        std::unique_ptr<JsRuntime> runtime;
+        std::unique_ptr<RenderNode> root;
+
+        bool dirty = true;
+        bool loaded = false;
+        bool readyCalled = false;
+
+        // 组件本地状态（按稳定路径保存，跨 setData 重建保留）。
+        std::map<std::string, float> scrollOffsets;
+        std::map<std::string, bool> toggles;
+        std::map<std::string, std::string> radioSelections;
+        std::map<std::string, float> sliderValues;
+        std::map<std::string, std::string> inputValues;
+        std::map<std::string, int> swiperIndex;
+        std::map<std::string, double> swiperLast;
+    };
+
+    struct ModalState {
+        bool active = false;
+        std::string title;
+        std::string content;
+        bool showCancel = true;
+        int focus = 0;  // 0 取消，1 确定
+        std::function<void(bool)> done;
+    };
 
     void loadPackage();
-    void buildTree();
-    void rebuildLayout(float width, float height);
+    bool openPage(const std::string& url, bool push);
+    void closeCurrentPage();
+    void loadPageFiles(PageState& page, const std::string& path, bool withRuntime);
+    void cleanupPage(PageState& page);
+    void rebuildTree(PageState& page);
+    void rebuildLayout(PageState& page, float width, float height);
+    void updateFocusList(PageState& page);
 
-    void buildElement(const WxmlNode& node, const Style& parentStyle,
-                      std::vector<SelectorNode>& ancestors,
-                      const std::vector<LocalValue>& locals,
-                      std::vector<std::unique_ptr<RenderNode>>& out, bool skipFor);
     void buildChildren(const WxmlNode& node, const Style& parentStyle,
                        std::vector<SelectorNode>& ancestors,
                        const std::vector<LocalValue>& locals,
+                       const std::string& path,
                        std::vector<std::unique_ptr<RenderNode>>& out);
+    void buildElement(const WxmlNode& node, const Style& parentStyle,
+                      std::vector<SelectorNode>& ancestors,
+                      const std::vector<LocalValue>& locals,
+                      const std::string& path,
+                      std::vector<std::unique_ptr<RenderNode>>& out,
+                      bool skipFor);
     std::string collectText(const WxmlNode& node,
-                            const std::vector<LocalValue>& locals) const;
+                            const std::vector<LocalValue>& locals);
 
-    const JsonValue* resolvePath(const std::string& path,
-                                 const std::vector<LocalValue>& locals) const;
+    bool evaluateExpression(const std::string& expression,
+                            const std::vector<LocalValue>& locals, JsonValue& out,
+                            bool* failed = nullptr);
+    bool evaluateAttribute(const WxmlNode& node, const std::string& name,
+                           const std::vector<LocalValue>& locals, JsonValue& out);
+    bool conditionTruthy(const WxmlNode& node, const char* name,
+                         const std::vector<LocalValue>& locals, bool& ok);
     std::string interpolate(const std::string& text,
-                            const std::vector<LocalValue>& locals) const;
+                            const std::vector<LocalValue>& locals);
     std::string valueToText(const JsonValue& value) const;
+    JsonValue buildScope(const std::vector<LocalValue>& locals) const;
+    std::string attributeText(const WxmlNode& node, const std::string& name,
+                              const std::vector<LocalValue>& locals);
+    JsonValue dataForPage() const;
 
-    void drawNode(NVGcontext* vg, RenderNode& node, float x, float y);
+    // 绘制
+    void drawNode(NVGcontext* vg, RenderNode& node, float parentAlpha,
+                  const RenderNode* clipParent);
+    void drawBackground(NVGcontext* vg, RenderNode& node, float alpha);
     void drawTextBlock(NVGcontext* vg, const RenderNode& node, float x, float y,
-                       float width);
-    void drawError(NVGcontext* vg, float x, float y, float width, float height);
+                       float width, float alpha);
+    void drawImage(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawInput(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawProgress(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawIcon(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawSwitch(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawCheckbox(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawRadio(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawSlider(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawNavigator(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawSwiper(NVGcontext* vg, RenderNode& node, float alpha,
+                    const RenderNode* clipParent);
+    void drawFocusRing(NVGcontext* vg, const RenderNode& node);
+    void drawOverlays(NVGcontext* vg, float width, float height);
+    void drawError(NVGcontext* vg, float x, float y, float width, float height,
+                   const std::string& message);
+
+    // 输入
+    void handleActivate();
+    void handleDirection(brls::FocusDirection direction);
+    void moveFocus(RenderNode* from, brls::FocusDirection direction);
+    RenderNode* findFocusByPath(const std::string& path) const;
+    RenderNode* firstFocusable() const;
+    void ensureVisible(RenderNode* node);
+    void triggerTap(RenderNode* node);
+    void triggerChange(RenderNode* node, const JsonValue& detail, const std::string& value);
+    void activateInput(RenderNode* node);
+    float valueOf(RenderNode* node) const;
+    void setLocalValue(RenderNode* node, const std::string& value);
+
+    void tick(double now);
+    void pumpSwiper(PageState& page, RenderNode& node, double now);
+    void saveStorage();
+    void loadStorage();
+    int imageTexture(const std::string& src, const std::string& pageDir);
+    std::string resolveLocalPath(const std::string& src, const std::string& pageDir);
 
     std::string packagePathOverride;
     std::string packageDir;
     std::string appJsonText;
-    std::string wxmlText;
-    std::string wxssText;
-    std::string jsText;
-    std::string pagePath;
-    std::string pageBackground = "#141518";
+    std::string appSource;
+    std::string appWxss;
+    std::string appTitle = "NX MiniApp";
+    std::string appBackground = "#141518";
     std::string errorMessage;
 
-    JsonValue data;
-    WxssStylesheet stylesheet;
-    WxmlNode wxmlRoot;
-    std::unique_ptr<RenderNode> root;
+    std::vector<std::unique_ptr<PageState>> pages;
+    PageState* current = nullptr;
+
+    std::vector<RenderNode*> focusNodes;
+    std::string focusPath;
+
+    ModalState modal;
+    std::string toastText;
+    std::string toastIcon;
+    double toastUntil = 0.0;
+    bool loadingVisible = false;
+    std::string loadingText = "加载中";
+    double overlayClock = 0.0;
+
+    std::string navigationTitle;
+
+    std::map<std::string, int> imageTextures;
+    std::map<std::string, std::string> storageValues;
+    std::string storageFile;
+    std::string clipboardText;
 
     float rpxScale = 1.0f;
     float layoutWidth = -1.0f;
     float layoutHeight = -1.0f;
     int fontId = -1;
-    bool loaded = false;
+    bool runLoopActive = false;
+    brls::VoidEvent::Subscription runLoopToken;
+    bool focusInitialized = false;
+    std::shared_ptr<bool> aliveToken = std::make_shared<bool>(true);
 };
 
 }  // namespace miniapp

@@ -25,77 +25,95 @@
 | 搜索 / 分类筛选 UI | 未支持 | 服务端支持 `q`、`category`，启动器没有入口 |
 | 排序 / 推荐位 | 未支持 | 固定按最近使用 + 服务端返回顺序 |
 | 管理后台 | 已实现 | `http://<host>:8080/admin`（Vue SPA）：令牌登录、概览、商店应用管理、小程序管理（图标/包上传、发布开关） |
-| 小程序内 `wx.*` | 未支持 | 详见第 3 节 |
+| 小程序内 `wx.*` | 部分实现 | 35 个可用接口 + 18 个兼容占位，见第 3 节 |
 
 ## 1. JS 运行时
 
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
-| QuickJS 执行页面脚本 | 已实现 | 启动时执行一次 |
+| QuickJS 执行页面脚本 | 已实现 | 每个页面独立上下文，打开时执行一次并常驻 |
 | ES2020 语法 | 已实现 | 由 QuickJS 版本决定 |
-| 全局 `Page({ data })` | 已实现 | 只读取 `data`，`JSON.stringify` 后交给渲染器 |
-| `wx` 全局对象 | 未支持 | 不存在；引用会抛 `ReferenceError` |
-| `App` / `getApp` / `Component` | 未支持 | 不存在 |
-| `setData` | 未支持 | 页面数据不可变 |
-| 生命周期方法（`onLoad` 等） | 未支持 | 函数属性会被 JSON 序列化丢弃 |
-| `console` | 未支持 | 没有注入 |
-| `setTimeout` / `setInterval` | 未支持 | 没有事件循环 |
-| Promise / async 回调 | 部分实现 | 语言层可用，但没有事件循环，脚本返回后不会继续执行 |
+| `Page(options)` | 已实现 | 注册页面对象；`data`、生命周期与方法 |
+| `App(options)` / `getApp()` | 已实现 | 应用级对象与 `onLaunch` / `onShow` / `onHide` |
+| `getCurrentPages()` | 已实现 | 返回当前页面路径数组 |
+| `Component` | 未支持 | 不存在 |
+| `setData` | 已实现 | 递归合并进 `this.data`，支持点路径，下一帧重绘 |
+| 生命周期 | 已实现 | `onLoad(query)` / `onShow` / `onReady` / `onHide` / `onUnload` |
+| 事件对象 | 已实现 | `type` / `timeStamp` / `target` / `currentTarget` / `dataset` / `detail` |
+| `console` | 已实现 | `log` / `info` / `warn` / `error` 写入宿主日志 |
+| `setTimeout` / `setInterval` | 已实现 | 由容器每帧推进；页面销毁时清理 |
+| Promise / async 回调 | 已实现 | 每次回调后执行微任务队列 |
 | `require` / ES Module | 未支持 | 单文件脚本 |
 | 多个 `Page()` 调用 | 已实现 | 以最后一次为准 |
 
 约束：
 
-- `data` 必须是可 JSON 序列化的纯数据；函数、`undefined`、循环引用会丢失或报错。
-- 脚本异常会直接显示在页面上，页面不会渲染。
-- 没有热更新，修改后要重启预览。
+- `data` 必须可 JSON 序列化；函数、循环引用会丢失或报错。
+- 页面 JS 异常会显示在页面上，页面不会渲染。
+- 没有热更新，修改后要重启预览（资源文件在启动时读取）。
 
 ## 2. 组件
 
 | 组件 | 状态 | 实际行为 |
 | --- | --- | --- |
-| `view` | 部分实现 | 盒子、背景、边框、圆角、flex 布局；无事件、无滚动、无 `hidden` |
-| `text` | 部分实现 | 文本换行、对齐、行高、粗体模拟；无 `selectable`、`space`、嵌套样式 |
-| `image` | 占位 | 只画占位块与 `src` 文件名；不加载图片、不支持 `mode` |
-| `button` | 占位 | 绿色胶囊外观与居中文字；无点击、无 `open-type`、无 loading |
-| `scroll-view` | 未支持 | 退化为 `view`，不会滚动 |
-| `swiper` / `swiper-item` | 未支持 | 退化为 `view` |
-| `input` / `textarea` | 未支持 | 退化为 `view`，无法输入 |
-| `picker` / `checkbox` / `radio` / `switch` / `slider` | 未支持 | 退化为 `view` |
-| `form` | 未支持 | 退化为 `view` |
-| `navigator` | 未支持 | 退化为 `view`，无路由 |
-| `rich-text` | 未支持 | 退化为 `view` |
+| `view` | 已实现 | 盒子、背景、边框、圆角、Flex、绝对定位、阴影；`bindtap` |
+| `text` | 已实现 | 插值、自动换行、对齐、行高、粗体模拟 |
+| `image` | 部分实现 | 加载包内本地图片；支持 `scaleToFill` / `aspectFit` / `aspectFill`；远程 URL 显示占位 |
+| `button` | 已实现 | 绿色胶囊外观、居中文字、`bindtap` |
+| `scroll-view` | 部分实现 | `scroll-y` / `scroll-x` 裁剪与焦点自动滚动；无手势、滚轮与 `bindscroll` |
+| `swiper` / `swiper-item` | 部分实现 | `autoplay` / `interval` 自动轮播与指示点；无 `bindchange`、纵向与手势 |
+| `input` / `textarea` | 部分实现 | 系统输入法、`value` / `placeholder`、`bindinput` / `bindconfirm`；textarea 仍是单行 |
+| `switch` / `checkbox` / `radio` | 已实现 | 原生绘制、A 切换、`bindchange`；radio 支持 `name` 分组 |
+| `slider` | 已实现 | `min` / `max` / `step` / `value`，方向键左右调整，`bindchange` |
+| `navigator` | 已实现 | `url` 与 `open-type`（redirect / reLaunch），默认 navigateTo |
+| `progress` | 已实现 | `percent` / `activeColor` / `backgroundColor` |
+| `rich-text` | 部分实现 | 读取 `nodes`，剥离标签后按纯文本渲染 |
+| `icon` | 已实现 | `type` / `size`，成功、警告、取消、等待、搜索、下载 |
+| `form` / `label` / `checkbox-group` / `radio-group` | 部分实现 | 容器语义，正常排版；不汇总提交 |
+| `picker` / `picker-view` | 未支持 | 退化为 `view` |
 | `canvas` / `video` / `audio` / `map` / `web-view` | 未支持 | 退化为 `view` |
 | 自定义组件 / `usingComponents` | 未支持 | 组件目录不会被读取 |
-| 事件绑定（`bindtap` 等） | 未支持 | 属性被忽略 |
-| `hidden` / `wx:key` | 未支持 | `hidden` 不生效；循环不复用 |
+| 事件绑定 | 已实现 | `bindtap` / `bindchange` / `bindinput` / `bindconfirm` |
+| `hidden` / `wx:key` | 未支持 | `hidden` 不生效；`wx:key` 无 diff 作用 |
 
 ## 3. wx.* API
 
-**当前容器没有注入 `wx` 对象，以下全部为「未支持」。**
+可用接口：
 
-| 分类 | 典型 API | 状态 |
+| 分类 | API | 状态 |
 | --- | --- | --- |
-| 系统 | `wx.getSystemInfoSync`、`wx.getWindowInfo` | 未支持 |
-| 界面 | `wx.showToast`、`wx.showModal`、`wx.showLoading` | 未支持 |
-| 导航栏 | `wx.setNavigationBarTitle`、`wx.setNavigationBarColor` | 未支持 |
-| 路由 | `wx.navigateTo`、`wx.redirectTo`、`wx.reLaunch`、`wx.navigateBack` | 未支持 |
-| 数据缓存 | `wx.getStorageSync`、`wx.setStorageSync`、`wx.clearStorage` | 未支持 |
-| 网络 | `wx.request`、`wx.downloadFile`、`wx.uploadFile` | 未支持 |
-| 媒体 | `wx.createInnerAudioContext`、`wx.chooseImage`、`wx.previewImage` | 未支持 |
-| 文件 | `wx.getFileSystemManager` | 未支持 |
-| 设备 | `wx.vibrateShort`、`wx.getBatteryInfo`、`wx.getNetworkType` | 未支持 |
-| 扫码/蓝牙/NFC | `wx.scanCode`、`wx.openBluetoothAdapter`、`wx.startHCE` | 未支持 |
-| 位置/地图 | `wx.getLocation`、`wx.openLocation` | 未支持 |
-| 开放接口 | `wx.login`、`wx.requestPayment`、`wx.shareAppMessage`、`wx.subscribeMessage` | 未支持 |
-| 云开发 | `wx.cloud` | 未支持 |
-| 画布 | `wx.createCanvasContext`、`wx.createSelectorQuery` | 未支持 |
+| 网络 | `wx.request` | 已实现（GET query / 其他方法 JSON body） |
+| 界面 | `wx.showToast`、`wx.showLoading`、`wx.hideLoading`、`wx.showModal` | 已实现 |
+| 导航栏 | `wx.setNavigationBarTitle` | 已实现 |
+| 路由 | `wx.navigateTo`、`wx.navigateBack`、`wx.redirectTo`、`wx.reLaunch` | 已实现 |
+| 数据缓存 | `wx.getStorageSync`、`wx.setStorageSync`、`wx.removeStorageSync`、`wx.clearStorageSync`、`wx.getStorageInfoSync` 及对应异步版本 | 已实现 |
+| 系统 | `wx.getSystemInfoSync`、`wx.getSystemInfo`、`wx.getWindowInfo`、`wx.getDeviceInfo`、`wx.getAppBaseInfo` | 已实现 |
+| 启动参数 | `wx.getLaunchOptionsSync`、`wx.getEnterOptionsSync` | 已实现 |
+| 设备 | `wx.getNetworkType`、`wx.getMenuButtonBoundingClientRect` | 已实现 |
+| 剪贴板 | `wx.setClipboardData`、`wx.getClipboardData` | 已实现（进程内） |
+| 更新 | `wx.getUpdateManager` | 占位（返回空实现对象） |
+| 工具 | `wx.canIUse`、`wx.nextTick` | 已实现 |
+| 振动 | `wx.vibrateShort` | 占位（宿主无振动接口） |
+
+兼容占位（调用不报错、无实际效果）：
+
+`setNavigationBarColor`、`showNavigationBarLoading`、`hideNavigationBarLoading`、
+`setKeepScreenOn`、`setPreferredFramesPerSecond`、`reportAnalytics`、`reportEvent`、
+`onNetworkStatusChange`、`onAppShow`、`onAppHide`、`onError`、`onUnhandledRejection`、
+`pageScrollTo` 及对应 `off*` 接口。
+
+尚未支持（调用得到 `undefined`）：
+
+`downloadFile`、`uploadFile`、`login`、`getUserInfo`、`requestPayment`、`chooseImage`、
+`previewImage`、`createInnerAudioContext`、`getFileSystemManager`、`scanCode`、`getLocation`、
+`openLocation`、`createCanvasContext`、`createSelectorQuery`、`cloud`、`shareAppMessage`、
+`subscribeMessage` 等。
 
 ### 用户要求这些 API 时怎么办
 
 1. 明确说明当前版本没有该能力，不要写“伪调用”代码。
-2. 能用静态数据或预计算替代的，先在 JS 里算出结果再渲染。
-3. 确实必须新增运行时能力时，按第 5 节流程扩展，并同步更新本文件。
+2. 能用已支持接口或静态数据替代的，先改写成可运行实现。
+3. 确实必须新增运行时能力时，按第 5 节流程扩展，并同步更新本文件与 `docs/api/index.html`。
 
 ## 4. 与微信小程序的差异
 
@@ -107,16 +125,16 @@
 | 渲染 | webview | Yoga + NanoVG 原生绘制 |
 | 样式 | 完整 WXSS | 子集，见 [wxss.md](wxss.md) |
 | 选择器优先级 | 有 | 无，按源码顺序覆盖 |
-| 页面 | 多页面 + 路由 | 单页面，无路由 |
-| 交互 | 触摸、滚动 | 无触摸、无滚动、无焦点导航 |
-| 数据更新 | `setData` 增量更新 | 启动时一次性求值 |
-| 组件 | 完整组件库 | 4 个基础组件，其中 2 个是占位 |
-| 图片 | 真实加载 | 占位块 |
-| 事件 | 完整事件系统 | 无 |
+| 页面 | 多页面 + 路由 | 多页面 + 页面栈 + query |
+| 交互 | 触摸、滚动 | 手柄焦点导航；桌面键盘方向键 / Enter / Backspace |
+| 数据更新 | `setData` 增量更新 | `setData` 合并后整树重建 |
+| 组件 | 完整组件库 | 21 类内置标签，无自定义组件 |
+| 图片 | 真实加载、网络图 | 包内本地图片；网络图占位 |
+| 事件 | 完整事件系统 | tap / change / input / confirm，无冒泡捕获 |
 | 自定义组件 | 支持 | 不支持 |
-| `wx.*` | 完整 API | 无 |
+| `wx.*` | 完整 API | 35 个可用 + 18 个兼容占位 |
 | 单位 | `rpx` 按屏幕宽换算 | 固定 `640/750`，与窗口宽度无关 |
-| 文本 | 无行数上限 | 单段最多 64 行 |
+| 文本 | 无行数上限 | 自动换行，单段建议 ≤ 64 行 |
 | 字体 | 可加载自定义字体 | 仅内置常规字体，粗体为模拟 |
 | 横竖屏 | 支持 | 固定 16:9 横屏 |
 
@@ -126,7 +144,7 @@
 
 1. 在 `apps/miniapp` 内实现，不要修改 `library/borealis` 的通用行为。
 2. JS 绑定统一在 [js_runtime.cpp](../../apps/miniapp/source/js_runtime.cpp)；新 API 优先挂在 `wx.nx.*` 下。
-3. 同步更新：本文件的状态表、[SKILL.md](../SKILL.md) 的硬约束、以及一个可运行的示例包。
+3. 同步更新：本文件的状态表、[SKILL.md](../SKILL.md) 的硬约束、`docs/` 对应页面，以及一个可运行的示例包。
 4. 桌面构建通过并实际预览截图确认。
 5. 未在 Switch 实机验证的能力，必须注明“仅桌面验证”。
 

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>商店与上架 — NXMiniApp 小程序文档</title>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="logo">NX</span> 小程序开发文档</a>
+  <span class="topbar-meta">参考 · 分发</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <h1>商店与上架</h1>
+    <p class="lead">
+      小程序不走微信后台，而是由 NXMiniApp 服务端（Go + MySQL）下发：启动器拉列表，点击时下载
+      <code>.nxpkg</code>、校验后安装到本地。
+    </p>
+
+    <h2>链路</h2>
+<pre><code>启动器 ── GET /api/v1/miniapps ──▶ 列表（只含 published = true）
+   │
+   └─ 点击卡片 ─ 未安装或版本不同 ─▶ GET /api/v1/miniapps/{id}/download
+                                   └─ 解包 → miniapps/{id}/ → 进入页面</code></pre>
+
+    <h2>上架字段（meta.json / 管理后台）</h2>
+    <table>
+      <thead><tr><th style="width:20%">字段</th><th style="width:26%">默认值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>目录名</td><td>必须匹配 <code>^[a-z0-9][a-z0-9_-]{1,63}$</code>（2–64 字符），安装目录按 ID 存放。</td></tr>
+        <tr><td><code>title</code></td><td>目录名</td><td>卡片标题。</td></tr>
+        <tr><td><code>summary</code></td><td>空</td><td>一句话简介，参与搜索。</td></tr>
+        <tr><td><code>description</code></td><td>空</td><td>详情描述。</td></tr>
+        <tr><td><code>category</code></td><td><code>示例</code></td><td>分类；启动器副标题显示「分类 · v版本 · 大小」。</td></tr>
+        <tr><td><code>developer</code></td><td>空</td><td>开发者。</td></tr>
+        <tr><td><code>version</code></td><td><code>1.0.0</code></td><td>与本地 <code>.version</code> 比较，决定是否重新下载。</td></tr>
+        <tr><td><code>icon</code></td><td>空</td><td>包目录有 <code>icon.png</code> 时自动登记。</td></tr>
+        <tr><td><code>published</code></td><td><code>true</code></td><td>为 <code>false</code> 时不会出现在列表里。</td></tr>
+      </tbody>
+    </table>
+
+    <h2>包格式要求</h2>
+    <div class="danger">
+      <strong>必须使用 ZIP_STORED（不压缩）且无数据描述符。</strong>
+      容器通过 <code>zip.Store</code> + 预填 CRC 的方式写包；普通 <code>zip -r</code> 产物可能因
+      DEFLATE 或数据描述符被拒绝，提示「安装包必须使用 ZIP_STORED」。
+    </div>
+    <ul>
+      <li>包根必须直接包含 <code>app.json</code>（不要在 zip 里再套一层目录）。</li>
+      <li>不允许绝对路径与 <code>..</code>，解包时会拒绝。</li>
+      <li>同一 ID 新版本会覆盖旧目录；最近使用只记录 ID，最多 8 条。</li>
+      <li><code>meta.json</code> 与 <code>icon.png</code> 只用于商店目录，不会进安装包。</li>
+    </ul>
+
+    <h2>发布方式</h2>
+    <h3>管理后台（推荐）</h3>
+    <p>
+      浏览器打开 <code>http://&lt;host&gt;:8080/admin</code>，默认令牌 <code>nxkit-store-admin</code>
+      （可用环境变量 <code>NXKIT_ADMIN_TOKEN</code> 覆盖）。「小程序」页支持：新建、编辑字段、上传图标、
+      上传包并递增版本、上下架切换。
+    </p>
+
+    <h3>HTTP 接口</h3>
+<pre><code>curl -X POST -H "Authorization: Bearer nxkit-store-admin" \
+  -F "file=@hello.zip" -F "version=0.2.0" \
+  http://127.0.0.1:8080/api/v1/admin/miniapps/hello/package</code></pre>
+
+    <h2>公共接口</h2>
+    <table>
+      <thead><tr><th style="width:16%">方法</th><th style="width:42%">路径</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>GET</td><td><code>/api/v1/health</code></td><td>健康检查。</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/miniapps</code></td><td>列表；支持 <code>q</code>（标题/简介/ID 模糊匹配）与 <code>category</code> 精确过滤。</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/miniapps/{id}</code></td><td>详情。</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/miniapps/{id}/download</code></td><td>下载 <code>.nxpkg</code>，始终 ZIP_STORED。</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/miniapps/{id}/icon</code></td><td>封面图片，可能 404。</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/check-updates</code></td><td>批量版本检查。</td></tr>
+      </tbody>
+    </table>
+    <p><code>icon_url</code> 与 <code>download_url</code> 可能是相对路径，客户端会拼成绝对地址。</p>
+
+    <h2>安装与更新</h2>
+    <ul>
+      <li>没有「更新」按钮：服务端 <code>version</code> 变化后，下次点击卡片会重新下载并覆盖安装。</li>
+      <li>本地版本标记在 <code>miniapps/&lt;id&gt;/.version</code>。</li>
+      <li>同一个包既可走商店，也可用 <code>NXKIT_MINIAPP_DEV</code> 指向本地目录直接预览。</li>
+    </ul>
+
+    <div class="foot">对应源码：<code>client/apps/miniapp/source/api/miniapp_api.cpp</code>、<code>source/install/package_manager.cpp</code>；服务端见仓库 <code>server/</code></div>
+  </main>
+</div>
+
+<script src="../assets/nav.js"></script>
+</body>
+</html>

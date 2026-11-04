@@ -65,6 +65,48 @@ struct Style {
     bool hasBorder = false;
     Rgba borderColor{0.2f, 0.2f, 0.22f, 1.0f};
     float borderWidth = 1.0f;
+
+    float opacity = 1.0f;
+    bool displayNone = false;
+    bool overflowHidden = false;
+
+    // position: absolute + 偏移。
+    bool absolute = false;
+    bool hasLeft = false;
+    bool hasTop = false;
+    bool hasRight = false;
+    bool hasBottom = false;
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 0.0f;
+    float bottom = 0.0f;
+
+    // 0 auto, 1 flex-start, 2 center, 3 flex-end, 4 stretch。
+    int alignSelf = 0;
+    float flexGrow = 0.0f;
+    float flexShrink = 0.0f;
+    bool hasFlexBasis = false;
+    float flexBasis = 0.0f;
+    bool flexBasisPercent = false;
+
+    bool hasMinWidth = false;
+    bool hasMinHeight = false;
+    bool hasMaxWidth = false;
+    bool hasMaxHeight = false;
+    float minWidth = 0.0f;
+    float minHeight = 0.0f;
+    float maxWidth = 0.0f;
+    float maxHeight = 0.0f;
+    bool minWidthPercent = false;
+    bool minHeightPercent = false;
+    bool maxWidthPercent = false;
+    bool maxHeightPercent = false;
+
+    bool hasShadow = false;
+    float shadowX = 0.0f;
+    float shadowY = 0.0f;
+    float shadowBlur = 0.0f;
+    Rgba shadowColor{0.0f, 0.0f, 0.0f, 0.45f};
 };
 
 struct Declaration {

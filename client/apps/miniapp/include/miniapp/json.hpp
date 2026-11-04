@@ -19,8 +19,8 @@ public:
     static JsonValue boolean(bool value);
     static JsonValue number(double value);
     static JsonValue string(std::string value);
-    static JsonValue array(std::vector<JsonValue> values);
-    static JsonValue object(std::map<std::string, JsonValue> values);
+    static JsonValue array(std::vector<JsonValue> values = {});
+    static JsonValue object(std::map<std::string, JsonValue> values = {});
 
     Type type() const { return valueType; }
 
@@ -41,6 +41,9 @@ public:
     const JsonValue& at(size_t index) const;
     const JsonValue* find(const std::string& key) const;
 
+    /// 以对象方式写入成员；非对象值会先转换成空对象。
+    void setMember(const std::string& key, JsonValue value);
+
 private:
     Type valueType = Type::Null;
     bool boolValue = false;
@@ -52,5 +55,8 @@ private:
 
 /// 解析 JSON 文本；失败时返回 Null 并把错误写到 error。
 JsonValue parseJson(const std::string& source, std::string* error = nullptr);
+
+/// 序列化为紧凑 JSON 文本。
+std::string toJsonString(const JsonValue& value);
 
 }  // namespace miniapp

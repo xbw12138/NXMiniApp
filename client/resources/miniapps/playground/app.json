@@ -1,0 +1,12 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/detail/detail"
+  ],
+  "window": {
+    "navigationBarTitleText": "NX MiniApp Playground",
+    "navigationBarBackgroundColor": "#141518",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#141518"
+  }
+}

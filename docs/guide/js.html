@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>脚本运行时 · NXMiniApp 小程序开发文档</title>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="logo">NX</span> 小程序开发文档</a>
+  <span class="topbar-meta">Page · setData · 生命周期</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <h1>脚本运行时</h1>
+    <p class="lead">
+      每个页面拥有独立的 QuickJS 上下文，页面打开时执行一次 <code>index.js</code>，
+      之后保持常驻。数据更新通过 <code>setData</code> 合并，容器在下一次绘制时重建节点树。
+    </p>
+
+    <h2>Page 与 App</h2>
+<pre><code>// app.js
+App({
+  onLaunch(options) { console.log('launch', options.path); },
+  globalData: { token: '' }
+});
+
+// pages/index/index.js
+Page({
+  data: {
+    count: 0,
+    user: { name: 'Nova' }
+  },
+
+  onLoad(query) {
+    // 页面首次创建，query 来自 URL
+  },
+  onShow() {},
+  onReady() {},
+  onHide() {},
+  onUnload() {},
+
+  onAdd() {
+    this.setData({ count: this.data.count + 1 });
+  }
+});</code></pre>
+    <p>
+      <code>getApp()</code> 返回 App 实例，<code>getCurrentPages()</code> 返回当前页面路径数组。
+      页面对象上的方法与生命周期都以 <code>this</code> 指向页面本身。
+    </p>
+
+    <h2>生命周期顺序</h2>
+    <table>
+      <thead><tr><th>阶段</th><th>回调</th><th>触发时机</th></tr></thead>
+      <tbody>
+        <tr><td>创建</td><td><code>onLoad(query)</code></td><td>页面实例创建后，查询参数已解析</td></tr>
+        <tr><td>显示</td><td><code>onShow()</code></td><td>onLoad 之后；从后台或子页面返回时再次触发</td></tr>
+        <tr><td>渲染完成</td><td><code>onReady()</code></td><td>首次布局与绘制完成后，只触发一次</td></tr>
+        <tr><td>隐藏</td><td><code>onHide()</code></td><td>navigateTo 压入新页面时</td></tr>
+        <tr><td>销毁</td><td><code>onUnload()</code></td><td>navigateBack / redirectTo / reLaunch 移除页面时</td></tr>
+      </tbody>
+    </table>
+
+    <h2>setData</h2>
+    <p>
+      <code>setData(patch)</code> 把补丁递归合并进 <code>this.data</code>，随后标记页面脏并在下一帧重绘。
+      支持普通对象、数组以及点路径键：
+    </p>
+<pre><code>this.setData({ count: 3 });
+this.setData({ 'user.name': 'Mika' });
+this.setData({ list: this.data.list.concat('new') });
+
+// 读取
+console.log(this.data.user.name);</code></pre>
+    <div class="warn">
+      <strong>注意：</strong>合并是浅层与递归对象合并，不是路径查询引擎；
+      先修改 <code>this.data</code> 再调用 <code>setData</code> 不会自动生效，
+      请始终把变更放进 <code>setData</code> 参数。
+    </div>
+
+    <h2>定时器</h2>
+    <p>
+      <code>setTimeout</code>、<code>setInterval</code>、<code>clearTimeout</code>、
+      <code>clearInterval</code> 由容器每帧推进，页面销毁时自动清理。
+    </p>
+<pre><code>this.timer = setInterval(() =&gt; {
+  this.setData({ count: this.data.count + 1 });
+}, 2000);
+
+onUnload() {
+  clearInterval(this.timer);
+}</code></pre>
+
+    <h2>事件处理</h2>
+    <p>
+      事件回调通过 <code>bindtap</code> / <code>bindchange</code> /
+      <code>bindinput</code> / <code>bindconfirm</code> 绑定。
+      事件对象包含：
+    </p>
+    <table>
+      <thead><tr><th>字段</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>type</code></td><td><code>tap</code> / <code>change</code> / <code>input</code> / <code>confirm</code></td></tr>
+        <tr><td><code>timeStamp</code></td><td>事件派发时间（毫秒）</td></tr>
+        <tr><td><code>target.dataset</code> / <code>currentTarget.dataset</code></td><td><code>data-*</code> 属性集合</td></tr>
+        <tr><td><code>target.id</code></td><td>元素 <code>id</code></td></tr>
+        <tr><td><code>detail.value</code></td><td>表单组件的值</td></tr>
+      </tbody>
+    </table>
+<pre><code>&lt;button data-id="7" bindtap="onItem"&gt;选择&lt;/button&gt;
+
+onItem(event) {
+  this.setData({ selected: event.currentTarget.dataset.id });
+}</code></pre>
+
+    <h2>Promise 与异步</h2>
+    <p>
+      QuickJS 原生支持 <code>async</code> / <code>await</code>、<code>Promise</code> 与
+      <code>JSON</code>。每次回调结束后容器会清空微任务队列，因此
+      <code>Promise.then</code> 会在同一帧内执行。没有 <code>require</code> /
+      <code>import</code>，所有代码需写在页面文件或 <code>app.js</code> 中。
+    </p>
+
+    <h2>错误处理</h2>
+    <p>
+      生命周期或事件回调抛出异常时，容器会捕获并写入宿主日志，
+      页面中央显示红色错误文字。未捕获的 Promise 拒绝不会中断页面。
+    </p>
+
+    <div class="foot">实现位于 <code>client/apps/miniapp/source/js_runtime.cpp</code>。</div>
+  </main>
+</div>
+
+<script src="../assets/nav.js"></script>
+</body>
+</html>

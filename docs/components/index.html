@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>组件 · NXMiniApp 小程序开发文档</title>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="logo">NX</span> 小程序开发文档</a>
+  <span class="topbar-meta">组件总览</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <h1>组件总览</h1>
+    <p class="lead">
+      容器内置 21 类标签。所有组件都由 Yoga 排版、NanoVG 绘制，不依赖 HTML。
+      未识别的标签会自动降级为 <code>view</code>。
+    </p>
+
+    <table>
+      <thead><tr><th>标签</th><th>默认尺寸</th><th>可交互</th><th>事件</th></tr></thead>
+      <tbody>
+        <tr><td><code>view</code></td><td>自适应</td><td>否</td><td><code>bindtap</code></td></tr>
+        <tr><td><code>scroll-view</code></td><td>自适应</td><td>可聚焦子节点</td><td><code>bindtap</code></td></tr>
+        <tr><td><code>text</code></td><td>按文本测量</td><td>否</td><td><code>bindtap</code></td></tr>
+        <tr><td><code>rich-text</code></td><td>宽度 100%</td><td>否</td><td>—</td></tr>
+        <tr><td><code>image</code></td><td>200 × 120rpx</td><td>否</td><td><code>bindtap</code></td></tr>
+        <tr><td><code>icon</code></td><td>48 × 48rpx</td><td>否</td><td>—</td></tr>
+        <tr><td><code>button</code></td><td>320 × 88rpx</td><td>是</td><td><code>bindtap</code></td></tr>
+        <tr><td><code>navigator</code></td><td>100% × 80rpx</td><td>是</td><td><code>bindtap</code> + 路由</td></tr>
+        <tr><td><code>input</code></td><td>100% × 80rpx</td><td>是</td><td><code>bindinput</code> / <code>bindconfirm</code></td></tr>
+        <tr><td><code>textarea</code></td><td>100% × 160rpx</td><td>是</td><td><code>bindinput</code> / <code>bindconfirm</code></td></tr>
+        <tr><td><code>switch</code></td><td>96 × 56rpx</td><td>是</td><td><code>bindchange</code></td></tr>
+        <tr><td><code>checkbox</code></td><td>48 × 48rpx</td><td>是</td><td><code>bindchange</code></td></tr>
+        <tr><td><code>radio</code></td><td>48 × 48rpx</td><td>是</td><td><code>bindchange</code></td></tr>
+        <tr><td><code>slider</code></td><td>100% × 80rpx</td><td>是</td><td><code>bindchange</code></td></tr>
+        <tr><td><code>progress</code></td><td>100% × 24rpx</td><td>否</td><td>—</td></tr>
+        <tr><td><code>swiper</code></td><td>100% × 300rpx</td><td>自动轮播</td><td>—</td></tr>
+        <tr><td><code>swiper-item</code></td><td>100% × 100%</td><td>否</td><td>—</td></tr>
+        <tr><td><code>form</code> / <code>label</code> / <code>checkbox-group</code> / <code>radio-group</code> / <code>block</code></td><td>容器 / 不渲染</td><td>否</td><td>—</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="view">view / scroll-view</h2>
+    <p>
+      默认 <code>flex-direction: column</code>。<code>scroll-view</code> 通过
+      <code>scroll-y="{{true}}"</code> 或 <code>scroll-x="{{true}}"</code> 开启滚动；
+      内容超出时由焦点导航自动滚动到可见区域。旋转与滚轮触摸暂未接入。
+    </p>
+<pre><code>&lt;scroll-view class="panel" scroll-y="{{true}}" style="height: 100%;"&gt;
+  &lt;view class="card"&gt;...&lt;/view&gt;
+&lt;/scroll-view&gt;</code></pre>
+
+    <h2 id="text">text / rich-text</h2>
+    <p>
+      <code>text</code> 支持 <code>{{}}</code> 插值与嵌套换行；默认继承父级颜色。
+      <code>rich-text</code> 只读取 <code>nodes</code> 字符串，当前降级为纯文本：剥离 HTML 标签、
+      还原常见实体，不渲染内联样式与图片。
+    </p>
+<pre><code>&lt;text&gt;共 {{items.length}} 项&lt;/text&gt;
+&lt;rich-text nodes="&amp;lt;b&amp;gt;标题&amp;lt;/b&amp;gt;，正文"&gt;&lt;/rich-text&gt;</code></pre>
+
+    <h2 id="image">image / icon</h2>
+    <p>
+      <code>image</code> 读取包内路径（以 <code>/</code> 开头）或启动器缓存的本地文件；
+      支持 <code>scaleToFill</code>（默认）、<code>aspectFit</code>、<code>aspectFill</code>。
+      远程 URL 暂不下载，会显示占位。
+    </p>
+<pre><code>&lt;image src="/images/logo.png" mode="aspectFit" class="logo"/&gt;</code></pre>
+    <p>
+      <code>icon</code> 为原生绘制：<code>type</code> 可取
+      <code>success</code> / <code>info</code> / <code>warn</code> / <code>waiting</code> /
+      <code>cancel</code> / <code>clear</code> / <code>search</code> / <code>download</code>，
+      <code>size</code> 为 rpx 数值。
+    </p>
+
+    <h2 id="button">button / navigator</h2>
+    <p>
+      <code>button</code> 默认使用主题绿色，可用 <code>class</code> 或内联样式覆盖。
+      与 <code>view</code> 一样通过 <code>bindtap</code> 触发事件。
+      <code>navigator</code> 在激活时直接跳转：默认 <code>navigateTo</code>，
+      <code>open-type</code> 可取 <code>redirect</code> / <code>reLaunch</code>。
+    </p>
+<pre><code>&lt;button bindtap="onAdd"&gt;+1 计数&lt;/button&gt;
+&lt;navigator url="/pages/detail/detail?from=list"&gt;打开详情&lt;/navigator&gt;</code></pre>
+
+    <h2 id="form">input / textarea</h2>
+    <p>
+      激活后调用系统输入法。<code>value</code> 与 <code>placeholder</code> 支持数据绑定，
+      <code>bindinput</code> 在输入确认时触发，<code>bindconfirm</code> 同时触发。
+    </p>
+    <div class="warn">
+      <strong>限制：</strong><code>textarea</code> 目前复用单行输入法，不能真正换行；
+      多行仅体现为更高的默认高度。
+    </div>
+<pre><code>&lt;input class="input" value="{{nick}}" placeholder="昵称"
+       bindinput="onInput" bindconfirm="onConfirm"/&gt;</code></pre>
+
+    <h2 id="choice">switch / checkbox / radio</h2>
+    <p>
+      三者都是原生绘制，A 键切换状态并派发 <code>change</code>，事件对象
+      <code>detail.value</code> 为布尔值。选中状态保存在页面内，不会自动回写
+      <code>data</code>，需要在事件里自行 <code>setData</code>。
+      <code>radio</code> 通过 <code>name</code> 分组，同组只保留一个选中项。
+    </p>
+<pre><code>&lt;switch checked="{{enabled}}" bindchange="onSwitch"/&gt;
+&lt;checkbox checked="{{accept}}" bindchange="onCheckbox"/&gt;
+&lt;radio-group&gt;
+  &lt;radio name="plan" value="a" checked="{{plan==='a'}}" bindchange="onRadio"/&gt;
+  &lt;radio name="plan" value="b" checked="{{plan==='b'}}" bindchange="onRadio"/&gt;
+&lt;/radio-group&gt;</code></pre>
+
+    <h2 id="slider">slider / progress</h2>
+    <p>
+      <code>slider</code> 支持 <code>min</code> / <code>max</code> / <code>step</code> /
+      <code>value</code>；方向键左右调整，A 键按 <code>step</code> 递增，触发
+      <code>change</code>。<code>progress</code> 读取 <code>percent</code>（0–100），
+      可选 <code>activeColor</code> / <code>backgroundColor</code>。
+    </p>
+<pre><code>&lt;slider min="0" max="100" step="5" value="{{volume}}" bindchange="onSlider"/&gt;
+&lt;progress percent="{{volume}}" activeColor="#22c55e"/&gt;</code></pre>
+
+    <h2 id="swiper">swiper / swiper-item</h2>
+    <p>
+      <code>swiper</code> 只构建当前项的子树，<code>autoplay</code> 与
+      <code>interval</code>（毫秒）驱动自动轮播，底部绘制指示点。
+      暂不支持 <code>bindchange</code>、纵向轮播与手势滑动。
+    </p>
+<pre><code>&lt;swiper autoplay="{{true}}" interval="{{3000}}" class="swiper"&gt;
+  &lt;swiper-item&gt;&lt;view class="slide"&gt;第一屏&lt;/view&gt;&lt;/swiper-item&gt;
+  &lt;swiper-item&gt;&lt;view class="slide"&gt;第二屏&lt;/view&gt;&lt;/swiper-item&gt;
+&lt;/swiper&gt;</code></pre>
+
+    <h2 id="form-container">form / label / checkbox-group / radio-group / block</h2>
+    <p>
+      这些标签只承担容器语义：<code>form</code>、<code>label</code> 与分组标签会正常排版子节点，
+      但不会汇总提交；<code>block</code> 不产生节点，只展开子节点。
+      表单提交建议在按钮的 <code>bindtap</code> 里手动读取页面状态。
+    </p>
+
+    <div class="foot">组件实现位于 <code>client/apps/miniapp/source/miniapp_view.cpp</code> 与 <code>layout.cpp</code>。</div>
+  </main>
+</div>
+
+<script src="../assets/nav.js"></script>
+</body>
+</html>

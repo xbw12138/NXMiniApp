@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,20 +18,78 @@ namespace miniapp {
 
 struct RenderNode {
     std::string tag;
-    std::string text;       // text / button 的展示文字
+    std::string text;        // text / button 的展示文字
     std::string imageLabel;  // image 占位文字
     std::vector<std::string> classes;
+
+    std::string id;
+    std::string path;  // 稳定路径，用于焦点/滚动/开关状态
+    std::string bindTap;
+    std::string bindChange;
+    std::string bindInput;
+    std::string bindConfirm;
+    std::map<std::string, std::string> dataset;
+
+    // 组件状态
+    std::string src;       // image
+    std::string imageMode; // image
+    std::string value;     // input / slider
+    std::string placeholder;
+    std::string navUrl;    // navigator
+    std::string openType;  // navigator
+    std::string radioName;
+    bool checked = false;
+    bool disabled = false;
+    float sliderMin = 0.0f;
+    float sliderMax = 100.0f;
+    float sliderStep = 1.0f;
+
+    // progress / icon / rich-text
+    float progressPercent = 0.0f;
+    Rgba progressActive{0.06f, 0.86f, 0.47f, 1.0f};
+    Rgba progressTrack{0.24f, 0.25f, 0.28f, 1.0f};
+    std::string iconType = "info";
+    float iconSize = 48.0f;
+
+    // scroll-view / swiper
+    float scrollOffset = 0.0f;
+    float contentHeight = 0.0f;
+    bool horizontal = false;
+    int swiperIndex = 0;
+    int swiperCount = 0;
+    bool autoplay = false;
+    float swiperInterval = 3000.0f;
+
     Style style;
 
     std::vector<std::unique_ptr<RenderNode>> children;
+    RenderNode* parent = nullptr;
     YGNodeRef yoga = nullptr;
 
     float fontSize = 28.0f;
     float lineHeight = 39.2f;
 
+    // 布局后计算出的绝对矩形（含滚动偏移）。
+    float absLeft = 0.0f;
+    float absTop = 0.0f;
+    float absWidth = 0.0f;
+    float absHeight = 0.0f;
+
     bool isText() const { return tag == "#text" || tag == "text"; }
     bool isButton() const { return tag == "button"; }
     bool isImage() const { return tag == "image"; }
+    bool isScrollView() const { return tag == "scroll-view"; }
+    bool isInteractive() const {
+        return !bindTap.empty() || tag == "button" || tag == "switch" ||
+               tag == "checkbox" || tag == "radio" || tag == "slider" ||
+               tag == "input" || tag == "textarea" || tag == "navigator";
+    }
+    bool isContainer() const {
+        return !isText() && !isImage() && tag != "input" && tag != "textarea" &&
+               tag != "slider" && tag != "switch" && tag != "checkbox" &&
+               tag != "radio" && tag != "progress" && tag != "rich-text" &&
+               tag != "icon";
+    }
 };
 
 }  // namespace miniapp

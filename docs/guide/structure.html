@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>目录结构 · NXMiniApp 小程序开发文档</title>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="logo">NX</span> 小程序开发文档</a>
+  <span class="topbar-meta">指南 · 目录结构</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <h1>目录结构</h1>
+    <p class="lead">小程序包就是一个小目录。容器读取页面清单、全局脚本与样式、页面三件套以及包内图片。</p>
+
+    <h2>包结构</h2>
+<pre><code>&lt;package&gt;/
+├── app.json          # 必需：页面清单与窗口配置
+├── app.js            # 可选：App() 应用级对象
+├── app.wxss          # 可选：全局样式
+├── meta.json         # 可选：仅商店上架使用，不会装进小程序包
+├── icon.png          # 可选：商店封面，同样不装进包
+├── images/           # 可选：image 组件读取的本地资源
+└── pages/
+    ├── index/
+    │   ├── index.wxml  # 必需
+    │   ├── index.wxss  # 必需（可以为空，但文件要存在）
+    │   └── index.js    # 必需
+    └── detail/
+        ├── detail.wxml
+        ├── detail.wxss
+        └── detail.js</code></pre>
+
+    <div class="note">
+      包根目录必须直接包含 <code>app.json</code>。如果打包时多套了一层目录（例如 zip 里是
+      <code>hello/app.json</code>），安装会失败并提示「安装包缺少 app.json」。
+    </div>
+
+    <h2>app.json</h2>
+    <table>
+      <thead><tr><th style="width:32%">字段</th><th>行为</th></tr></thead>
+      <tbody>
+        <tr><td><code>pages</code></td><td>页面路径数组，第一个为启动页；其余页可通过 <code>navigateTo</code> 打开。</td></tr>
+        <tr><td><code>window.backgroundColor</code></td><td>页面根节点没有背景色时的兜底背景。</td></tr>
+        <tr><td><code>window.navigationBarTitleText</code></td><td>初始页面标题，可被 <code>wx.setNavigationBarTitle</code> 覆盖。</td></tr>
+        <tr><td>其他</td><td><code>tabBar</code>、<code>usingComponents</code>、<code>subPackages</code> 等暂不生效。</td></tr>
+      </tbody>
+    </table>
+
+<pre><code>{
+  "pages": ["pages/index/index", "pages/detail/detail"],
+  "window": {
+    "backgroundColor": "#141518",
+    "navigationBarTitleText": "我的小程序"
+  }
+}</code></pre>
+
+    <h2>app.js 与 app.wxss</h2>
+    <p>
+      启动时先执行 <code>app.js</code> 注册 <code>App()</code>，再加载 <code>app.wxss</code> 作为全局样式。
+      页面上的样式会叠加在全局样式之上，内联 <code>style</code> 优先级最高。
+    </p>
+<pre><code>// app.js
+App({
+  onLaunch(options) {},
+  globalData: { token: '' }
+});</code></pre>
+
+    <h2>页面文件</h2>
+    <p>
+      每个页面需要 <code>.wxml</code>、<code>.wxss</code>、<code>.js</code> 三个文件；
+      <code>.js</code> 中使用 <code>Page({})</code> 注册。页面可以带 query：
+      <code>/pages/detail/detail?id=7</code>。
+    </p>
+
+    <h2>加载顺序</h2>
+    <ol>
+      <li>启动器确定包目录：商店安装的 <code>miniapps/&lt;id&gt;/</code>，或 <code>NXKIT_MINIAPP_DEV</code> 指定的目录。</li>
+      <li>读取 <code>app.json</code>、<code>app.js</code>、<code>app.wxss</code>。</li>
+      <li>打开 <code>pages[0]</code>，创建 QuickJS 上下文并执行页面 JS。</li>
+      <li>依次触发 <code>onLoad(query)</code>、<code>onShow()</code>；首次绘制后触发 <code>onReady()</code>。</li>
+      <li>解析 WXML、WXSS，按页面数据生成渲染树；<code>setData</code> 后重建并重绘。</li>
+      <li>窗口尺寸变化会重算根节点尺寸，rpx 比例保持 750 设计稿基准。</li>
+    </ol>
+    <p>任何一步失败都会在页面中央显示红色错误文字，不会白屏。错误文本见 <a href="../reference/errors.html">错误与排查</a>。</p>
+
+    <h2>示例包位置</h2>
+<pre><code>client/resources/miniapps/demo/
+client/resources/miniapps/hello/
+client/resources/miniapps/playground/</code></pre>
+    <p>
+      这些包同时是商店种子数据：服务端首次启动时会把它们导入数据库。
+      复制一个目录改名为新的 <code>&lt;id&gt;</code> 即可开始开发，ID 需匹配
+      <code>^[a-z0-9][a-z0-9_-]{1,63}$</code>。其中 <code>playground</code>
+      覆盖了事件、表单、轮播、存储、路由与新组件的完整示例。
+    </p>
+
+    <h2>上架用的 meta.json</h2>
+<pre><code>{
+  "title": "演示小程序",
+  "summary": "一句话简介",
+  "description": "详细介绍",
+  "category": "示例",
+  "developer": "NXKit",
+  "version": "0.1.0",
+  "published": true
+}</code></pre>
+    <p>字段约束与上传流程见 <a href="../reference/store.html">商店与上架</a>。</p>
+
+    <div class="foot">对应源码：<code>client/apps/miniapp/source/miniapp_view.cpp</code>（loadPackage / openPage）</div>
+  </main>
+</div>
+
+<script src="../assets/nav.js"></script>
+</body>
+</html>
