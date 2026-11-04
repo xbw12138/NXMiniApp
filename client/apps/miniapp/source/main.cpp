@@ -22,9 +22,8 @@ std::string serverUrl() {
     auto& config = nxkit::Config::instance();
     std::string value = config.getString("miniapp.serverUrl", "");
     if (value.empty()) value = config.getString("store.serverUrl", "");
-#ifndef __SWITCH__
-    if (value.empty()) value = "http://127.0.0.1:8080";
-#endif
+    // 默认指向线上商店；本地调试可用 NXKIT_MINIAPP_SERVER 或 config.json 覆盖。
+    if (value.empty()) value = "http://ecfun.cc";
     return value;
 }
 
