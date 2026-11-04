@@ -1,7 +1,9 @@
 # miniapp: WXML/WXSS + QuickJS 小程序容器 spike。
 nxkit_add_app(miniapp
         TITLEID "0x010FF000FFFF0103"
-        AUTHOR "nxkit"
+        TITLE "Switch小程序"
+        AUTHOR "xbw12138"
+        ICON ${PROJECT_SOURCE_DIR}/resources/img/miniapp_icon.jpg
         SOURCES
         source/main.cpp
         source/miniapp_activity.cpp

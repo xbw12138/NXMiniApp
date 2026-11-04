@@ -36,7 +36,7 @@ void applyDarkTheme() {
 
 int main(int, char**) {
     nxkit::AppConfig config;
-    config.title = "NX MiniApp";
+    config.title = "Switch小程序";
     config.lightAccent = nvgRGB(15, 220, 120);
     config.darkAccent = nvgRGB(15, 220, 120);
 #ifndef __SWITCH__

@@ -115,14 +115,13 @@ void LauncherView::reload() {
             this->loaded = true;
 
             if (!error.empty()) {
-                this->statusLabel->setText(MiniAppApi::instance().serverUrl());
-                this->grid->setError(error + "\n请确认商店服务已启动，或在 config.json 设置 miniapp.serverUrl");
+                this->statusLabel->setText("连接商店失败");
+                this->grid->setError(error + "\n请检查网络后重试");
                 return;
             }
 
             this->items = list;
-            this->statusLabel->setText(MiniAppApi::instance().serverUrl() + " · " +
-                                       std::to_string(list.size()) + " 个小程序");
+            this->statusLabel->setText("共 " + std::to_string(list.size()) + " 个小程序");
             this->applyItems();
         });
     });

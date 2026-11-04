@@ -1,5 +1,6 @@
 # nxkit_add_app(<name>
 #     [TITLEID   <title id>]
+#     [TITLE     <display name>]
 #     [AUTHOR    <author>]
 #     [VERSION   <1.0.0>]
 #     [ICON      <path to icon>]
@@ -10,10 +11,13 @@
 # applies the platform specific packaging rules (.nro for Switch, .data for
 # desktop, .vpk for PSVita).
 function(nxkit_add_app APP_NAME)
-    cmake_parse_arguments(APP "" "TITLEID;AUTHOR;VERSION;ICON" "SOURCES;LIBS" ${ARGN})
+    cmake_parse_arguments(APP "" "TITLEID;TITLE;AUTHOR;VERSION;ICON" "SOURCES;LIBS" ${ARGN})
 
     if(NOT APP_SOURCES)
         message(FATAL_ERROR "nxkit_add_app(${APP_NAME}): no SOURCES given")
+    endif()
+    if(NOT APP_TITLE)
+        set(APP_TITLE ${APP_NAME})
     endif()
 
     if(NOT APP_TITLEID)
@@ -69,7 +73,7 @@ function(nxkit_add_app APP_NAME)
     elseif(PLATFORM_SWITCH)
         add_custom_target(${APP_NAME}.nro
                 DEPENDS ${APP_NAME}
-                COMMAND ${NX_NACPTOOL_EXE} --create "${APP_NAME}"
+                COMMAND ${NX_NACPTOOL_EXE} --create "${APP_TITLE}"
                 "${APP_AUTHOR}" "${APP_VERSION}" ${APP_NAME}.nacp --titleid=${APP_TITLEID}
                 COMMAND ${CMAKE_COMMAND} -E copy_directory ${NXKIT_RESOURCES_DIR} ${CMAKE_BINARY_DIR}/resources
                 COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/resources/font
