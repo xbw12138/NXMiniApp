@@ -66,8 +66,30 @@ LauncherView::LauncherView() {
     heading->addView(this->statusLabel);
     header->addView(heading);
 
+    brls::Button* search = new brls::Button();
+    search->setText("搜索");
+    search->setMarginLeft(12);
+    search->registerClickAction([this](brls::View*) {
+        this->promptSearch();
+        return true;
+    });
+    header->addView(search);
+
+    this->clearSearchBtn = new brls::Button();
+    this->clearSearchBtn->setText("清除");
+    this->clearSearchBtn->setMarginLeft(8);
+    this->clearSearchBtn->setVisibility(brls::Visibility::GONE);
+    this->clearSearchBtn->registerClickAction([this](brls::View*) {
+        this->searchQuery.clear();
+        this->clearSearchBtn->setVisibility(brls::Visibility::GONE);
+        this->applyItems();
+        return true;
+    });
+    header->addView(this->clearSearchBtn);
+
     brls::Button* refresh = new brls::Button();
     refresh->setText("刷新");
+    refresh->setMarginLeft(8);
     refresh->registerClickAction([this](brls::View*) {
         this->loaded = false;
         this->reload();
@@ -164,6 +186,34 @@ void LauncherView::applyItems() {
         return;
     }
 
+    // 搜索模式：不按「最近使用」排序，全量过滤标题/id/分类/开发者。
+    if (!this->searchQuery.empty()) {
+        std::string query = this->searchQuery;
+        std::transform(query.begin(), query.end(), query.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        std::vector<nxkit::CoverItem> covers;
+        for (const auto& app : this->items) {
+            std::string hay = app.title + " " + app.id + " " + app.category + " " + app.developer;
+            std::transform(hay.begin(), hay.end(), hay.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            if (hay.find(query) == std::string::npos) continue;
+            nxkit::CoverItem cover;
+            cover.id = app.id;
+            cover.cover = app.iconUrl;
+            cover.title = app.title;
+            cover.subtitle = subtitleOf(app);
+            covers.push_back(std::move(cover));
+        }
+        if (covers.empty()) {
+            this->grid->setEmpty("没有找到匹配「" + this->searchQuery + "」的小程序");
+        } else {
+            this->grid->setItems(covers);
+        }
+        this->statusLabel->setText("搜索「" + this->searchQuery + "」 · " +
+                                   std::to_string(covers.size()) + " 个结果");
+        return;
+    }
+
     std::vector<std::string> recent = this->recentIds();
     std::vector<nxkit::CoverItem> covers;
     std::vector<std::string> added;
@@ -176,6 +226,8 @@ void LauncherView::applyItems() {
         cover.cover = app.iconUrl;
         cover.title = app.title;
         cover.subtitle = subtitleOf(app);
+        int used = this->usageCount(app.id);
+        if (used > 0) cover.subtitle += " · 用过" + std::to_string(used) + "次";
         cover.badge = badge;
         covers.push_back(std::move(cover));
     };
@@ -243,7 +295,34 @@ void LauncherView::openItem(const MiniAppItem& item) {
 
 void LauncherView::enter(const MiniAppItem& item) {
     this->touchRecent(item.id);
+    this->bumpUsage(item.id);
     brls::Application::pushActivity(new MiniappActivity(packages::directory(item.id)));
+}
+
+void LauncherView::bumpUsage(const std::string& id) {
+    auto& config = nxkit::Config::instance();
+    std::string base = "miniapp.usage." + id;
+    config.setValue(base + ".count", config.getInt(base + ".count", 0) + 1);
+    config.setValue(base + ".lastUsed",
+                    std::chrono::duration_cast<std::chrono::seconds>(
+                        std::chrono::system_clock::now().time_since_epoch())
+                        .count());
+    config.save();
+}
+
+int LauncherView::usageCount(const std::string& id) const {
+    return nxkit::Config::instance().getInt("miniapp.usage." + id + ".count", 0);
+}
+
+void LauncherView::promptSearch() {
+    brls::Application::getImeManager()->openForText(
+        [this](std::string text) {
+            this->searchQuery = text;
+            this->clearSearchBtn->setVisibility(text.empty() ? brls::Visibility::GONE
+                                                             : brls::Visibility::VISIBLE);
+            this->applyItems();
+        },
+        "搜索小程序", "", 64, this->searchQuery);
 }
 
 }  // namespace miniapp

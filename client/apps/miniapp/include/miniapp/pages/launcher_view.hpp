@@ -29,8 +29,14 @@ private:
     void enter(const MiniAppItem& item);
     std::vector<std::string> recentIds() const;
     void touchRecent(const std::string& id);
+    // 使用统计：次数 + 最近使用时间，持久化在 config.json。
+    void bumpUsage(const std::string& id);
+    int usageCount(const std::string& id) const;
+    // 搜索：弹出系统键盘，按标题/id/分类/开发者过滤。
+    void promptSearch();
 
     brls::Label* statusLabel = nullptr;
+    brls::Button* clearSearchBtn = nullptr;
     nxkit::CoverGridPage* grid = nullptr;
 
     std::vector<MiniAppItem> items;
@@ -38,6 +44,7 @@ private:
     bool loaded = false;
     bool loading = false;
     std::string downloadingId;
+    std::string searchQuery;
 };
 
 }  // namespace miniapp
