@@ -6,8 +6,13 @@
 
 #include <nlohmann/json.hpp>
 
+#include <borealis/core/thread.hpp>
+
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <thread>
 
 #include "miniapp/install/package_manager.hpp"
 #include "miniapp/miniapp_activity.hpp"
@@ -188,6 +193,18 @@ void LauncherView::applyItems() {
     }
 
     this->grid->setItems(covers);
+
+#ifndef __SWITCH__
+    // 崩溃复现自动驾驶：NXKIT_AUTOPILOT=1 时自动反复「打开首个小程序→返回」。
+    static bool autopilot = std::getenv("NXKIT_AUTOPILOT") != nullptr;
+    if (autopilot && !this->items.empty()) {
+        MiniAppItem first = this->items.front();
+        std::thread([this, first]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+            brls::sync([this, first]() { this->openItem(first); });
+        }).detach();
+    }
+#endif
 }
 
 void LauncherView::openItem(const MiniAppItem& item) {

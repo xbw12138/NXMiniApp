@@ -6,6 +6,9 @@
 
 #include <cstdlib>
 #include <string>
+#ifdef __SWITCH__
+#include <fstream>
+#endif
 
 #include "miniapp/api/miniapp_api.hpp"
 #include "miniapp/miniapp_activity.hpp"
@@ -14,6 +17,22 @@
 #include "nxkit/config.hpp"
 
 namespace {
+
+#ifdef __SWITCH__
+// Switch 上把日志落盘到 SD 卡：真机崩溃后可经 USB 拉取日志定位问题。
+void setupFileLog() {
+    static std::ofstream file("sdmc:/switch/miniapp/miniapp.log", std::ios::trunc);
+    if (!file) return;
+    brls::Logger::getLogEvent()->subscribe([](const std::string& line) {
+        file << line << "\n";
+        file.flush();
+    });
+    brls::Logger::info("miniapp: file log ready");
+}
+#else
+void setupFileLog() {}
+#endif
+
 
 std::string serverUrl() {
     const char* env = std::getenv("NXKIT_MINIAPP_SERVER");
@@ -35,6 +54,8 @@ void applyDarkTheme() {
 }  // namespace
 
 int main(int, char**) {
+    setupFileLog();
+    brls::Logger::info("miniapp: starting");
     nxkit::AppConfig config;
     config.title = "Switch小程序";
     config.lightAccent = nvgRGB(15, 220, 120);

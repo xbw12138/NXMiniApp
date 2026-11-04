@@ -25,6 +25,7 @@
 #include <functional>
 #include <iterator>
 #include <sstream>
+#include <thread>
 
 #include "miniapp/js_runtime.hpp"
 #include "miniapp/layout.hpp"
@@ -206,10 +207,18 @@ std::string formatClock(double seconds) {
 
 MiniappView::MiniappView(std::string packagePath)
     : packagePathOverride(std::move(packagePath)) {
+    brls::Logger::info("MiniappView: ctor enter");
     rpxScale = kRpxBaseWidth / kRpxDesignWidth;
+#ifdef __SWITCH__
+    // Switch 平台必须用 zh-Hans 作为主字体：borealis 已为它挂好
+    // 拉丁/扩展汉字/图标字体的回退链，FONT_REGULAR 不含中文字形。
+    fontId = brls::Application::getFont(brls::FONT_CHINESE_SIMPLIFIED);
+#else
     fontId = brls::Application::getFont(brls::FONT_REGULAR);
+#endif
     if (fontId == brls::FONT_INVALID) {
-        brls::Logger::warning("miniapp: regular font is not loaded");
+        brls::Logger::warning("miniapp: primary font is not loaded, falling back to regular");
+        fontId = brls::Application::getFont(brls::FONT_REGULAR);
     }
 
     this->setFocusable(true);
@@ -228,7 +237,10 @@ MiniappView::MiniappView(std::string packagePath)
             if (done) done(confirm);
             return true;
         }
-        if (!navigateBack(1)) brls::Application::popActivity();
+        if (!navigateBack(1)) {
+            brls::Logger::info("MiniappView: B pressed, popActivity");
+            brls::Application::popActivity();
+        }
         return true;
     });
 
@@ -280,9 +292,21 @@ MiniappView::MiniappView(std::string packagePath)
     // 对接 wiliwili 风格播放器：用 MpvEvent 回调驱动状态，不轮询 mpv。
     nxkit::VideoView::instance().setStateCallback(
         [this](const nxkit::VideoState& vs) { this->onVideoState(vs); });
+
+#ifndef __SWITCH__
+    // 崩溃复现自动驾驶：NXKIT_AUTOPILOT=1 时进入后自动按 B 返回。
+    static bool autopilot = std::getenv("NXKIT_AUTOPILOT") != nullptr;
+    if (autopilot) {
+        std::thread([]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+            brls::sync([]() { brls::Application::popActivity(); });
+        }).detach();
+    }
+#endif
 }
 
 MiniappView::~MiniappView() {
+    brls::Logger::info("MiniappView: dtor begin");
     if (aliveToken) *aliveToken = false;
     if (runLoopActive) {
         brls::Application::getRunLoopEvent()->unsubscribe(runLoopToken);
@@ -290,11 +314,14 @@ MiniappView::~MiniappView() {
     }
     brls::Application::getPostDrawEvent()->unsubscribe(postDrawToken);
     nxkit::VideoView::instance().setStateCallback(nullptr);
+    brls::Logger::info("MiniappView: stopVideo");
     stopVideo();
+    brls::Logger::info("MiniappView: cleanup {} page(s)", pages.size());
     for (auto& page : pages) {
         cleanupPage(*page);
     }
     pages.clear();
+    brls::Logger::info("MiniappView: dtor done");
 }
 
 brls::View* MiniappView::getDefaultFocus() {
