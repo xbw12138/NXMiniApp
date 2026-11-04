@@ -698,6 +698,9 @@ void Application::frame()
     nvgResetTransform(Application::getNVGContext()); // scale
     nvgEndFrame(Application::getNVGContext());
 
+    // Raw video / OpenGL overlays which are not part of the NanoVG scene.
+    Application::postDrawEvent.fire();
+
     Application::platform->getVideoContext()->endFrame();
 }
 
@@ -1103,6 +1106,11 @@ Event<InputType>* Application::getGlobalInputTypeChangeEvent()
 VoidEvent* Application::getRunLoopEvent()
 {
     return &Application::runLoopEvent;
+}
+
+VoidEvent* Application::getPostDrawEvent()
+{
+    return &Application::postDrawEvent;
 }
 
 VoidEvent* Application::getExitEvent()

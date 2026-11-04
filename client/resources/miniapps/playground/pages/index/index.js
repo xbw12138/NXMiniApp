@@ -8,6 +8,8 @@ Page({
     nick: '',
     saved: '尚未写入存储',
     systemLine: '',
+    videoSrc: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    videoStatus: '点击视频或按 A 播放',
     richNodes: '<b>富文本</b>：标签已剥离，仅保留文字内容',
     items: [
       { name: '小林', score: 96 },
@@ -98,5 +100,34 @@ Page({
   onRead() {
     const nick = wx.getStorageSync('nick');
     this.setData({ saved: nick ? '读取到：' + nick : '暂无存储' });
+  },
+
+  onVideoPlayTap() {
+    wx.createVideoContext('demoVideo').play();
+  },
+
+  onVideoPauseTap() {
+    wx.createVideoContext('demoVideo').pause();
+  },
+
+  onVideoPlay() {
+    this.setData({ videoStatus: '播放中' });
+  },
+
+  onVideoPause() {
+    this.setData({ videoStatus: '已暂停' });
+  },
+
+  onVideoEnded() {
+    this.setData({ videoStatus: '播放结束' });
+  },
+
+  onVideoTime(e) {
+    const t = Math.floor(e.detail.currentTime || 0);
+    this.setData({ videoStatus: '时间 ' + t + 's' });
+  },
+
+  onVideoError(e) {
+    this.setData({ videoStatus: '视频错误：' + (e.detail.errMsg || '') });
   }
 });

@@ -18,7 +18,7 @@
   <main class="content">
     <h1>组件总览</h1>
     <p class="lead">
-      容器内置 21 类标签。所有组件都由 Yoga 排版、NanoVG 绘制，不依赖 HTML。
+      容器内置 22 类标签。所有组件都由 Yoga 排版、NanoVG 绘制，不依赖 HTML。
       未识别的标签会自动降级为 <code>view</code>。
     </p>
 
@@ -42,6 +42,7 @@
         <tr><td><code>progress</code></td><td>100% × 24rpx</td><td>否</td><td>—</td></tr>
         <tr><td><code>swiper</code></td><td>100% × 300rpx</td><td>自动轮播</td><td>—</td></tr>
         <tr><td><code>swiper-item</code></td><td>100% × 100%</td><td>否</td><td>—</td></tr>
+        <tr><td><code>video</code></td><td>100% × 360rpx</td><td>是</td><td><code>bindplay</code> / <code>bindpause</code> / <code>bindended</code> / <code>bindtimeupdate</code> / <code>binderror</code></td></tr>
         <tr><td><code>form</code> / <code>label</code> / <code>checkbox-group</code> / <code>radio-group</code> / <code>block</code></td><td>容器 / 不渲染</td><td>否</td><td>—</td></tr>
       </tbody>
     </table>
@@ -50,7 +51,9 @@
     <p>
       默认 <code>flex-direction: column</code>。<code>scroll-view</code> 通过
       <code>scroll-y="{{true}}"</code> 或 <code>scroll-x="{{true}}"</code> 开启滚动；
-      内容超出时由焦点导航自动滚动到可见区域。旋转与滚轮触摸暂未接入。
+      内容超出时由焦点导航自动滚动到可见区域。鼠标左键与触摸点击会命中渲染树，
+      触发对应节点的 <code>bindtap</code> 并沿祖先冒泡（<code>catchtap</code> 终止冒泡）。
+      鼠标滚轮暂未接入。
     </p>
 <pre><code>&lt;scroll-view class="panel" scroll-y="{{true}}" style="height: 100%;"&gt;
   &lt;view class="card"&gt;...&lt;/view&gt;
@@ -135,6 +138,38 @@
   &lt;swiper-item&gt;&lt;view class="slide"&gt;第一屏&lt;/view&gt;&lt;/swiper-item&gt;
   &lt;swiper-item&gt;&lt;view class="slide"&gt;第二屏&lt;/view&gt;&lt;/swiper-item&gt;
 &lt;/swiper&gt;</code></pre>
+
+    <h2 id="video">video</h2>
+    <p>
+      支持 <code>src</code>、<code>poster</code>、<code>autoplay</code>、<code>loop</code>、
+      <code>muted</code>、<code>controls</code> 与 <code>object-fit</code>（<code>contain</code> /
+      <code>cover</code> / <code>fill</code>）。点击画面或按 A 键播放/暂停，
+      底部控制条显示进度、时间与状态。
+    </p>
+    <p>
+      播放后端是 <code>nxkit::MPVCore</code>：
+    </p>
+    <ul>
+      <li>Switch 构建默认开启 <code>NXKIT_WITH_MPV</code>，可加载包内文件路径或 HTTP(S) 地址。</li>
+      <li>桌面构建默认关闭；需要安装 libmpv 后以 <code>-DNXKIT_WITH_MPV=ON</code> 重新配置。</li>
+      <li>未启用 MPV 时只显示 poster 与占位控制条，点击播放会提示
+          “视频播放需要启用 libmpv 的构建”，不会伪造播放。</li>
+    </ul>
+<pre><code>&lt;video id="demoVideo" class="video" src="/videos/demo.mp4" poster="/images/logo.png"
+       autoplay="{{false}}" loop="{{true}}" muted="{{true}}" controls="{{true}}"
+       bindplay="onVideoPlay" bindpause="onVideoPause"
+       bindended="onVideoEnded" bindtimeupdate="onVideoTime"
+       binderror="onVideoError"/&gt;</code></pre>
+    <p>脚本侧通过 <code>wx.createVideoContext(id)</code> 控制播放：</p>
+<pre><code>const ctx = wx.createVideoContext('demoVideo');
+ctx.play();
+ctx.pause();
+ctx.seek(30);
+ctx.stop();</code></pre>
+    <div class="warn">
+      <strong>限制：</strong>全局只有一个 MPV 实例，同一时间只播放一个 <code>video</code>；
+      视频直出层不参与 NanoVG 合成，被 <code>scroll-view</code> 裁剪或完全移出屏幕时暂停绘制。
+    </div>
 
     <h2 id="form-container">form / label / checkbox-group / radio-group / block</h2>
     <p>

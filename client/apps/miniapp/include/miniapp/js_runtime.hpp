@@ -61,6 +61,12 @@ public:
 
     virtual std::string clipboardGet() { return {}; }
     virtual void clipboardSet(const std::string&) {}
+
+    /// wx.createVideoContext 背后的宿主能力。
+    virtual bool videoControl(const std::string& id, const std::string& action,
+                              double value) {
+        return false;
+    }
 };
 
 /// 页面脚本运行时。

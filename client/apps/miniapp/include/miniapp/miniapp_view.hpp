@@ -54,6 +54,8 @@ public:
     std::vector<std::string> storageKeys() override;
     std::string clipboardGet() override;
     void clipboardSet(const std::string& text) override;
+    bool videoControl(const std::string& id, const std::string& action,
+                      double value) override;
 
 private:
     struct LocalValue {
@@ -89,6 +91,13 @@ private:
         std::map<std::string, std::string> inputValues;
         std::map<std::string, int> swiperIndex;
         std::map<std::string, double> swiperLast;
+
+        // video 播放状态（按稳定路径保存）。
+        std::map<std::string, bool> videoPlaying;
+        std::map<std::string, bool> videoStarted;
+        std::map<std::string, std::string> videoLoadedSrc;
+        std::map<std::string, double> videoTime;
+        std::map<std::string, double> videoLastUpdate;
     };
 
     struct ModalState {
@@ -148,6 +157,8 @@ private:
     void drawInput(NVGcontext* vg, RenderNode& node, float alpha);
     void drawProgress(NVGcontext* vg, RenderNode& node, float alpha);
     void drawIcon(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawVideo(NVGcontext* vg, RenderNode& node, float alpha);
+    void drawVideoSurface();
     void drawSwitch(NVGcontext* vg, RenderNode& node, float alpha);
     void drawCheckbox(NVGcontext* vg, RenderNode& node, float alpha);
     void drawRadio(NVGcontext* vg, RenderNode& node, float alpha);
@@ -162,6 +173,11 @@ private:
 
     // 输入
     void handleActivate();
+    void handlePointerTap(float x, float y);
+    void activateNode(RenderNode* node);
+    RenderNode* hitTestNode(RenderNode& node, float x, float y) const;
+    RenderNode* findNodeByPath(RenderNode& node, const std::string& path) const;
+    RenderNode* findNodeById(RenderNode& node, const std::string& id) const;
     void handleDirection(brls::FocusDirection direction);
     void moveFocus(RenderNode* from, brls::FocusDirection direction);
     RenderNode* findFocusByPath(const std::string& path) const;
@@ -175,6 +191,12 @@ private:
 
     void tick(double now);
     void pumpSwiper(PageState& page, RenderNode& node, double now);
+    void pumpVideo(PageState& page, RenderNode& node, double now);
+    void toggleVideo(RenderNode* node);
+    void startVideo(RenderNode* node, bool forceLoad);
+    void stopVideo();
+    void dispatchVideoEvent(RenderNode* node, const std::string& handler,
+                            const std::string& type);
     void saveStorage();
     void loadStorage();
     int imageTexture(const std::string& src, const std::string& pageDir);
@@ -218,6 +240,11 @@ private:
     brls::VoidEvent::Subscription runLoopToken;
     bool focusInitialized = false;
     std::shared_ptr<bool> aliveToken = std::make_shared<bool>(true);
+
+    // video：全局只允许一个播放器实例。
+    std::string activeVideoPath;
+    std::string activeVideoSrc;
+    brls::VoidEvent::Subscription postDrawToken;
 };
 
 }  // namespace miniapp

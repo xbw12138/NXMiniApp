@@ -214,6 +214,10 @@ void setupNode(RenderNode& node, bool root, float rootWidth, float rootHeight,
         if (!style.hasWidth) YGNodeStyleSetWidthPercent(node.yoga, 100.0f);
         if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 80.0f * rpxScale);
     }
+    if (node.tag == "video") {
+        if (!style.hasWidth) YGNodeStyleSetWidthPercent(node.yoga, 100.0f);
+        if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 360.0f * rpxScale);
+    }
     if (node.isText() || node.isButton() || node.tag == "rich-text") {
         YGNodeSetMeasureFunc(node.yoga, measureTextNode);
     }

@@ -24,9 +24,11 @@ python3 -m http.server 8090 --directory docs
 # 打开 http://127.0.0.1:8090
 ```
 
-当前对齐范围（与微信对比）：21 类内置标签（含 scroll-view / swiper / 表单控件 / progress / rich-text / icon）、
+当前对齐范围（与微信对比）：22 类内置标签（含 scroll-view / swiper / 表单控件 / progress / rich-text / icon / video）、
 模板指令 `wx:for` / `wx:if` / `wx:elif` / `wx:else`、完整 JS 运行时常驻与 `setData`、页面栈与路由、
-35 个可用的 `wx.*` API 和 18 个兼容占位接口。详细边界见文档的「与微信的差异」。
+鼠标左键与触摸点击（`bindtap` 冒泡 / `catchtap` 终止）、36 个可用的 `wx.*` API 和 18 个兼容占位接口。
+`video` 在 Switch 构建（默认 `NXKIT_WITH_MPV=ON`）中可真实播放，桌面构建需安装 libmpv 后开启。
+详细边界见文档的「与微信的差异」。
 
 ## 服务端（Docker，推荐）
 

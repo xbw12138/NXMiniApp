@@ -9,13 +9,18 @@
 #include <borealis/core/font.hpp>
 #include <borealis/core/ime.hpp>
 #include <borealis/core/thread.hpp>
+#include <borealis/core/touch/tap_gesture.hpp>
 #include <nxkit/http_client.hpp>
 #include <nxkit/paths.hpp>
+#ifdef NXKIT_WITH_MPV
+#include <nxkit/media/mpv_core.hpp>
+#endif
 
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -191,6 +196,14 @@ double steadyMilliseconds() {
         .count();
 }
 
+std::string formatClock(double seconds) {
+    if (!(seconds > 0.0)) seconds = 0.0;
+    int total = static_cast<int>(seconds);
+    char buffer[24];
+    std::snprintf(buffer, sizeof(buffer), "%d:%02d", total / 60, total % 60);
+    return buffer;
+}
+
 }  // namespace
 
 MiniappView::MiniappView(std::string packagePath)
@@ -246,12 +259,25 @@ MiniappView::MiniappView(std::string packagePath)
     this->registerAction("右", brls::BUTTON_RIGHT, right);
     this->registerAction("右", brls::BUTTON_NAV_RIGHT, right);
 
+    // 鼠标左键 / 触摸点击：由手势识别器统一转发到渲染树命中测试。
+    this->addGestureRecognizer(new brls::TapGestureRecognizer(
+        [this](brls::TapGestureStatus status, brls::Sound*) {
+            if (status.state == brls::GestureState::END) {
+                this->handlePointerTap(status.position.x, status.position.y);
+            }
+        }));
+
     this->loadPackage();
 
     runLoopToken = brls::Application::getRunLoopEvent()->subscribe([this]() {
         this->tick(steadyMilliseconds());
     });
     runLoopActive = true;
+
+    // 视频走 OpenGL 直出，只能在 NanoVG 帧结束后、交换缓冲前绘制。
+    postDrawToken = brls::Application::getPostDrawEvent()->subscribe([this]() {
+        this->drawVideoSurface();
+    });
 }
 
 MiniappView::~MiniappView() {
@@ -260,6 +286,8 @@ MiniappView::~MiniappView() {
         brls::Application::getRunLoopEvent()->unsubscribe(runLoopToken);
         runLoopActive = false;
     }
+    brls::Application::getPostDrawEvent()->unsubscribe(postDrawToken);
+    stopVideo();
     for (auto& page : pages) {
         cleanupPage(*page);
     }
@@ -393,6 +421,7 @@ bool MiniappView::openPage(const std::string& url, bool push) {
 
 void MiniappView::closeCurrentPage() {
     if (!current) return;
+    stopVideo();
     if (current->runtime) {
         current->runtime->callLifecycle("onHide");
         current->runtime->callLifecycle("onUnload");
@@ -795,7 +824,7 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
         "view", "text", "image", "button", "scroll-view", "swiper", "swiper-item",
         "input", "textarea", "switch", "checkbox", "checkbox-group", "radio",
         "radio-group", "slider", "navigator", "form", "progress", "rich-text",
-        "label", "icon"};
+        "label", "icon", "video"};
     bool known = false;
     for (const char* knownTag : kKnownTags) {
         if (tag == knownTag) {
@@ -870,6 +899,13 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
         }
     } else if (tag == "slider") {
         if (!style.hasBackground) style.hasBackground = false;
+    } else if (tag == "video") {
+        if (!style.hasBackground) {
+            style.hasBackground = true;
+            style.background = Rgba{0.05f, 0.06f, 0.07f, 1.0f};
+            style.borderRadius = 12.0f * rpxScale;
+        }
+        style.overflowHidden = true;
     }
 
     // 事件与 dataset。
@@ -880,6 +916,8 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
             std::string text = trim(*handler);
             if (!text.empty()) {
                 render->bindTap = text;
+                render->catchTap = std::strcmp(name, "catchtap") == 0 ||
+                                   std::strcmp(name, "catch:tap") == 0;
                 break;
             }
         }
@@ -892,6 +930,21 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
     }
     if (const std::string* handler = node.attr("bindconfirm")) {
         render->bindConfirm = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("bindplay")) {
+        render->bindPlay = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("bindpause")) {
+        render->bindPause = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("bindended")) {
+        render->bindEnded = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("bindtimeupdate")) {
+        render->bindTimeUpdate = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("binderror")) {
+        render->bindError = trim(*handler);
     }
     for (const auto& entry : node.attributes) {
         if (entry.first.size() > 5 && entry.first.compare(0, 5, "data-") == 0) {
@@ -1007,6 +1060,35 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
             render->iconSize = std::max(16.0f, toFloat(attribute, 48.0f));
         } else {
             render->iconSize = 48.0f * rpxScale;
+        }
+    } else if (tag == "video") {
+        render->videoSrc = attributeText(node, "src", locals);
+        render->videoPoster = attributeText(node, "poster", locals);
+        render->videoObjectFit = attributeText(node, "object-fit", locals);
+        if (render->videoObjectFit.empty()) {
+            render->videoObjectFit = attributeText(node, "objectFit", locals);
+        }
+        if (render->videoObjectFit.empty()) render->videoObjectFit = "contain";
+        JsonValue attribute;
+        if (evaluateAttribute(node, "autoplay", locals, attribute)) {
+            render->videoAutoplay = isTruthy(attribute);
+        }
+        if (evaluateAttribute(node, "loop", locals, attribute)) {
+            render->videoLoop = isTruthy(attribute);
+        }
+        if (evaluateAttribute(node, "muted", locals, attribute)) {
+            render->videoMuted = isTruthy(attribute);
+        }
+        if (evaluateAttribute(node, "controls", locals, attribute)) {
+            render->videoControls = isTruthy(attribute);
+        }
+        if (current) {
+            auto playing = current->videoPlaying.find(path);
+            if (playing != current->videoPlaying.end()) {
+                render->videoPlaying = playing->second;
+            }
+            auto time = current->videoTime.find(path);
+            if (time != current->videoTime.end()) render->videoTime = time->second;
         }
     }
 
@@ -1188,6 +1270,8 @@ void MiniappView::drawNode(NVGcontext* vg, RenderNode& node, float parentAlpha,
         drawTextBlock(vg, node, drawX, drawY, width, alpha);
     } else if (node.tag == "icon") {
         drawIcon(vg, node, alpha);
+    } else if (node.tag == "video") {
+        drawVideo(vg, node, alpha);
     } else if (node.tag == "switch") {
         drawSwitch(vg, node, alpha);
     } else if (node.tag == "checkbox") {
@@ -1405,6 +1489,153 @@ void MiniappView::drawIcon(NVGcontext* vg, RenderNode& node, float alpha) {
     nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, alpha));
     nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgText(vg, centerX, centerY, glyph.c_str(), nullptr);
+}
+
+void MiniappView::drawVideo(NVGcontext* vg, RenderNode& node, float alpha) {
+    if (node.absWidth <= 0.0f || node.absHeight <= 0.0f) return;
+
+    float barHeight =
+        node.videoControls ? std::min(44.0f, node.absHeight * 0.35f) : 0.0f;
+    float videoHeight = std::max(1.0f, node.absHeight - barHeight);
+
+    nvgSave(vg);
+    nvgScissor(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight);
+
+    // 视频画面区域。
+    nvgBeginPath(vg);
+    nvgRect(vg, node.absLeft, node.absTop, node.absWidth, videoHeight);
+    nvgFillColor(vg, nvgRGBAf(0.03f, 0.04f, 0.05f, alpha));
+    nvgFill(vg);
+
+    bool showPoster = !node.videoPlaying || node.videoError;
+    if (showPoster && !node.videoPoster.empty()) {
+        int texture = imageTexture(node.videoPoster, current ? current->dir : packageDir);
+        int imageWidth = 0;
+        int imageHeight = 0;
+        if (texture > 0) nvgImageSize(vg, texture, &imageWidth, &imageHeight);
+        if (texture > 0 && imageWidth > 0 && imageHeight > 0) {
+            float scaleX = node.absWidth / static_cast<float>(imageWidth);
+            float scaleY = videoHeight / static_cast<float>(imageHeight);
+            float scale = std::min(scaleX, scaleY);
+            if (node.videoObjectFit == "cover" || node.videoObjectFit == "fill") {
+                scale = std::max(scaleX, scaleY);
+            }
+            float patternWidth = imageWidth * scale;
+            float patternHeight = imageHeight * scale;
+            float patternX = node.absLeft + (node.absWidth - patternWidth) * 0.5f;
+            float patternY = node.absTop + (videoHeight - patternHeight) * 0.5f;
+            nvgBeginPath(vg);
+            nvgRect(vg, node.absLeft, node.absTop, node.absWidth, videoHeight);
+            NVGpaint paint = nvgImagePattern(vg, patternX, patternY, patternWidth,
+                                             patternHeight, 0.0f, texture, alpha);
+            nvgFillPaint(vg, paint);
+            nvgFill(vg);
+        }
+    }
+
+    // 未播放时在画面中央画播放按钮；播放中的画面由 OpenGL 直出覆盖。
+    if (showPoster) {
+        float centerX = node.absLeft + node.absWidth * 0.5f;
+        float centerY = node.absTop + videoHeight * 0.5f;
+        float radius = std::max(18.0f, std::min(44.0f, std::min(node.absWidth, videoHeight) * 0.14f));
+        nvgBeginPath(vg);
+        nvgCircle(vg, centerX, centerY, radius);
+        nvgFillColor(vg, nvgRGBAf(0.0f, 0.0f, 0.0f, 0.55f * alpha));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, centerX - radius * 0.28f, centerY - radius * 0.34f);
+        nvgLineTo(vg, centerX + radius * 0.38f, centerY);
+        nvgLineTo(vg, centerX - radius * 0.28f, centerY + radius * 0.34f);
+        nvgClosePath(vg);
+        nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, alpha));
+        nvgFill(vg);
+    }
+
+    if (node.videoError && !node.videoErrorText.empty()) {
+        nvgFontFaceId(vg, fontId);
+        nvgFontSize(vg, std::min(node.fontSize, 22.0f));
+        nvgFillColor(vg, nvgRGBAf(1.0f, 0.42f, 0.42f, alpha));
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(vg, node.absLeft + node.absWidth * 0.5f,
+                node.absTop + videoHeight - 18.0f, node.videoErrorText.c_str(), nullptr);
+    }
+
+    if (barHeight > 0.0f) {
+        float barTop = node.absTop + videoHeight;
+        nvgBeginPath(vg);
+        nvgRect(vg, node.absLeft, barTop, node.absWidth, barHeight);
+        nvgFillColor(vg, nvgRGBAf(0.08f, 0.09f, 0.11f, 0.96f * alpha));
+        nvgFill(vg);
+
+        float progress = 0.0f;
+        if (node.videoDuration > 0.0) {
+            progress = static_cast<float>(node.videoTime / node.videoDuration);
+        }
+        progress = std::max(0.0f, std::min(1.0f, progress));
+        nvgBeginPath(vg);
+        nvgRect(vg, node.absLeft, barTop, node.absWidth * progress, 3.0f);
+        nvgFillColor(vg, toColor(kAccent, alpha));
+        nvgFill(vg);
+
+        std::string clock = formatClock(node.videoTime) + " / " +
+                            formatClock(node.videoDuration);
+        std::string status;
+        if (node.videoError) {
+            status = "播放失败";
+        } else {
+#ifdef NXKIT_WITH_MPV
+            status = node.videoPlaying ? "播放中" : "已暂停";
+#else
+            status = node.videoPlaying ? "播放中" : "未启用 MPV";
+#endif
+        }
+
+        nvgFontFaceId(vg, fontId);
+        nvgFontSize(vg, 18.0f);
+        nvgFillColor(vg, nvgRGBAf(0.82f, 0.84f, 0.88f, alpha));
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgText(vg, node.absLeft + 12.0f, barTop + barHeight * 0.62f, clock.c_str(),
+                nullptr);
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        nvgText(vg, node.absLeft + node.absWidth - 12.0f, barTop + barHeight * 0.62f,
+                status.c_str(), nullptr);
+    }
+
+    nvgRestore(vg);
+}
+
+void MiniappView::drawVideoSurface() {
+#ifdef NXKIT_WITH_MPV
+    if (activeVideoPath.empty() || !current || !current->root) return;
+    RenderNode* node = findNodeByPath(*current->root, activeVideoPath);
+    if (!node || !node->videoPlaying || node->videoError) return;
+    if (node->style.displayNone || node->absWidth <= 0.0f || node->absHeight <= 0.0f) {
+        return;
+    }
+
+    float barHeight =
+        node->videoControls ? std::min(44.0f, node->absHeight * 0.35f) : 0.0f;
+    float viewWidth = brls::Application::contentWidth;
+    float viewHeight = brls::Application::contentHeight;
+    if (node->absLeft < 0.0f || node->absTop < 0.0f ||
+        node->absLeft + node->absWidth > viewWidth ||
+        node->absTop + node->absHeight > viewHeight) {
+        return;
+    }
+    // 被 scroll-view 等裁剪时不直出，避免画到裁剪区域之外。
+    for (RenderNode* parent = node->parent; parent; parent = parent->parent) {
+        if (!parent->style.overflowHidden && !parent->isScrollView()) continue;
+        if (node->absLeft < parent->absLeft || node->absTop < parent->absTop ||
+            node->absLeft + node->absWidth > parent->absLeft + parent->absWidth ||
+            node->absTop + node->absHeight > parent->absTop + parent->absHeight) {
+            return;
+        }
+    }
+
+    brls::Rect rect(node->absLeft, node->absTop, node->absWidth,
+                    std::max(1.0f, node->absHeight - barHeight));
+    nxkit::MPVCore::instance().draw(rect, node->style.opacity);
+#endif
 }
 
 float MiniappView::valueOf(RenderNode* node) const {
@@ -1718,30 +1949,73 @@ void MiniappView::handleActivate() {
     }
 
     RenderNode* node = findFocusByPath(focusPath);
-    if (!node || !current) return;
+    if (!node) return;
+    activateNode(node);
+}
+
+void MiniappView::handlePointerTap(float x, float y) {
+    if (!current) return;
+
+    if (modal.active) {
+        float panelWidth = std::min(760.0f, layoutWidth * 0.68f);
+        float panelHeight = 320.0f;
+        float left = (layoutWidth - panelWidth) * 0.5f;
+        float top = (layoutHeight - panelHeight) * 0.5f;
+        float buttonWidth = (panelWidth - 96.0f) * 0.5f;
+        float buttonHeight = 64.0f;
+        float buttonY = top + panelHeight - 100.0f;
+        if (y >= buttonY && y <= buttonY + buttonHeight) {
+            bool confirm = true;
+            if (modal.showCancel) {
+                confirm = x >= left + 32.0f + buttonWidth + 16.0f;
+            }
+            auto done = modal.done;
+            modal = ModalState{};
+            if (done) done(confirm);
+        }
+        return;
+    }
+
+    if (!current->root) return;
+    RenderNode* hit = hitTestNode(*current->root, x, y);
+    if (!hit) return;
+
+    RenderNode* target = nullptr;
+    for (RenderNode* node = hit; node; node = node->parent) {
+        if (node->isInteractive()) {
+            target = node;
+            break;
+        }
+    }
+    if (!target) return;
+
+    focusPath = target->path;
+    activateNode(target);
+}
+
+void MiniappView::activateNode(RenderNode* node) {
+    if (!node || !current || node->disabled) return;
 
     if (node->tag == "input" || node->tag == "textarea") {
         activateInput(node);
         return;
     }
+
     if (node->tag == "switch" || node->tag == "checkbox" || node->tag == "radio") {
-        bool checked = node->checked;
-        bool nextChecked = !checked;
+        bool nextChecked = !node->checked;
         if (node->tag == "radio") {
             nextChecked = true;
-            if (current && !node->radioName.empty()) {
+            if (!node->radioName.empty()) {
                 current->radioSelections[node->radioName] = node->path;
             }
-        } else if (current) {
+        } else {
             current->toggles[node->path] = nextChecked;
         }
         JsonValue detail = JsonValue::object();
         detail.setMember("value", JsonValue::boolean(nextChecked));
-        if (current) current->dirty = true;
+        current->dirty = true;
         triggerChange(node, detail, std::string());
-        return;
-    }
-    if (node->tag == "slider") {
+    } else if (node->tag == "slider") {
         float value = valueOf(node);
         float next = value + node->sliderStep;
         if (next > node->sliderMax) next = node->sliderMax;
@@ -1750,15 +2024,179 @@ void MiniappView::handleActivate() {
         detail.setMember("value", JsonValue::number(next));
         triggerChange(node, detail, std::string());
         current->dirty = true;
-        return;
-    }
-    if (node->tag == "navigator" && !node->navUrl.empty()) {
+    } else if (node->tag == "navigator" && !node->navUrl.empty()) {
         if (node->openType == "redirect") redirectTo(node->navUrl);
         else if (node->openType == "reLaunch") reLaunch(node->navUrl);
         else navigateTo(node->navUrl);
+    } else if (node->tag == "video") {
+        toggleVideo(node);
+    }
+
+    // 微信的 bindtap 会沿祖先冒泡，catchtap 终止冒泡。
+    for (RenderNode* target = node; target; target = target->parent) {
+        if (target->bindTap.empty()) continue;
+        triggerTap(target);
+        if (target->catchTap) break;
+    }
+}
+
+RenderNode* MiniappView::hitTestNode(RenderNode& node, float x, float y) const {
+    if (node.style.displayNone) return nullptr;
+    if (node.absWidth <= 0.0f || node.absHeight <= 0.0f) return nullptr;
+
+    bool clip = node.style.overflowHidden || node.isScrollView();
+    if (clip) {
+        if (x < node.absLeft || x > node.absLeft + node.absWidth || y < node.absTop ||
+            y > node.absTop + node.absHeight) {
+            return nullptr;
+        }
+    }
+
+    for (auto it = node.children.rbegin(); it != node.children.rend(); ++it) {
+        if (RenderNode* hit = hitTestNode(**it, x, y)) return hit;
+    }
+
+    if (x >= node.absLeft && x <= node.absLeft + node.absWidth && y >= node.absTop &&
+        y <= node.absTop + node.absHeight) {
+        return &node;
+    }
+    return nullptr;
+}
+
+RenderNode* MiniappView::findNodeByPath(RenderNode& node, const std::string& path) const {
+    if (node.path == path) return &node;
+    for (auto& child : node.children) {
+        if (RenderNode* hit = findNodeByPath(*child, path)) return hit;
+    }
+    return nullptr;
+}
+
+RenderNode* MiniappView::findNodeById(RenderNode& node, const std::string& id) const {
+    if (!id.empty() && node.id == id) return &node;
+    for (auto& child : node.children) {
+        if (RenderNode* hit = findNodeById(*child, id)) return hit;
+    }
+    return nullptr;
+}
+
+void MiniappView::toggleVideo(RenderNode* node) {
+    if (!node || !current) return;
+
+    bool next = !node->videoPlaying;
+    node->videoPlaying = next;
+    current->videoPlaying[node->path] = next;
+    current->dirty = true;
+
+    if (!next) {
+#ifdef NXKIT_WITH_MPV
+        if (activeVideoPath == node->path) nxkit::MPVCore::instance().pause();
+#endif
+        dispatchVideoEvent(node, node->bindPause, "pause");
         return;
     }
-    triggerTap(node);
+
+    node->videoError = false;
+    node->videoErrorText.clear();
+    current->videoStarted[node->path] = true;
+    startVideo(node, true);
+
+    if (node->videoPlaying) {
+        dispatchVideoEvent(node, node->bindPlay, "play");
+    }
+}
+
+void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
+    if (!node || !current) return;
+    if (node->videoSrc.empty()) {
+        node->videoError = true;
+        node->videoErrorText = "video src 为空";
+        node->videoPlaying = false;
+        current->videoPlaying[node->path] = false;
+        dispatchVideoEvent(node, node->bindError, "error");
+        return;
+    }
+
+    std::string resolved = resolveLocalPath(node->videoSrc, current->dir);
+    activeVideoPath = node->path;
+
+#ifdef NXKIT_WITH_MPV
+    auto& player = nxkit::MPVCore::instance();
+    if (!player.isValid()) {
+        node->videoError = true;
+        node->videoErrorText = "视频播放器未初始化";
+        node->videoPlaying = false;
+        current->videoPlaying[node->path] = false;
+        dispatchVideoEvent(node, node->bindError, "error");
+        return;
+    }
+
+    std::string& loaded = current->videoLoadedSrc[node->path];
+    if (forceLoad || loaded != resolved) {
+        player.setUrl(resolved);
+        loaded = resolved;
+        activeVideoSrc = resolved;
+    }
+    player.command_async("set", "loop-file", node->videoLoop ? "inf" : "no");
+    player.command_async("set", "mute", node->videoMuted ? "yes" : "no");
+    player.resume();
+#else
+    (void)forceLoad;
+    activeVideoSrc = resolved;
+    node->videoError = true;
+    node->videoErrorText = "当前构建未启用 MPV";
+    node->videoPlaying = false;
+    current->videoPlaying[node->path] = false;
+    showToast("视频播放需要启用 libmpv 的构建", "none", 2000);
+    dispatchVideoEvent(node, node->bindError, "error");
+#endif
+}
+
+void MiniappView::stopVideo() {
+#ifdef NXKIT_WITH_MPV
+    auto& player = nxkit::MPVCore::instance();
+    if (player.isValid()) player.stop();
+#endif
+    activeVideoPath.clear();
+    activeVideoSrc.clear();
+}
+
+void MiniappView::dispatchVideoEvent(RenderNode* node, const std::string& handler,
+                                     const std::string& type) {
+    if (!node || handler.empty() || !current || !current->runtime) return;
+    JsonValue detail = JsonValue::object();
+    detail.setMember("currentTime", JsonValue::number(node->videoTime));
+    detail.setMember("duration", JsonValue::number(node->videoDuration));
+    if (type == "error") {
+        detail.setMember("errMsg", JsonValue::string(node->videoErrorText));
+    }
+    current->runtime->dispatchEvent(handler, type, node->dataset, detail);
+}
+
+bool MiniappView::videoControl(const std::string& id, const std::string& action,
+                               double value) {
+    if (!current || !current->root || id.empty()) return false;
+    RenderNode* node = findNodeById(*current->root, id);
+    if (!node || node->tag != "video") return false;
+
+    if (action == "play") {
+        if (!node->videoPlaying) toggleVideo(node);
+    } else if (action == "pause") {
+        if (node->videoPlaying) toggleVideo(node);
+    } else if (action == "stop") {
+        if (node->videoPlaying) toggleVideo(node);
+        node->videoTime = 0.0;
+        current->videoTime[node->path] = 0.0;
+    } else if (action == "seek") {
+        if (value < 0.0) value = 0.0;
+        node->videoTime = value;
+        current->videoTime[node->path] = value;
+#ifdef NXKIT_WITH_MPV
+        if (activeVideoPath == node->path) {
+            nxkit::MPVCore::instance().seek(static_cast<int64_t>(value));
+        }
+#endif
+    }
+    return true;
 }
 
 void MiniappView::triggerTap(RenderNode* node) {
@@ -1963,9 +2401,62 @@ void MiniappView::tick(double now) {
                     current->dirty = true;
                     break;
                 }
+            } else if (node->tag == "video") {
+                pumpVideo(*current, *node, now);
             }
             for (auto& child : node->children) stack.push_back(child.get());
         }
+    }
+}
+
+void MiniappView::pumpVideo(PageState& page, RenderNode& node, double now) {
+    (void)now;
+    if (node.videoSrc.empty()) return;
+
+    if (node.videoAutoplay && page.videoStarted.find(node.path) == page.videoStarted.end()) {
+        page.videoStarted[node.path] = true;
+        node.videoPlaying = true;
+        page.videoPlaying[node.path] = true;
+        node.videoError = false;
+        node.videoErrorText.clear();
+        page.dirty = true;
+        startVideo(&node, true);
+        if (node.videoPlaying) dispatchVideoEvent(&node, node.bindPlay, "play");
+    }
+
+    if (node.videoPlaying && activeVideoPath == node.path) {
+#ifdef NXKIT_WITH_MPV
+        auto& player = nxkit::MPVCore::instance();
+        if (!player.isValid()) {
+            node.videoPlaying = false;
+            page.videoPlaying[node.path] = false;
+            node.videoError = true;
+            node.videoErrorText = "视频播放器未初始化";
+            page.dirty = true;
+            dispatchVideoEvent(&node, node.bindError, "error");
+            return;
+        }
+
+        node.videoTime = player.getPlaybackTime();
+        node.videoDuration = static_cast<double>(player.duration);
+        page.videoTime[node.path] = node.videoTime;
+
+        auto last = page.videoLastUpdate.find(node.path);
+        if (last == page.videoLastUpdate.end() ||
+            std::abs(static_cast<int>(node.videoTime) - static_cast<int>(last->second)) >= 1.0) {
+            page.videoLastUpdate[node.path] = node.videoTime;
+            dispatchVideoEvent(&node, node.bindTimeUpdate, "timeupdate");
+        }
+
+        if (player.video_eof && !node.videoLoop) {
+            node.videoPlaying = false;
+            page.videoPlaying[node.path] = false;
+            node.videoError = false;
+            node.videoTime = node.videoDuration;
+            page.dirty = true;
+            dispatchVideoEvent(&node, node.bindEnded, "ended");
+        }
+#endif
     }
 }
 

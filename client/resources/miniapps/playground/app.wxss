@@ -160,6 +160,11 @@
   border-radius: 16rpx;
 }
 
+.video {
+  height: 200rpx;
+  border-radius: 16rpx;
+}
+
 .slide {
   height: 100%;
   align-items: center;

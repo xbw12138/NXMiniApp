@@ -234,6 +234,12 @@ class Application
     static VoidEvent* getGlobalHintsUpdateEvent();
     static Event<InputType>* getGlobalInputTypeChangeEvent();
     static VoidEvent* getRunLoopEvent();
+    /**
+     * Fired after NanoVG ends the current frame but before the video context
+     * swaps buffers. Views that bypass NanoVG (raw OpenGL video output) should
+     * draw here so their content is presented in the same frame.
+     */
+    static VoidEvent* getPostDrawEvent();
     static VoidEvent* getExitEvent();
     static VoidEvent* getWindowSizeChangedEvent();
     static VoidEvent* getWindowCreationDoneEvent();
@@ -351,6 +357,7 @@ class Application
     inline static VoidEvent globalHintsUpdateEvent;
     inline static Event<InputType> globalInputTypeChangeEvent;
     inline static VoidEvent runLoopEvent;
+    inline static VoidEvent postDrawEvent;
     inline static VoidEvent exitEvent;
     inline static VoidEvent windowSizeChangedEvent;
     inline static VoidEvent windowCreationDoneEvent;

@@ -77,6 +77,19 @@
       </view>
 
       <view class="card">
+        <text class="card-title">Video 组件</text>
+        <video id="demoVideo" class="video" src="{{videoSrc}}" poster="/images/logo.png"
+               autoplay="{{false}}" loop="{{true}}" muted="{{true}}" controls="{{true}}"
+               bindplay="onVideoPlay" bindpause="onVideoPause" bindended="onVideoEnded"
+               bindtimeupdate="onVideoTime" binderror="onVideoError"/>
+        <text class="hint">{{videoStatus}}</text>
+        <view class="row">
+          <button class="btn" bindtap="onVideoPlayTap">播放</button>
+          <button class="btn btn-ghost" bindtap="onVideoPauseTap">暂停</button>
+        </view>
+      </view>
+
+      <view class="card">
         <text class="card-title">更多基础组件</text>
         <view class="row">
           <icon type="success" size="48"/>

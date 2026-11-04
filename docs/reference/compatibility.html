@@ -30,10 +30,10 @@
         <tr><td>渲染</td><td>webview + 浏览器 CSS</td><td>Yoga 排版 + NanoVG 原生绘制</td></tr>
         <tr><td>页面</td><td>多页面 + 路由 + 页面栈</td><td>多页面 + navigateTo / navigateBack / redirectTo / reLaunch</td></tr>
         <tr><td>数据更新</td><td><code>setData</code> 增量更新</td><td><code>setData</code> 合并后整树重建与重绘</td></tr>
-        <tr><td>交互</td><td>触摸、滚动、输入、手势</td><td>手柄焦点导航、A 激活、B 返回；桌面键盘方向键 / Enter / Backspace</td></tr>
-        <tr><td>组件</td><td>完整组件库 + 自定义组件</td><td>21 类内置标签，无自定义组件</td></tr>
-        <tr><td>事件</td><td>冒泡 / 捕获 / 完整事件对象</td><td>tap / change / input / confirm，无冒泡捕获</td></tr>
-        <tr><td>wx.* API</td><td>200+ 接口</td><td>35 个可用 + 18 个兼容占位</td></tr>
+        <tr><td>交互</td><td>触摸、滚动、输入、手势</td><td>手柄焦点导航、A 激活、B 返回；鼠标左键 / 触摸点击命中节点；桌面键盘方向键 / Enter / Backspace</td></tr>
+        <tr><td>组件</td><td>完整组件库 + 自定义组件</td><td>22 类内置标签，无自定义组件</td></tr>
+        <tr><td>事件</td><td>冒泡 / 捕获 / 完整事件对象</td><td>tap（含冒泡）/ change / input / confirm / video 事件</td></tr>
+        <tr><td>wx.* API</td><td>200+ 接口</td><td>36 个可用 + 18 个兼容占位</td></tr>
         <tr><td>样式</td><td>完整 CSS 能力</td><td>Flex + 定位 + 阴影 + 文本属性子集</td></tr>
         <tr><td>选择器优先级</td><td>有</td><td>无，按源码顺序覆盖</td></tr>
         <tr><td>布局默认值</td><td><code>view</code> 为块级元素</td><td>所有盒子默认 <code>flex-direction: column</code></td></tr>
@@ -51,7 +51,7 @@
       <li>补齐 <code>app.js</code> / <code>app.wxss</code>（可选），页面路径写进 <code>app.json</code> 的 <code>pages</code>。</li>
       <li>把依赖自定义组件、<code>template</code> / <code>import</code> 的结构改写为内置标签。</li>
       <li><code>wx:elif</code> / <code>wx:else</code> 与 <code>wx:for</code> 可以直接使用；<code>wx:key</code> 可保留但无 diff 作用。</li>
-      <li><code>bind:tap</code>、<code>catchtap</code> 改为 <code>bindtap</code>；需要阻止父级点击时拆分结构。</li>
+      <li><code>bind:tap</code> / <code>catchtap</code> 可以直接使用；<code>bindtap</code> 会沿祖先冒泡，<code>catchtap</code> 终止冒泡。</li>
       <li>把未列出的 <code>wx.*</code> 调用替换为已支持接口，或加上 <code>wx.canIUse</code> 判断。</li>
       <li>按 <a href="../style/index.html">样式章节</a> 清理伪类、动画、渐变、媒体查询与子代选择器。</li>
       <li>布局默认是 <code>column</code>；需要横排时显式写 <code>flex-direction: row</code>。</li>

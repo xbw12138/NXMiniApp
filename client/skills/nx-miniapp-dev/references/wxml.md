@@ -16,14 +16,15 @@ WXML 由项目内置的极简解析器处理，不是浏览器 DOM，也不是�
 | `switch` / `checkbox` / `radio` / `slider` | 原生绘制与 `bindchange` |
 | `navigator` | 页面跳转 |
 | `progress` / `rich-text` / `icon` | 进度条 / 纯文本降级 / 原生图标 |
+| `video` | poster / 播放暂停 / 控制条；`NXKIT_WITH_MPV` 构建可真实播放 |
 | `form` / `label` / `checkbox-group` / `radio-group` | 容器语义 |
 | `block` | 不生成节点，只展开子节点 |
 | 其他任意标签 | 一律按 `view` 处理（属性保留但不生效） |
 
 由此产生的常见问题：
 
-- `picker`、`picker-view`、`video`、`canvas`、`map`、`web-view` 仍只是普通 `view`。
-- 未实现 `catchtap` / `bind:tap`，请统一使用 `bindtap`。
+- `picker`、`picker-view`、`canvas`、`map`、`web-view` 仍只是普通 `view`。
+- `bindtap` / `bind:tap` / `catchtap` / `catch:tap` 均可使用；`bindtap` 会沿祖先冒泡。
 - `block` 包裹 `wx:for` 是合法的：它不会生成额外盒子。
 
 ## 2. 根节点

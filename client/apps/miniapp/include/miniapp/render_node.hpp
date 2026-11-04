@@ -51,6 +51,26 @@ struct RenderNode {
     std::string iconType = "info";
     float iconSize = 48.0f;
 
+    // video
+    std::string videoSrc;
+    std::string videoPoster;
+    std::string videoObjectFit = "contain";
+    bool videoAutoplay = false;
+    bool videoLoop = false;
+    bool videoMuted = false;
+    bool videoControls = true;
+    bool videoPlaying = false;
+    bool videoError = false;
+    std::string videoErrorText;
+    double videoTime = 0.0;
+    double videoDuration = 0.0;
+    std::string bindPlay;
+    std::string bindPause;
+    std::string bindEnded;
+    std::string bindTimeUpdate;
+    std::string bindError;
+    bool catchTap = false;
+
     // scroll-view / swiper
     float scrollOffset = 0.0f;
     float contentHeight = 0.0f;
@@ -82,13 +102,14 @@ struct RenderNode {
     bool isInteractive() const {
         return !bindTap.empty() || tag == "button" || tag == "switch" ||
                tag == "checkbox" || tag == "radio" || tag == "slider" ||
-               tag == "input" || tag == "textarea" || tag == "navigator";
+               tag == "input" || tag == "textarea" || tag == "navigator" ||
+               tag == "video";
     }
     bool isContainer() const {
         return !isText() && !isImage() && tag != "input" && tag != "textarea" &&
                tag != "slider" && tag != "switch" && tag != "checkbox" &&
                tag != "radio" && tag != "progress" && tag != "rich-text" &&
-               tag != "icon";
+               tag != "icon" && tag != "video";
     }
 };
 

@@ -672,6 +672,37 @@ struct RuntimeBridge {
         return JS_UNDEFINED;
     }
 
+    // ---- video ----
+
+    static JSValue wxVideoControlData(JSContext* ctx, JSValueConst, int argc,
+                                      JSValueConst* argv, int magic, JSValue* data) {
+        static const char* actions[] = {"play", "pause", "stop", "seek"};
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || magic < 0 || magic > 3) {
+            return JS_UNDEFINED;
+        }
+        std::string id = toStd(ctx, data[0]);
+        double value = (argc > 0) ? numberArg(ctx, argv[0], 0.0) : 0.0;
+        runtime->host->videoControl(id, actions[magic], value);
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxCreateVideoContext(JSContext* ctx, JSValueConst, int argc,
+                                        JSValueConst* argv) {
+        JSValue context = JS_NewObject(ctx);
+        JSValue id = JS_NewString(ctx, argc > 0 ? toStd(ctx, argv[0]).c_str() : "");
+        JS_SetPropertyStr(ctx, context, "id", JS_DupValue(ctx, id));
+
+        static const char* names[] = {"play", "pause", "stop", "seek"};
+        for (int i = 0; i < 4; ++i) {
+            int length = i == 3 ? 1 : 0;
+            JSValue fn = JS_NewCFunctionData(ctx, wxVideoControlData, length, i, 1, &id);
+            JS_SetPropertyStr(ctx, context, names[i], fn);
+        }
+        JS_FreeValue(ctx, id);
+        return context;
+    }
+
     // ---- 网络 ----
 
     static JSValue wxRequest(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
@@ -1196,6 +1227,7 @@ void JsRuntime::installWx() {
     set("clearStorage", RuntimeBridge::wxClearStorage, 1);
 
     set("request", RuntimeBridge::wxRequest, 1);
+    set("createVideoContext", RuntimeBridge::wxCreateVideoContext, 1);
     set("navigateTo", RuntimeBridge::wxNavigateTo, 1);
     set("navigateBack", RuntimeBridge::wxNavigateBack, 1);
     set("redirectTo", RuntimeBridge::wxRedirectTo, 1);

@@ -25,7 +25,7 @@
 | 搜索 / 分类筛选 UI | 未支持 | 服务端支持 `q`、`category`，启动器没有入口 |
 | 排序 / 推荐位 | 未支持 | 固定按最近使用 + 服务端返回顺序 |
 | 管理后台 | 已实现 | `http://<host>:8080/admin`（Vue SPA）：令牌登录、概览、商店应用管理、小程序管理（图标/包上传、发布开关） |
-| 小程序内 `wx.*` | 部分实现 | 35 个可用接口 + 18 个兼容占位，见第 3 节 |
+| 小程序内 `wx.*` | 部分实现 | 36 个可用接口 + 18 个兼容占位，见第 3 节 |
 
 ## 1. JS 运行时
 
@@ -69,11 +69,12 @@
 | `progress` | 已实现 | `percent` / `activeColor` / `backgroundColor` |
 | `rich-text` | 部分实现 | 读取 `nodes`，剥离标签后按纯文本渲染 |
 | `icon` | 已实现 | `type` / `size`，成功、警告、取消、等待、搜索、下载 |
+| `video` | 部分实现 | `src` / `poster` / `autoplay` / `loop` / `muted` / `controls` / `object-fit`，点击或 A 播放暂停；MPV 构建可真实播放 |
 | `form` / `label` / `checkbox-group` / `radio-group` | 部分实现 | 容器语义，正常排版；不汇总提交 |
 | `picker` / `picker-view` | 未支持 | 退化为 `view` |
-| `canvas` / `video` / `audio` / `map` / `web-view` | 未支持 | 退化为 `view` |
+| `canvas` / `audio` / `map` / `web-view` | 未支持 | 退化为 `view` |
 | 自定义组件 / `usingComponents` | 未支持 | 组件目录不会被读取 |
-| 事件绑定 | 已实现 | `bindtap` / `bindchange` / `bindinput` / `bindconfirm` |
+| 事件绑定 | 已实现 | `bindtap`（含鼠标/触摸命中与冒泡）/ `bindchange` / `bindinput` / `bindconfirm` / video 的 `bindplay` 等 |
 | `hidden` / `wx:key` | 未支持 | `hidden` 不生效；`wx:key` 无 diff 作用 |
 
 ## 3. wx.* API
@@ -91,6 +92,7 @@
 | 启动参数 | `wx.getLaunchOptionsSync`、`wx.getEnterOptionsSync` | 已实现 |
 | 设备 | `wx.getNetworkType`、`wx.getMenuButtonBoundingClientRect` | 已实现 |
 | 剪贴板 | `wx.setClipboardData`、`wx.getClipboardData` | 已实现（进程内） |
+| 媒体 | `wx.createVideoContext` | 已实现（play / pause / stop / seek；依赖 MPV 构建） |
 | 更新 | `wx.getUpdateManager` | 占位（返回空实现对象） |
 | 工具 | `wx.canIUse`、`wx.nextTick` | 已实现 |
 | 振动 | `wx.vibrateShort` | 占位（宿主无振动接口） |
@@ -128,11 +130,11 @@
 | 页面 | 多页面 + 路由 | 多页面 + 页面栈 + query |
 | 交互 | 触摸、滚动 | 手柄焦点导航；桌面键盘方向键 / Enter / Backspace |
 | 数据更新 | `setData` 增量更新 | `setData` 合并后整树重建 |
-| 组件 | 完整组件库 | 21 类内置标签，无自定义组件 |
+| 组件 | 完整组件库 | 22 类内置标签，无自定义组件 |
 | 图片 | 真实加载、网络图 | 包内本地图片；网络图占位 |
 | 事件 | 完整事件系统 | tap / change / input / confirm，无冒泡捕获 |
 | 自定义组件 | 支持 | 不支持 |
-| `wx.*` | 完整 API | 35 个可用 + 18 个兼容占位 |
+| `wx.*` | 完整 API | 36 个可用 + 18 个兼容占位 |
 | 单位 | `rpx` 按屏幕宽换算 | 固定 `640/750`，与窗口宽度无关 |
 | 文本 | 无行数上限 | 自动换行，单段建议 ≤ 64 行 |
 | 字体 | 可加载自定义字体 | 仅内置常规字体，粗体为模拟 |

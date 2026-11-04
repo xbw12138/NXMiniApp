@@ -25,15 +25,16 @@
 
     <div class="warn">
       <strong>先读这一条：</strong>这是微信小程序的一个可运行子集，不是完整实现。当前没有 webview、
-      自定义组件、<code>video</code> / <code>canvas</code> / <code>map</code>、npm 构建与开发者工具。
+      自定义组件、<code>canvas</code> / <code>map</code>、npm 构建与开发者工具；
+      <code>video</code> 仅在启用 MPV 的构建中可真实播放。
       未列出的能力请以本文档为准，不要直接按微信官方文档推测行为。
     </div>
 
     <h2>当前能力一览</h2>
 
     <div class="cards">
-      <div class="card"><div class="num">21</div><div class="cap">可用标签 / 组件</div></div>
-      <div class="card"><div class="num">35</div><div class="cap">可用的 wx.* API</div></div>
+      <div class="card"><div class="num">22</div><div class="cap">可用标签 / 组件</div></div>
+      <div class="card"><div class="num">36</div><div class="cap">可用的 wx.* API</div></div>
       <div class="card"><div class="num">18</div><div class="cap">兼容占位 API（调用不报错）</div></div>
       <div class="card"><div class="num">6</div><div class="cap">页面生命周期 onLoad … onUnload</div></div>
       <div class="card"><div class="num">∞</div><div class="cap">页面栈深度（受内存限制）</div></div>
@@ -47,7 +48,7 @@
         <tr>
           <td>页面结构</td><td>完整 WXML + 自定义组件</td>
           <td><span class="badge part">子集</span></td>
-          <td>21 类内置标签；未知标签降级为 <code>view</code>，无自定义组件</td>
+          <td>22 类内置标签；未知标签降级为 <code>view</code>，无自定义组件</td>
         </tr>
         <tr>
           <td>模板语法</td><td><code>{{}}</code>、<code>wx:for</code>、<code>wx:if/elif/else</code>、<code>wx:key</code></td>
@@ -82,7 +83,7 @@
         <tr>
           <td>wx.* API</td><td>约 200+ 个接口</td>
           <td><span class="badge part">子集</span></td>
-          <td>35 个可用接口；另有 18 个兼容占位接口，便于迁移</td>
+          <td>36 个可用接口；另有 18 个兼容占位接口，便于迁移</td>
         </tr>
         <tr>
           <td>分发</td><td>微信后台 + 自动更新</td>
@@ -152,9 +153,9 @@ NXKIT_MINIAPP_DEV=&lt;repo&gt;/client/resources/miniapps/playground ./miniapp</c
       <a class="entry" href="guide/structure.html"><div class="t">目录结构</div><div class="d">app.json 字段、app.js / app.wxss、页面加载顺序</div></a>
       <a class="entry" href="guide/template.html"><div class="t">WXML 与数据绑定</div><div class="d">标签、<code>{{}}</code>、wx:for、wx:if/elif/else、事件与 dataset</div></a>
       <a class="entry" href="guide/js.html"><div class="t">脚本运行时</div><div class="d">Page/App、生命周期、setData、定时器、页面栈</div></a>
-      <a class="entry" href="components/index.html"><div class="t">组件</div><div class="d">21 类标签的属性与交互行为</div></a>
+      <a class="entry" href="components/index.html"><div class="t">组件</div><div class="d">22 类标签的属性与交互行为</div></a>
       <a class="entry" href="style/index.html"><div class="t">WXSS 子集</div><div class="d">选择器、单位、Flex、定位、阴影</div></a>
-      <a class="entry" href="api/index.html"><div class="t">API 支持状态</div><div class="d">35 个可用接口与 18 个占位接口</div></a>
+      <a class="entry" href="api/index.html"><div class="t">API 支持状态</div><div class="d">36 个可用接口与 18 个占位接口</div></a>
       <a class="entry" href="reference/compatibility.html"><div class="t">与微信的差异</div><div class="d">迁移前必须知道的限制</div></a>
       <a class="entry" href="reference/errors.html"><div class="t">错误与排查</div><div class="d">红字错误对照与常见故障</div></a>
       <a class="entry" href="reference/store.html"><div class="t">商店与上架</div><div class="d">包格式、meta.json、管理后台</div></a>
