@@ -26,8 +26,8 @@ public:
 
 private:
     void reload();
-    // 设置状态栏文本；空文本时隐藏标签（空 Label 的 measure 会撑满可用高度，见 borealis label.cpp）。
-    void setStatus(const std::string& text);
+    // 关于弹窗：版本/服务器/源码信息。
+    void showAbout();
     // 启动时优先拉起服务端配置的首页小程序；未配置或失败时回落到商店列表。
     void fetchStoreList();
     void openHome(const MiniAppItem& home);
@@ -44,7 +44,6 @@ private:
     // 搜索：弹出系统键盘，按标题/id/分类/开发者过滤。
     void promptSearch();
 
-    brls::Label* statusLabel = nullptr;
     brls::Button* clearSearchBtn = nullptr;
     brls::Button* searchBtn = nullptr;
     nxkit::CoverGridPage* grid = nullptr;

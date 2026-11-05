@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include <borealis/core/thread.hpp>
+#include <borealis/views/dialog.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -53,19 +54,14 @@ LauncherView::LauncherView() {
     header->setAlignItems(brls::AlignItems::CENTER);
     header->setPadding(16, 28, 8, 28);
 
-    brls::Box* heading = new brls::Box(brls::Axis::COLUMN);
-    heading->setGrow(1);
     brls::Label* title = new brls::Label();
-    title->setText("小程序");
+    title->setText("Switch小程序");
     title->setFontSize(26);
-    heading->addView(title);
+    header->addView(title);
 
-    this->statusLabel = new brls::Label();
-    this->statusLabel->setFontSize(13);
-    this->statusLabel->setMarginTop(2);
-    this->statusLabel->setTextColor(brls::Application::getTheme()["font/grey"]);
-    heading->addView(this->statusLabel);
-    header->addView(heading);
+    brls::Box* spacer = new brls::Box();
+    spacer->setGrow(1);
+    header->addView(spacer);
 
     brls::Button* search = new brls::Button();
     this->searchBtn = search;
@@ -89,8 +85,10 @@ LauncherView::LauncherView() {
     });
     header->addView(this->clearSearchBtn);
 
+    // 图标按钮：文本为 Material Icons 码点，经字体回退链渲染为图标。
     brls::Button* refresh = new brls::Button();
-    refresh->setText("刷新");
+    refresh->setText("\xee\x97\x95");  // refresh
+    refresh->setFontSize(22);
     refresh->setMarginLeft(8);
     refresh->registerClickAction([this](brls::View*) {
         this->loaded = false;
@@ -98,6 +96,16 @@ LauncherView::LauncherView() {
         return true;
     });
     header->addView(refresh);
+
+    brls::Button* about = new brls::Button();
+    about->setText("\xee\xa2\x8f");  // info_outline
+    about->setFontSize(22);
+    about->setMarginLeft(8);
+    about->registerClickAction([this](brls::View*) {
+        this->showAbout();
+        return true;
+    });
+    header->addView(about);
 
     this->addView(header);
 
@@ -131,10 +139,12 @@ void LauncherView::willAppear(bool resetState) {
     }
 }
 
-void LauncherView::setStatus(const std::string& text) {
-    this->statusLabel->setText(text);
-    this->statusLabel->setVisibility(text.empty() ? brls::Visibility::GONE
-                                                  : brls::Visibility::VISIBLE);
+void LauncherView::showAbout() {
+    brls::Dialog* dialog = new brls::Dialog(
+        "Switch小程序\n服务器：" + MiniAppApi::instance().serverUrl() +
+        "\n源码：github.com/xbw12138/NXMiniApp");
+    dialog->addButton("知道了", [] {});
+    dialog->open();
 }
 
 void LauncherView::reload() {
@@ -144,7 +154,6 @@ void LauncherView::reload() {
     // 已内嵌首页：刷新 = 重新拉取首页描述（可感知新版本），成功后重建内嵌视图；
     // 失败则保留当前内嵌视图，仅重建一次触发其内部数据重载。
     if (this->homeView) {
-        this->setStatus("正在刷新首页…");
         MiniAppApi::instance().fetchHome(
             [this, alive = this->alive](const HomeInfo& info, const std::string& error) {
                 brls::sync([this, alive, info, error] {
@@ -162,7 +171,6 @@ void LauncherView::reload() {
 
     // 首页由服务端下发的小程序驱动：先取首页描述，有则直接内嵌运行，否则回落商店列表。
     if (!this->homeLaunched) {
-        this->setStatus("正在加载首页…");
         this->grid->showSkeleton(6);
 
         MiniAppApi::instance().fetchHome(
@@ -184,7 +192,6 @@ void LauncherView::reload() {
 
 void LauncherView::openHome(const MiniAppItem& home) {
     this->homeLaunched = true;
-    this->setStatus("正在进入首页…");
 
     if (packages::installed(home.id, home.version)) {
         this->loading = false;
@@ -218,7 +225,6 @@ void LauncherView::embedHome(const MiniAppItem& home) {
     this->homeLaunched = true;
     this->loaded = true;
     this->homeItem = home;
-    this->setStatus("");
     // 首页自带搜索入口，原生搜索/清除按钮只服务于商店网格。
     if (this->searchBtn) this->searchBtn->setVisibility(brls::Visibility::GONE);
     if (this->clearSearchBtn) this->clearSearchBtn->setVisibility(brls::Visibility::GONE);
@@ -244,7 +250,6 @@ void LauncherView::embedHome(const MiniAppItem& home) {
 
 void LauncherView::fetchStoreList() {
     this->loading = true;
-    this->setStatus("正在连接商店…");
     this->grid->showSkeleton(6);
 
     MiniAppApi::instance().fetchList([this, alive = this->alive](const std::vector<MiniAppItem>& list,
@@ -255,13 +260,11 @@ void LauncherView::fetchStoreList() {
             this->loaded = true;
 
             if (!error.empty()) {
-                this->setStatus("连接商店失败");
                 this->grid->setError(error + "\n请检查网络后重试");
                 return;
             }
 
             this->items = list;
-            this->setStatus("共 " + std::to_string(list.size()) + " 个小程序");
             this->applyItems();
         });
     });
@@ -323,8 +326,6 @@ void LauncherView::applyItems() {
         } else {
             this->grid->setItems(covers);
         }
-        this->setStatus("搜索「" + this->searchQuery + "」 · " +
-                        std::to_string(covers.size()) + " 个结果");
         return;
     }
 
