@@ -1,0 +1,17 @@
+<view class="page">
+  <view class="topbar">
+    <text class="brand">{{title}}</text>
+    <view class="spacer"></view>
+    <view class="button" bindtap="onBack">
+      <text class="button-text">返回</text>
+    </view>
+  </view>
+
+  <scroll-view class="detail" scroll-y="{{true}}">
+    <text class="detail-summary">{{summary}}</text>
+    <text class="detail-body">{{body}}</text>
+    <view wx:if="{{status !== ''}}" class="empty">
+      <text class="empty-text">{{status}}</text>
+    </view>
+  </scroll-view>
+</view>

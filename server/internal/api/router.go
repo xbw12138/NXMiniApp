@@ -42,6 +42,8 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 	v1.GET("/apps/:id/download", e.DownloadApp)
 	v1.POST("/check-updates", e.CheckUpdates)
 	v1.GET("/miniapps", e.ListMiniApps)
+	v1.GET("/miniapp-home", e.MiniAppHome)
+	v1.GET("/content/:id", e.ContentDetail)
 	v1.GET("/miniapps/:id", e.MiniAppDetail)
 	v1.GET("/miniapps/:id/download", e.DownloadMiniApp)
 	v1.GET("/miniapps/:id/icon", e.MiniAppIcon)
@@ -51,6 +53,7 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 
 	r.Static("/media/icons", cfg.IconsDir())
 	r.Static("/media/screenshots", cfg.ScreenshotsDir())
+	r.Static("/media/covers", cfg.CoversDir())
 
 	// 门户首页与投稿页（嵌入静态页，优先于 SPA 兜底路由）。
 	r.GET("/", func(c *gin.Context) { servePortal(c, "index.html") })

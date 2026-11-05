@@ -1,0 +1,267 @@
+/* Switch 横屏首页：左侧推荐与最近使用，右侧资讯。 */
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background-color: #101215;
+  padding: 26rpx 32rpx 22rpx 32rpx;
+  color: #eef1f5;
+}
+
+.topbar {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 16rpx;
+}
+
+.brand {
+  font-size: 38rpx;
+  font-weight: bold;
+  color: #f3f5f8;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.search {
+  width: 250rpx;
+  height: 62rpx;
+  border-radius: 31rpx;
+  background-color: #1c2026;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-text {
+  font-size: 24rpx;
+  color: #aab2bd;
+}
+
+.body {
+  flex: 1;
+  flex-direction: row;
+}
+
+.left {
+  flex: 3;
+  flex-direction: column;
+  margin-right: 20rpx;
+}
+
+.right {
+  flex: 2;
+  flex-direction: column;
+}
+
+.section-title {
+  font-size: 25rpx;
+  font-weight: bold;
+  color: #8b94a0;
+  margin-top: 4rpx;
+  margin-bottom: 10rpx;
+  flex-shrink: 0;
+}
+
+.banner {
+  height: 226rpx;
+  border-radius: 20rpx;
+  margin-bottom: 16rpx;
+  flex-shrink: 0;
+}
+
+.banner-item {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  border-radius: 20rpx;
+  overflow: hidden;
+  background-color: #191d22;
+}
+
+.banner-cover {
+  width: 100%;
+  height: 158rpx;
+}
+
+.banner-caption {
+  width: 100%;
+  height: 68rpx;
+  padding: 0 20rpx;
+  justify-content: center;
+  background-color: #191d22;
+}
+
+.banner-title {
+  font-size: 25rpx;
+  font-weight: bold;
+  color: #f2f4f7;
+}
+
+.scroll {
+  flex: 1;
+}
+
+.recent-scroll {
+  height: 200rpx;
+  flex-shrink: 0;
+}
+
+.app-card {
+  flex-direction: row;
+  align-items: center;
+  padding: 12rpx 16rpx;
+  border-radius: 16rpx;
+  background-color: #191d22;
+  margin-bottom: 10rpx;
+}
+
+.app-icon {
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 12rpx;
+  margin-right: 16rpx;
+}
+
+.app-meta {
+  flex: 1;
+  flex-direction: column;
+}
+
+.app-title {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #eaeef3;
+}
+
+.app-sub {
+  font-size: 20rpx;
+  color: #7d8693;
+  margin-top: 4rpx;
+}
+
+.recent-row {
+  flex-direction: row;
+  align-items: center;
+  padding: 12rpx 16rpx;
+  border-radius: 12rpx;
+  background-color: #191d22;
+  margin-bottom: 8rpx;
+}
+
+.recent-title {
+  flex: 1;
+  font-size: 24rpx;
+  color: #e6eaf0;
+}
+
+.recent-count {
+  font-size: 21rpx;
+  color: #6f7885;
+}
+
+.news-item {
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background-color: #191d22;
+  margin-bottom: 12rpx;
+}
+
+.news-title {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #e9edf2;
+}
+
+.news-summary {
+  font-size: 21rpx;
+  color: #7f8894;
+  margin-top: 6rpx;
+}
+
+.empty {
+  padding: 16rpx 4rpx;
+}
+
+.empty-text {
+  font-size: 22rpx;
+  color: #6b7481;
+}
+
+.status {
+  font-size: 20rpx;
+  color: #5d6672;
+  margin-top: 10rpx;
+  flex-shrink: 0;
+}
+
+/* 搜索页 */
+.button {
+  height: 62rpx;
+  padding: 0 26rpx;
+  border-radius: 31rpx;
+  background-color: #1c2026;
+  align-items: center;
+  justify-content: center;
+  margin-left: 12rpx;
+}
+
+.button-text {
+  font-size: 24rpx;
+  color: #cfd5dd;
+}
+
+.searchbar {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 16rpx;
+  flex-shrink: 0;
+}
+
+.input {
+  flex: 1;
+  height: 68rpx;
+  border-radius: 34rpx;
+  background-color: #1c2026;
+  color: #eef1f5;
+  font-size: 24rpx;
+  padding: 0 26rpx;
+}
+
+.go {
+  height: 68rpx;
+  padding: 0 32rpx;
+  border-radius: 34rpx;
+  background-color: #17c46c;
+  align-items: center;
+  justify-content: center;
+  margin-left: 14rpx;
+}
+
+.go-text {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #06140d;
+}
+
+.results {
+  flex: 1;
+}
+
+/* 资讯详情页 */
+.detail {
+  flex: 1;
+}
+
+.detail-summary {
+  font-size: 24rpx;
+  color: #8b94a0;
+  margin-bottom: 16rpx;
+}
+
+.detail-body {
+  font-size: 25rpx;
+  color: #d7dce2;
+  line-height: 1.6;
+}

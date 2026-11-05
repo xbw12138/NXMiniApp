@@ -50,6 +50,10 @@ public:
     virtual bool redirectTo(const std::string& url) = 0;
     virtual bool reLaunch(const std::string& url) = 0;
 
+    /// wx.miniapp：启动另一个小程序 / 读取最近使用列表。
+    virtual bool launchMiniApp(const std::string& /*id*/) { return false; }
+    virtual JsonValue recentMiniApps() { return JsonValue::array(); }
+
     virtual JsonValue systemInfo() = 0;
     virtual void vibrateShort() {}
 

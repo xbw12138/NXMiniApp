@@ -23,10 +23,19 @@
     </p>
 
     <h2>链路</h2>
-<pre><code>启动器 ── GET /api/v1/miniapps ──▶ 列表（只含 published = true）
+<pre><code>启动器 ── GET /api/v1/miniapp-home ──▶ 首页描述（home + 横幅 / 资讯 / 推荐）
+   │                                    └─ 未配置或包缺失 → 回落商家列表
+   ├─ home 已安装且版本一致 ─▶ 直接运行首页小程序
+   └─ 未安装 ─▶ GET /api/v1/miniapps/{id}/download ─▶ 解包 ─▶ 运行
+
+列表页 ── GET /api/v1/miniapps ──▶ 列表（只含 published = true）
    │
    └─ 点击卡片 ─ 未安装或版本不同 ─▶ GET /api/v1/miniapps/{id}/download
                                    └─ 解包 → miniapps/{id}/ → 进入页面</code></pre>
+    <p>
+      首页本身就是一个可热更的小程序：改版式或内容只需在后台更新该小程序的包，
+      或直接编辑「首页内容」里的横幅 / 资讯，客户端下次启动自动生效，无需重编 NRO。
+    </p>
 
     <h2>上架字段（meta.json / 管理后台）</h2>
     <table>
@@ -84,9 +93,17 @@
         <tr><td>GET</td><td><code>/api/v1/miniapps/{id}/download</code></td><td>下载 <code>.nxpkg</code>，始终 ZIP_STORED。</td></tr>
         <tr><td>GET</td><td><code>/api/v1/miniapps/{id}/icon</code></td><td>封面图片，可能 404。</td></tr>
         <tr><td>GET</td><td><code>/api/v1/check-updates</code></td><td>批量版本检查。</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/miniapp-home</code></td><td>首页描述：<code>home</code>（首页小程序）与 <code>banners</code> / <code>news</code> / <code>featured</code> 内容位。</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/content/{id}</code></td><td>单条横幅 / 资讯详情，供首页小程序渲染正文。</td></tr>
+        <tr><td>GET</td><td><code>/media/covers/{file}</code></td><td>后台为横幅 / 资讯上传的封面图。</td></tr>
       </tbody>
     </table>
     <p><code>icon_url</code> 与 <code>download_url</code> 可能是相对路径，客户端会拼成绝对地址。</p>
+    <p>
+      管理后台新增「首页内容」页：配置首页小程序 ID（写入 <code>settings.home.miniapp_id</code>），
+      维护横幅与资讯（封面、跳转类型 none / miniapp / news / url），保存后
+      <code>/api/v1/miniapp-home</code> 立即生效。
+    </p>
 
     <h2>安装与更新</h2>
     <ul>

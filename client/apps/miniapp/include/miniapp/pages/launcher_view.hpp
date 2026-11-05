@@ -24,6 +24,9 @@ public:
 
 private:
     void reload();
+    // 启动时优先拉起服务端配置的首页小程序；未配置或失败时回落到商店列表。
+    void fetchStoreList();
+    void openHome(const MiniAppItem& home);
     void applyItems();
     void openItem(const MiniAppItem& item);
     void enter(const MiniAppItem& item);
@@ -43,6 +46,7 @@ private:
     std::shared_ptr<bool> alive = std::make_shared<bool>(true);
     bool loaded = false;
     bool loading = false;
+    bool homeLaunched = false;
     std::string downloadingId;
     std::string searchQuery;
 };

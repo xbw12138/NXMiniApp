@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/search/search",
+    "pages/news/news"
+  ],
+  "window": {
+    "backgroundColor": "#101215",
+    "navigationBarTitleText": "Switch 小程序"
+  }
+}

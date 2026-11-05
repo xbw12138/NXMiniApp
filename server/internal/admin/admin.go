@@ -49,6 +49,13 @@ func Register(r *gin.Engine, e *api.Env) {
 	auth.POST("/releases", uploadRelease(e))
 	auth.PATCH("/releases/:id/flags", patchReleaseFlags(e))
 	auth.DELETE("/releases/:id", deleteRelease(e))
+	auth.GET("/content", listContent(e))
+	auth.POST("/content", createContent(e))
+	auth.PUT("/content/:id", updateContent(e))
+	auth.DELETE("/content/:id", deleteContent(e))
+	auth.POST("/content/:id/cover", uploadContentCover(e))
+	auth.GET("/home-config", getHomeConfig(e))
+	auth.PUT("/home-config", updateHomeConfig(e))
 
 	docs.RegisterAdmin(auth, e.DB, e.Cfg.DocsDir)
 }
@@ -669,6 +676,8 @@ func patchMiniAppFlags(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body struct {
 			Published *bool `json:"published"`
+			Featured  *bool `json:"featured"`
+			Sort      *int  `json:"sort"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			api.Abort(c, http.StatusBadRequest, "请求体无效")
@@ -681,6 +690,12 @@ func patchMiniAppFlags(e *api.Env) gin.HandlerFunc {
 		updates := map[string]any{"updated_at": api.NowMS()}
 		if body.Published != nil {
 			updates["published"] = *body.Published
+		}
+		if body.Featured != nil {
+			updates["featured"] = *body.Featured
+		}
+		if body.Sort != nil {
+			updates["sort"] = *body.Sort
 		}
 		e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(updates)
 		refetchMiniApp(c, e, m.ID)

@@ -131,6 +131,62 @@ void LauncherView::reload() {
     if (this->loading) return;
     this->loading = true;
 
+    // 首页由服务端下发的小程序驱动：先取首页描述，有则直接运行，否则回落商店列表。
+    if (!this->homeLaunched) {
+        this->statusLabel->setText("正在加载首页…");
+        this->grid->showSkeleton(6);
+
+        MiniAppApi::instance().fetchHome(
+            [this, alive = this->alive](const HomeInfo& info, const std::string& error) {
+                brls::sync([this, alive, info, error] {
+                    if (!*alive) return;
+                    if (error.empty() && info.hasHome) {
+                        this->openHome(info.home);
+                        return;
+                    }
+                    this->fetchStoreList();
+                });
+            });
+        return;
+    }
+
+    this->fetchStoreList();
+}
+
+void LauncherView::openHome(const MiniAppItem& home) {
+    this->homeLaunched = true;
+    this->statusLabel->setText("正在进入首页…");
+
+    if (packages::installed(home.id, home.version)) {
+        this->loading = false;
+        this->loaded = false;
+        this->enter(home);
+        return;
+    }
+
+    MiniAppApi::instance().download(
+        home.id, [this, alive = this->alive, home](const std::string& archive,
+                                                   const std::string& error) {
+            brls::sync([this, alive, home, archive, error] {
+                if (!*alive) return;
+                std::string installError;
+                if (!error.empty() ||
+                    !packages::install(home.id, home.version, archive, installError)) {
+                    // 首页包装不上时退回商店列表，避免卡在加载态。
+                    brls::Logger::warning("miniapp: home install failed: {}",
+                                          error.empty() ? installError : error);
+                    this->fetchStoreList();
+                    return;
+                }
+                this->loading = false;
+                this->loaded = false;
+                this->enter(home);
+            });
+        });
+}
+
+void LauncherView::fetchStoreList() {
+    this->loading = true;
     this->statusLabel->setText("正在连接商店…");
     this->grid->showSkeleton(6);
 
@@ -296,6 +352,9 @@ void LauncherView::openItem(const MiniAppItem& item) {
 void LauncherView::enter(const MiniAppItem& item) {
     this->touchRecent(item.id);
     this->bumpUsage(item.id);
+    // 缓存标题，供首页小程序通过 wx.miniapp.listRecent 展示最近使用。
+    nxkit::Config::instance().setValue("miniapp.title." + item.id, item.title);
+    nxkit::Config::instance().save();
     brls::Application::pushActivity(new MiniappActivity(packages::directory(item.id)));
 }
 

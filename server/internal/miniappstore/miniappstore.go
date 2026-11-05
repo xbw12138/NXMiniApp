@@ -279,17 +279,23 @@ func metaBool(meta map[string]any, key string, fallback bool) bool {
 	return fallback
 }
 
+// HomeID 是内置首页小程序的 ID。
+const HomeID = "home"
+
+// settingHomeMiniApp 与 api.SettingHomeMiniApp 保持一致（避免循环依赖）。
+const settingHomeMiniApp = "home.miniapp_id"
+
 // Seed imports bundled mini programs from seedDir (the image ships them at
 // /seed/miniapps) when the miniapps table is still empty. Each seed directory
 // must contain app.json; meta.json provides the catalogue row and icon.png is
 // stored next to the package directory.
+//
+// 内置首页（HomeID）会单独补齐：即使库里已有其他小程序，缺少 home 时也会导入，
+// 并在尚未配置首页小程序时写入默认值。
 func Seed(db *gorm.DB, dataDir, seedDir string) error {
 	var count int64
 	if err := db.Model(&models.MiniApp{}).Count(&count).Error; err != nil {
 		return err
-	}
-	if count > 0 {
-		return nil
 	}
 	entries, err := os.ReadDir(seedDir)
 	if err != nil {
@@ -306,8 +312,16 @@ func Seed(db *gorm.DB, dataDir, seedDir string) error {
 		if !idPattern.MatchString(id) {
 			continue
 		}
+		if count > 0 && id != HomeID {
+			continue
+		}
 		src := filepath.Join(seedDir, id)
 		if !fileExists(filepath.Join(src, "app.json")) {
+			continue
+		}
+
+		var existing models.MiniApp
+		if err := db.Where("id = ?", id).Take(&existing).Error; err == nil {
 			continue
 		}
 
@@ -355,5 +369,15 @@ func Seed(db *gorm.DB, dataDir, seedDir string) error {
 			return err
 		}
 	}
-	return nil
+
+	// 首次部署时把内置 home 设为首页；后台改过配置后不会被覆盖。
+	var home models.MiniApp
+	if err := db.Where("id = ?", HomeID).Take(&home).Error; err != nil {
+		return nil
+	}
+	var setting models.Setting
+	if err := db.Where("key = ?", settingHomeMiniApp).Take(&setting).Error; err == nil {
+		return nil
+	}
+	return db.Create(&models.Setting{Key: settingHomeMiniApp, Value: HomeID}).Error
 }

@@ -24,12 +24,35 @@ struct MiniAppItem {
     long long updatedAt = 0;
 };
 
+/// 首页内容位：横幅或资讯。
+struct HomeContentItem {
+    int id = 0;
+    std::string kind;
+    std::string title;
+    std::string summary;
+    std::string body;
+    std::string coverUrl;
+    std::string linkType;
+    std::string linkTarget;
+    int sort = 0;
+};
+
+/// 首页描述：home 为空表示服务端未配置首页小程序。
+struct HomeInfo {
+    bool hasHome = false;
+    MiniAppItem home;
+    std::vector<HomeContentItem> banners;
+    std::vector<HomeContentItem> news;
+    std::vector<MiniAppItem> featured;
+};
+
 /// Fetches the catalogue and packages from the store backend.
 class MiniAppApi {
 public:
     using ListCallback =
         std::function<void(const std::vector<MiniAppItem>& items, const std::string& error)>;
     using DownloadCallback = std::function<void(const std::string& data, const std::string& error)>;
+    using HomeCallback = std::function<void(const HomeInfo& info, const std::string& error)>;
 
     static MiniAppApi& instance();
 
@@ -38,6 +61,8 @@ public:
     bool ready() const { return !base.empty(); }
 
     void fetchList(ListCallback callback);
+    void search(const std::string& keyword, ListCallback callback);
+    void fetchHome(HomeCallback callback);
     void download(const std::string& id, DownloadCallback callback);
 
 private:

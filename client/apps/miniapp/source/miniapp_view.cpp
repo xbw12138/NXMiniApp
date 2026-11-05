@@ -27,10 +27,14 @@
 #include <sstream>
 #include <thread>
 
+#include "miniapp/api/miniapp_api.hpp"
+#include "miniapp/install/package_manager.hpp"
 #include "miniapp/js_runtime.hpp"
 #include "miniapp/layout.hpp"
+#include "miniapp/miniapp_activity.hpp"
 #include "miniapp/wxml_parser.hpp"
 #include "miniapp/wxss.hpp"
+#include "nxkit/config.hpp"
 
 namespace miniapp {
 
@@ -1368,22 +1372,64 @@ void MiniappView::drawTextBlock(NVGcontext* vg, const RenderNode& node, float x,
 }
 
 int MiniappView::imageTexture(const std::string& src, const std::string& pageDir) {
-    if (src.empty() || src.rfind("http://", 0) == 0 || src.rfind("https://", 0) == 0) {
-        return -1;
-    }
-    std::string path = resolveLocalPath(src, pageDir);
-    auto it = imageTextures.find(path);
+    if (src.empty()) return -1;
+
+    const bool remote =
+        src.rfind("http://", 0) == 0 || src.rfind("https://", 0) == 0;
+    std::string key = remote ? src : resolveLocalPath(src, pageDir);
+    auto it = imageTextures.find(key);
     if (it != imageTextures.end()) return it->second;
 
+    if (remote) {
+        // 远程图先返回占位，下载完成后再绘制。
+        if (pendingImages.insert(key).second) requestRemoteImage(key);
+        return -1;
+    }
+
     NVGcontext* vg = brls::Application::getNVGContext();
-    int texture = nvgCreateImage(vg, path.c_str(), 0);
+    int texture = nvgCreateImage(vg, key.c_str(), 0);
     if (texture <= 0) {
         texture = -1;
-        brls::Logger::warning("miniapp: cannot load image {}", path);
+        brls::Logger::warning("miniapp: cannot load image {}", key);
     }
-    imageTextures[path] = texture;
+    imageTextures[key] = texture;
     return texture;
 }
+
+void MiniappView::requestRemoteImage(const std::string& url) {
+    std::weak_ptr<bool> weak = aliveToken;
+    std::thread([this, url, weak]() {
+        nxkit::HttpClient client;
+        client.setTimeout(15000);
+        nxkit::HttpResult result = client.get(url);
+        if (!result.ok || result.body.empty()) {
+            brls::sync([this, url, weak] {
+                auto token = weak.lock();
+                if (!token || !*token) return;
+                pendingImages.erase(url);
+                imageTextures[url] = -1;
+            });
+            return;
+        }
+        std::shared_ptr<std::string> bytes =
+            std::make_shared<std::string>(std::move(result.body));
+        brls::sync([this, url, weak, bytes] {
+            auto token = weak.lock();
+            if (!token || !*token) return;
+            pendingImages.erase(url);
+            NVGcontext* vg = brls::Application::getNVGContext();
+            int texture = nvgCreateImageMem(
+                vg, 0, reinterpret_cast<unsigned char*>(const_cast<char*>(bytes->data())),
+                static_cast<int>(bytes->size()));
+            if (texture <= 0) {
+                brls::Logger::warning("miniapp: cannot decode remote image {}", url);
+                texture = -1;
+            }
+            imageTextures[url] = texture;
+        });
+    }).detach();
+}
+
 
 std::string MiniappView::resolveLocalPath(const std::string& src, const std::string& pageDir) {
     if (src.empty()) return src;
@@ -2528,8 +2574,13 @@ void MiniappView::httpRequest(const std::string& method, const std::string& url,
     for (const auto& entry : headers) client.setHeader(entry.first, entry.second);
     client.setTimeout(15000);
 
+    // 首页小程序用相对路径请求自己的服务端，这里补上商店地址。
+    std::string target = url;
+    if (!target.empty() && target[0] == '/' && MiniAppApi::instance().ready()) {
+        target = MiniAppApi::instance().serverUrl() + target;
+    }
     if (method == "GET" || method == "HEAD") {
-        client.getAsync(url, {}, [done](const nxkit::HttpResult& result) {
+        client.getAsync(target, {}, [done](const nxkit::HttpResult& result) {
             done(result.ok, static_cast<int>(result.status), result.body, result.headers);
         });
     } else {
@@ -2541,7 +2592,7 @@ void MiniappView::httpRequest(const std::string& method, const std::string& url,
                 payload = body;
             }
         }
-        client.postJsonAsync(url, {}, payload, [done](const nxkit::HttpResult& result) {
+        client.postJsonAsync(target, {}, payload, [done](const nxkit::HttpResult& result) {
             done(result.ok, static_cast<int>(result.status), result.body, result.headers);
         });
     }
@@ -2619,6 +2670,104 @@ bool MiniappView::reLaunch(const std::string& url) {
     }
     current = nullptr;
     return openPage(url, false);
+}
+
+namespace {
+
+// 记录「最近使用」，供 wx.miniapp.listRecent 展示。
+void rememberMiniApp(const std::string& id, const std::string& title) {
+    auto& config = nxkit::Config::instance();
+    nlohmann::json updated = nlohmann::json::array();
+    updated.push_back(id);
+
+    const nlohmann::json& data = config.data();
+    if (data.is_object()) {
+        auto section = data.find("miniapp");
+        if (section != data.end() && section->is_object()) {
+            auto recent = section->find("recent");
+            if (recent != section->end() && recent->is_array()) {
+                for (const auto& entry : *recent) {
+                    if (!entry.is_string()) continue;
+                    if (entry.get<std::string>() == id) continue;
+                    if (updated.size() >= 8) break;
+                    updated.push_back(entry);
+                }
+            }
+        }
+    }
+
+    config.setValue("miniapp.recent", updated);
+    if (!title.empty()) config.setString("miniapp.title." + id, title);
+    std::string usage = "miniapp.usage." + id + ".count";
+    config.setInt(usage, config.getInt(usage, 0) + 1);
+    config.save();
+}
+
+}  // namespace
+
+bool MiniappView::launchMiniApp(const std::string& id) {
+    if (id.empty()) return false;
+
+    if (packages::installed(id, "")) {
+        rememberMiniApp(id, "");
+        brls::Application::pushActivity(new MiniappActivity(packages::directory(id)));
+        return true;
+    }
+
+    // 未安装时先按商店目录查版本，下载安装后再进入。
+    std::weak_ptr<bool> weak = aliveToken;
+    MiniAppApi::instance().fetchList([weak, id](const std::vector<MiniAppItem>& list,
+                                                const std::string& error) {
+        if (!error.empty()) return;
+        for (const auto& candidate : list) {
+            if (candidate.id != id) continue;
+            MiniAppApi::instance().download(
+                id, [weak, candidate](const std::string& archive, const std::string& error) {
+                    brls::sync([weak, candidate, archive, error] {
+                        auto token = weak.lock();
+                        if (!token || !*token) return;
+                        if (!error.empty() || archive.empty()) return;
+                        std::string installError;
+                        if (!packages::install(candidate.id, candidate.version, archive,
+                                               installError)) {
+                            brls::Logger::warning("miniapp: install {} failed: {}", candidate.id,
+                                                  installError);
+                            return;
+                        }
+                        rememberMiniApp(candidate.id, candidate.title);
+                        brls::Application::pushActivity(
+                            new MiniappActivity(packages::directory(candidate.id)));
+                    });
+                });
+            return;
+        }
+    });
+    return true;
+}
+
+JsonValue MiniappView::recentMiniApps() {
+    std::vector<JsonValue> items;
+    const nlohmann::json& data = nxkit::Config::instance().data();
+    if (!data.is_object()) return JsonValue::array();
+    auto section = data.find("miniapp");
+    if (section == data.end() || !section->is_object()) return JsonValue::array();
+    auto recent = section->find("recent");
+    if (recent == section->end() || !recent->is_array()) return JsonValue::array();
+
+    for (const auto& entry : *recent) {
+        if (!entry.is_string()) continue;
+        std::string id = entry.get<std::string>();
+        JsonValue item = JsonValue::object();
+        item.setMember("id", JsonValue::string(id));
+        item.setMember("title", JsonValue::string(
+                                    nxkit::Config::instance().getString("miniapp.title." + id, id)));
+        item.setMember("count", JsonValue::number(
+                                    nxkit::Config::instance().getInt(
+                                        "miniapp.usage." + id + ".count", 0)));
+        item.setMember("installed", JsonValue::boolean(packages::installed(id, "")));
+        items.push_back(std::move(item));
+    }
+    return JsonValue::array(std::move(items));
 }
 
 JsonValue MiniappView::systemInfo() {

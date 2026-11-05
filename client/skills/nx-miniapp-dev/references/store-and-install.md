@@ -70,7 +70,7 @@
 
 MySQL `miniapps` 表字段：`id,title,summary,description,category,developer,version,icon,published,downloads,created_at,updated_at`（时间戳为毫秒）。
 
-种子目录 `client/resources/miniapps/<id>/` 的 `meta.json` 只在**首次启动**（表为空）时导入，字段：
+种子目录 `client/resources/miniapps/<id>/` 的 `meta.json` 只在**首次启动**（表为空）时导入（内置首页 `home` 例外：缺失时会单独补齐），字段：
 
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
@@ -100,7 +100,7 @@ curl -X POST -H "Authorization: Bearer nxkit-store-admin" \
   http://127.0.0.1:8080/api/v1/admin/miniapps/hello/package
 ```
 
-**种子目录**：改 `client/resources/miniapps` 只在首次 `docker compose up --build` 时生效（表非空就跳过）；日常更新请走管理后台。
+**种子目录**：改 `client/resources/miniapps` 只在首次 `docker compose up --build` 时生效（表非空就跳过；内置 `home` 缺失时会补齐）；日常更新请走管理后台。
 
 客户端没有「更新」按钮；只要服务端 `version` 变化，下次点击该卡片就会重新下载并覆盖安装。
 

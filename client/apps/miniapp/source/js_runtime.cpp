@@ -719,7 +719,8 @@ struct RuntimeBridge {
         JSValue fail = JS_GetPropertyStr(ctx, argv[0], "fail");
         JSValue complete = JS_GetPropertyStr(ctx, argv[0], "complete");
 
-        std::string method = toStd(ctx, methodValue);
+        std::string method =
+            (JS_IsUndefined(methodValue) || JS_IsNull(methodValue)) ? std::string() : toStd(ctx, methodValue);
         if (method.empty()) method = "GET";
         for (char& c : method) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
         std::string url = toStd(ctx, urlValue);
@@ -876,6 +877,30 @@ struct RuntimeBridge {
 
     static JSValue wxReLaunch(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
         return navigate(ctx, JS_UNDEFINED, argc > 0 ? argv[0] : JS_UNDEFINED, "relaunch");
+    }
+
+    // ---- 小程序互跳与最近使用 ----
+
+    static JSValue wxMiniAppLaunch(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || argc <= 0) return JS_UNDEFINED;
+
+        std::string id;
+        if (JS_IsString(argv[0])) {
+            id = toStd(ctx, argv[0]);
+        } else if (JS_IsObject(argv[0])) {
+            id = toStd(ctx, JS_GetPropertyStr(ctx, argv[0], "id"));
+        }
+        if (id.empty()) return JS_UNDEFINED;
+
+        bool ok = runtime->host->launchMiniApp(id);
+        return JS_NewBool(ctx, ok);
+    }
+
+    static JSValue wxMiniAppListRecent(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host) return JS_NewArray(ctx);
+        return runtime->valueFromJson(runtime->host->recentMiniApps());
     }
 };
 
@@ -1232,6 +1257,14 @@ void JsRuntime::installWx() {
     set("navigateBack", RuntimeBridge::wxNavigateBack, 1);
     set("redirectTo", RuntimeBridge::wxRedirectTo, 1);
     set("reLaunch", RuntimeBridge::wxReLaunch, 1);
+
+    // wx.miniapp：小程序互跳与最近使用，供首页小程序组织内容。
+    JSValue miniappNamespace = JS_NewObject(context);
+    JS_SetPropertyStr(context, miniappNamespace, "launch",
+                      JS_NewCFunction(context, RuntimeBridge::wxMiniAppLaunch, "launch", 1));
+    JS_SetPropertyStr(context, miniappNamespace, "listRecent",
+                      JS_NewCFunction(context, RuntimeBridge::wxMiniAppListRecent, "listRecent", 0));
+    JS_SetPropertyStr(context, wx, "miniapp", miniappNamespace);
 
     JS_SetPropertyStr(context, global, "wx", wx);
     JS_FreeValue(context, global);

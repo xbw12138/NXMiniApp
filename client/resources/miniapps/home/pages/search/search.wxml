@@ -1,0 +1,30 @@
+<view class="page">
+  <view class="topbar">
+    <text class="brand">搜索小程序</text>
+    <view class="spacer"></view>
+    <view class="button" bindtap="onBack">
+      <text class="button-text">返回</text>
+    </view>
+  </view>
+
+  <view class="searchbar">
+    <input class="input" value="{{keyword}}" placeholder="输入名称、分类或开发者"
+           bindinput="onInput" bindconfirm="onConfirm"/>
+    <view class="go" bindtap="onSubmit">
+      <text class="go-text">搜索</text>
+    </view>
+  </view>
+
+  <scroll-view class="results" scroll-y="{{true}}">
+    <view class="app-card" wx:for="{{items}}" wx:key="id" data-id="{{item.id}}" bindtap="onLaunch">
+      <image class="app-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+      <view class="app-meta">
+        <text class="app-title">{{item.title}}</text>
+        <text class="app-sub">{{item.category}} · {{item.summary}}</text>
+      </view>
+    </view>
+    <view wx:if="{{items.length === 0}}" class="empty">
+      <text class="empty-text">{{status}}</text>
+    </view>
+  </scroll-view>
+</view>

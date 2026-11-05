@@ -40,6 +40,7 @@
         { path: "api/index.html#network", title: "网络 request" },
         { path: "api/index.html#ui", title: "界面交互" },
         { path: "api/index.html#media", title: "媒体" },
+        { path: "api/index.html#miniapp", title: "小程序互跳" },
         { path: "api/index.html#storage", title: "数据缓存" },
         { path: "api/index.html#route", title: "路由" },
         { path: "api/index.html#system", title: "系统信息" },

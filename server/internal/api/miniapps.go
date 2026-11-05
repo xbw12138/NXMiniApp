@@ -39,6 +39,8 @@ func MiniAppJSON(cfg config.Config, m *models.MiniApp) gin.H {
 		"icon_url":     iconURL,
 		"version":      version,
 		"size":         miniappstore.DirSize(miniappstore.PackageDir(cfg.DataDir, m.ID)),
+		"featured":     m.Featured,
+		"sort":         m.Sort,
 		"published":    m.Published,
 		"updated_at":   m.UpdatedAt,
 		"download_url": "/api/v1/miniapps/" + m.ID + "/download",

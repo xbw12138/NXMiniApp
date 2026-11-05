@@ -18,7 +18,7 @@
   <main class="content">
     <h1>wx.* API 支持状态</h1>
     <p class="lead">
-      容器向页面注入全局 <code>wx</code> 对象。目前 36 个接口有真实行为，
+      容器向页面注入全局 <code>wx</code> 对象。目前 38 个接口有真实行为，
       18 个接口以空实现提供兼容。所有异步接口只支持回调风格，不返回 Promise。
     </p>
 
@@ -38,6 +38,8 @@
     <p>
       GET / HEAD 会把 <code>data</code> 序列化为查询串，其他方法发送 JSON 请求体；
       未显式设置时自动补 <code>Content-Type: application/json</code>。
+      <code>url</code> 以 <code>/</code> 开头时按商店服务端地址解析，便于首页这类
+      “由服务端下发、内容随服务端更新”的小程序直接请求 <code>/api/v1/miniapp-home</code>。
     </p>
 <pre><code>wx.request({
   url: 'https://example.com/api/list',
@@ -78,6 +80,21 @@ ctx.seek(30);</code></pre>
       实际解码由 <code>nxkit::MPVCore</code> 完成。桌面构建默认关闭
       <code>NXKIT_WITH_MPV</code>，需要安装 libmpv 并重新配置；未启用时
       <code>video</code> 只显示 poster 与占位控制条，并派发 <code>binderror</code>。
+    </p>
+
+    <h2 id="miniapp">小程序互跳</h2>
+    <table>
+      <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.miniapp.launch(id)</code></td><td>小程序 ID，或 <code>{ id }</code></td><td>已安装则直接进入；未安装会先下载安装。返回布尔值表示是否已受理</td></tr>
+        <tr><td><code>wx.miniapp.listRecent()</code></td><td>—</td><td>返回最近使用的数组：<code>[{ id, title, count, installed }]</code>，按最近使用倒序</td></tr>
+      </tbody>
+    </table>
+<pre><code>const recent = wx.miniapp.listRecent();
+wx.miniapp.launch(recent[0].id);</code></pre>
+    <p>
+      首页小程序就是靠这两个接口组织“推荐 / 最近使用”的；客户端启动时会先请求
+      <code>/api/v1/miniapp-home</code> 拿到首页小程序，再按版本安装运行。
     </p>
 
     <h2 id="storage">数据缓存</h2>

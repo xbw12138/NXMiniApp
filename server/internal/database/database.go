@@ -34,5 +34,6 @@ func Connect(dsn string) (*gorm.DB, error) {
 
 // Migrate creates or updates the schema for all store tables.
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&models.StoreApp{}, &models.Version{}, &models.MiniApp{}, &models.DocPage{}, &models.ContainerRelease{})
+	return db.AutoMigrate(&models.StoreApp{}, &models.Version{}, &models.MiniApp{},
+		&models.DocPage{}, &models.ContainerRelease{}, &models.ContentItem{}, &models.Setting{})
 }

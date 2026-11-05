@@ -69,6 +69,8 @@ int main(int, char**) {
         std::string package = devPackage;
         config.createActivity = [package] {
             applyDarkTheme();
+            // 首页小程序用相对路径请求服务端，预览时也要先配置商店地址。
+            miniapp::MiniAppApi::instance().configure(serverUrl());
             return new miniapp::MiniappActivity(package);
         };
         return nxkit::runApp(config);

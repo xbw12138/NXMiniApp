@@ -8,6 +8,7 @@
 
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -47,6 +48,8 @@ public:
     bool navigateBack(int delta) override;
     bool redirectTo(const std::string& url) override;
     bool reLaunch(const std::string& url) override;
+    bool launchMiniApp(const std::string& id) override;
+    JsonValue recentMiniApps() override;
     JsonValue systemInfo() override;
     void vibrateShort() override;
     bool storageGet(const std::string& key, std::string& value) override;
@@ -202,6 +205,7 @@ private:
     void saveStorage();
     void loadStorage();
     int imageTexture(const std::string& src, const std::string& pageDir);
+    void requestRemoteImage(const std::string& url);
     std::string resolveLocalPath(const std::string& src, const std::string& pageDir);
 
     std::string packagePathOverride;
@@ -230,6 +234,7 @@ private:
     std::string navigationTitle;
 
     std::map<std::string, int> imageTextures;
+    std::set<std::string> pendingImages;
     std::map<std::string, std::string> storageValues;
     std::string storageFile;
     std::string clipboardText;
