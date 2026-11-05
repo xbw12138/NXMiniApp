@@ -8,6 +8,7 @@
 #include <string>
 #ifdef __SWITCH__
 #include <fstream>
+#include <sys/stat.h>
 #endif
 
 #include "miniapp/api/miniapp_api.hpp"
@@ -21,6 +22,8 @@ namespace {
 #ifdef __SWITCH__
 // Switch 上把日志落盘到 SD 卡：真机崩溃后可经 USB 拉取日志定位问题。
 void setupFileLog() {
+    // ofstream 不会自动建父目录，目录缺失时日志会静默丢失。
+    mkdir("sdmc:/switch/miniapp", 0777);
     static std::ofstream file("sdmc:/switch/miniapp/miniapp.log", std::ios::trunc);
     if (!file) return;
     brls::Logger::getLogEvent()->subscribe([](const std::string& line) {
