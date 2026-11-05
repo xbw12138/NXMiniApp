@@ -376,7 +376,7 @@ func Seed(db *gorm.DB, dataDir, seedDir string) error {
 		return nil
 	}
 	var setting models.Setting
-	if err := db.Where("key = ?", settingHomeMiniApp).Take(&setting).Error; err == nil {
+	if err := db.Where("`key` = ?", settingHomeMiniApp).Take(&setting).Error; err == nil {
 		return nil
 	}
 	return db.Create(&models.Setting{Key: settingHomeMiniApp, Value: HomeID}).Error

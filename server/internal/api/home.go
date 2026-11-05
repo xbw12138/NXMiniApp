@@ -15,7 +15,7 @@ const SettingHomeMiniApp = "home.miniapp_id"
 // SettingValue 读取一个配置项；不存在时返回空字符串。
 func (e *Env) SettingValue(key string) string {
 	var row models.Setting
-	if err := e.DB.Where("key = ?", key).Take(&row).Error; err != nil {
+	if err := e.DB.Where("`key` = ?", key).Take(&row).Error; err != nil {
 		return ""
 	}
 	return row.Value
