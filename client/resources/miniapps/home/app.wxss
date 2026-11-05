@@ -26,7 +26,7 @@
 }
 
 .search {
-  width: 250rpx;
+  flex: 1;
   height: 62rpx;
   border-radius: 31rpx;
   background-color: #1c2026;

@@ -15,6 +15,8 @@
 
 namespace miniapp {
 
+class MiniappView;
+
 class LauncherView : public brls::Box {
 public:
     LauncherView();
@@ -24,9 +26,13 @@ public:
 
 private:
     void reload();
+    // 设置状态栏文本；空文本时隐藏标签（空 Label 的 measure 会撑满可用高度，见 borealis label.cpp）。
+    void setStatus(const std::string& text);
     // 启动时优先拉起服务端配置的首页小程序；未配置或失败时回落到商店列表。
     void fetchStoreList();
     void openHome(const MiniAppItem& home);
+    // 把首页小程序作为内容视图内嵌到标题栏下方（不再 push 独立页面）。
+    void embedHome(const MiniAppItem& home);
     void applyItems();
     void openItem(const MiniAppItem& item);
     void enter(const MiniAppItem& item);
@@ -40,7 +46,11 @@ private:
 
     brls::Label* statusLabel = nullptr;
     brls::Button* clearSearchBtn = nullptr;
+    brls::Button* searchBtn = nullptr;
     nxkit::CoverGridPage* grid = nullptr;
+    // 内嵌模式下的首页小程序视图；非空表示首页已内嵌，不再使用商店网格。
+    MiniappView* homeView = nullptr;
+    MiniAppItem homeItem;
 
     std::vector<MiniAppItem> items;
     std::shared_ptr<bool> alive = std::make_shared<bool>(true);

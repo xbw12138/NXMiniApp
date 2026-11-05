@@ -16,6 +16,7 @@
 
 #include "miniapp/install/package_manager.hpp"
 #include "miniapp/miniapp_activity.hpp"
+#include "miniapp/miniapp_view.hpp"
 #include "nxkit/config.hpp"
 
 namespace miniapp {
@@ -67,6 +68,7 @@ LauncherView::LauncherView() {
     header->addView(heading);
 
     brls::Button* search = new brls::Button();
+    this->searchBtn = search;
     search->setText("搜索");
     search->setMarginLeft(12);
     search->registerClickAction([this](brls::View*) {
@@ -120,6 +122,8 @@ LauncherView::~LauncherView() { *this->alive = false; }
 
 void LauncherView::willAppear(bool resetState) {
     brls::Box::willAppear(resetState);
+    // 首页小程序已内嵌：保持其运行状态，返回时不重建、不回落商店网格。
+    if (this->homeView) return;
     if (!this->loaded) {
         this->reload();
     } else {
@@ -127,13 +131,38 @@ void LauncherView::willAppear(bool resetState) {
     }
 }
 
+void LauncherView::setStatus(const std::string& text) {
+    this->statusLabel->setText(text);
+    this->statusLabel->setVisibility(text.empty() ? brls::Visibility::GONE
+                                                  : brls::Visibility::VISIBLE);
+}
+
 void LauncherView::reload() {
     if (this->loading) return;
     this->loading = true;
 
-    // 首页由服务端下发的小程序驱动：先取首页描述，有则直接运行，否则回落商店列表。
+    // 已内嵌首页：刷新 = 重新拉取首页描述（可感知新版本），成功后重建内嵌视图；
+    // 失败则保留当前内嵌视图，仅重建一次触发其内部数据重载。
+    if (this->homeView) {
+        this->setStatus("正在刷新首页…");
+        MiniAppApi::instance().fetchHome(
+            [this, alive = this->alive](const HomeInfo& info, const std::string& error) {
+                brls::sync([this, alive, info, error] {
+                    if (!*alive) return;
+                    this->loading = false;
+                    if (error.empty() && info.hasHome) {
+                        this->openHome(info.home);
+                    } else if (this->homeItem.id.empty() == false) {
+                        this->embedHome(this->homeItem);
+                    }
+                });
+            });
+        return;
+    }
+
+    // 首页由服务端下发的小程序驱动：先取首页描述，有则直接内嵌运行，否则回落商店列表。
     if (!this->homeLaunched) {
-        this->statusLabel->setText("正在加载首页…");
+        this->setStatus("正在加载首页…");
         this->grid->showSkeleton(6);
 
         MiniAppApi::instance().fetchHome(
@@ -155,12 +184,12 @@ void LauncherView::reload() {
 
 void LauncherView::openHome(const MiniAppItem& home) {
     this->homeLaunched = true;
-    this->statusLabel->setText("正在进入首页…");
+    this->setStatus("正在进入首页…");
 
     if (packages::installed(home.id, home.version)) {
         this->loading = false;
-        this->loaded = false;
-        this->enter(home);
+        this->loaded = true;
+        this->embedHome(home);
         return;
     }
 
@@ -179,15 +208,43 @@ void LauncherView::openHome(const MiniAppItem& home) {
                     return;
                 }
                 this->loading = false;
-                this->loaded = false;
-                this->enter(home);
+                this->loaded = true;
+                this->embedHome(home);
             });
         });
 }
 
+void LauncherView::embedHome(const MiniAppItem& home) {
+    this->homeLaunched = true;
+    this->loaded = true;
+    this->homeItem = home;
+    this->setStatus("");
+    // 首页自带搜索入口，原生搜索/清除按钮只服务于商店网格。
+    if (this->searchBtn) this->searchBtn->setVisibility(brls::Visibility::GONE);
+    if (this->clearSearchBtn) this->clearSearchBtn->setVisibility(brls::Visibility::GONE);
+
+    if (this->homeView) {
+        this->removeView(this->homeView);
+        this->homeView = nullptr;
+    }
+
+    MiniappView* view = new MiniappView(packages::directory(home.id));
+    view->setGrow(1);
+    this->addView(view);
+    this->homeView = view;
+    brls::Application::giveFocus(view->getDefaultFocus());
+
+    // 网格在内嵌模式下不再需要，延迟移除避免打断当前焦点。
+    if (this->grid) {
+        nxkit::CoverGridPage* stale = this->grid;
+        this->grid = nullptr;
+        this->removeView(stale);
+    }
+}
+
 void LauncherView::fetchStoreList() {
     this->loading = true;
-    this->statusLabel->setText("正在连接商店…");
+    this->setStatus("正在连接商店…");
     this->grid->showSkeleton(6);
 
     MiniAppApi::instance().fetchList([this, alive = this->alive](const std::vector<MiniAppItem>& list,
@@ -198,13 +255,13 @@ void LauncherView::fetchStoreList() {
             this->loaded = true;
 
             if (!error.empty()) {
-                this->statusLabel->setText("连接商店失败");
+                this->setStatus("连接商店失败");
                 this->grid->setError(error + "\n请检查网络后重试");
                 return;
             }
 
             this->items = list;
-            this->statusLabel->setText("共 " + std::to_string(list.size()) + " 个小程序");
+            this->setStatus("共 " + std::to_string(list.size()) + " 个小程序");
             this->applyItems();
         });
     });
@@ -237,6 +294,7 @@ void LauncherView::touchRecent(const std::string& id) {
 }
 
 void LauncherView::applyItems() {
+    if (!this->grid) return;
     if (this->items.empty()) {
         this->grid->setEmpty("商店里还没有小程序");
         return;
@@ -265,8 +323,8 @@ void LauncherView::applyItems() {
         } else {
             this->grid->setItems(covers);
         }
-        this->statusLabel->setText("搜索「" + this->searchQuery + "」 · " +
-                                   std::to_string(covers.size()) + " 个结果");
+        this->setStatus("搜索「" + this->searchQuery + "」 · " +
+                        std::to_string(covers.size()) + " 个结果");
         return;
     }
 

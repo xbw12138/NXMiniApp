@@ -1,7 +1,5 @@
 <view class="page">
   <view class="topbar">
-    <text class="brand">Switch 小程序</text>
-    <view class="spacer"></view>
     <view class="search" bindtap="onSearch">
       <text class="search-text">搜索小程序</text>
     </view>
