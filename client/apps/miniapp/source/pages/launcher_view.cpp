@@ -45,6 +45,45 @@ std::string subtitleOf(const MiniAppItem& item) {
     return subtitle;
 }
 
+// 图标字形 Label：直接使用 Material Icons 字体渲染。
+// 经主字体回退渲染时，垂直居中按主字体度量计算，无下降部的图标字形会被顶偏；
+// 字体与度量同源后，图标才能在按钮里真正居中。
+class IconGlyph : public brls::Label {
+public:
+    IconGlyph(const char* glyph, float size) {
+        this->font = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+        this->setFontSize(size);
+        this->setText(glyph);
+        this->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        this->setVerticalAlign(brls::VerticalAlign::CENTER);
+    }
+};
+
+// 图标按钮：默认按钮外观（灰底圆角）内嵌居中的 Material Icons 字形。
+brls::Box* makeIconButton(const char* glyph, std::function<bool(brls::View*)> onClick) {
+    brls::Theme theme = brls::Application::getTheme();
+    brls::Style style = brls::Application::getStyle();
+
+    brls::Box* button = new brls::Box(brls::Axis::ROW);
+    button->setFocusable(true);
+    button->setJustifyContent(brls::JustifyContent::CENTER);
+    button->setAlignItems(brls::AlignItems::CENTER);
+    button->setPadding(9, 14, 9, 14);
+    button->setCornerRadius(style["brls/button/corner_radius"]);
+    button->setHighlightCornerRadius(style["brls/button/corner_radius"]);
+    button->setBackgroundColor(theme["brls/button/default_enabled_background"]);
+    button->setHideHighlightBackground(true);
+    button->setShadowType(brls::ShadowType::GENERIC);
+
+    IconGlyph* icon = new IconGlyph(glyph, 22);
+    icon->setTextColor(theme["brls/button/default_enabled_text"]);
+    button->addView(icon);
+
+    button->registerClickAction(std::move(onClick));
+    button->addGestureRecognizer(new brls::TapGestureRecognizer(button));
+    return button;
+}
+
 }  // namespace
 
 LauncherView::LauncherView() {
@@ -85,26 +124,20 @@ LauncherView::LauncherView() {
     });
     header->addView(this->clearSearchBtn);
 
-    // 图标按钮：文本为 Material Icons 码点，经字体回退链渲染为图标。
-    brls::Button* refresh = new brls::Button();
-    refresh->setText("\xee\x97\x95");  // refresh
-    refresh->setFontSize(22);
-    refresh->setMarginLeft(8);
-    refresh->registerClickAction([this](brls::View*) {
+    // 图标按钮：字形为 Material Icons 码点，直接用图标字体渲染保证居中。
+    brls::Box* refresh = makeIconButton("\xee\x97\x95", [this](brls::View*) {  // refresh
         this->loaded = false;
         this->reload();
         return true;
     });
+    refresh->setMarginLeft(8);
     header->addView(refresh);
 
-    brls::Button* about = new brls::Button();
-    about->setText("\xee\xa2\x8f");  // info_outline
-    about->setFontSize(22);
-    about->setMarginLeft(8);
-    about->registerClickAction([this](brls::View*) {
+    brls::Box* about = makeIconButton("\xee\xa2\x8f", [this](brls::View*) {  // info_outline
         this->showAbout();
         return true;
     });
+    about->setMarginLeft(8);
     header->addView(about);
 
     this->addView(header);

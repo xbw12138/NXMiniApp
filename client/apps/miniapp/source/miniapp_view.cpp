@@ -226,6 +226,8 @@ MiniappView::MiniappView(std::string packagePath)
     }
 
     this->setFocusable(true);
+    // 小程序内部自己画绿色焦点框，隐藏 borealis 默认的蓝色高亮边框（贴着标题栏像进度条）。
+    this->setHideHighlight(true);
 
     auto action = [this](brls::View*) {
         this->handleActivate();
@@ -249,20 +251,16 @@ MiniappView::MiniappView(std::string packagePath)
     });
 
     auto up = [this](brls::View*) {
-        this->handleDirection(brls::FocusDirection::UP);
-        return true;
+        return this->handleDirection(brls::FocusDirection::UP);
     };
     auto down = [this](brls::View*) {
-        this->handleDirection(brls::FocusDirection::DOWN);
-        return true;
+        return this->handleDirection(brls::FocusDirection::DOWN);
     };
     auto left = [this](brls::View*) {
-        this->handleDirection(brls::FocusDirection::LEFT);
-        return true;
+        return this->handleDirection(brls::FocusDirection::LEFT);
     };
     auto right = [this](brls::View*) {
-        this->handleDirection(brls::FocusDirection::RIGHT);
-        return true;
+        return this->handleDirection(brls::FocusDirection::RIGHT);
     };
     this->registerAction("上", brls::BUTTON_UP, up);
     this->registerAction("上", brls::BUTTON_NAV_UP, up);
@@ -2303,11 +2301,11 @@ void MiniappView::activateInput(RenderNode* node) {
         placeholder.empty() ? "输入内容" : placeholder, "", 200, initial);
 }
 
-void MiniappView::handleDirection(brls::FocusDirection direction) {
+bool MiniappView::handleDirection(brls::FocusDirection direction) {
     if (modal.active) {
         if (direction == brls::FocusDirection::LEFT) modal.focus = 0;
         if (direction == brls::FocusDirection::RIGHT) modal.focus = 1;
-        return;
+        return true;
     }
     RenderNode* node = findFocusByPath(focusPath);
     if (node && node->tag == "slider" &&
@@ -2324,18 +2322,19 @@ void MiniappView::handleDirection(brls::FocusDirection direction) {
             detail.setMember("value", JsonValue::number(next));
             triggerChange(node, detail, std::string());
         }
-        return;
+        return true;
     }
-    moveFocus(node, direction);
+    return moveFocus(node, direction);
 }
 
-void MiniappView::moveFocus(RenderNode* from, brls::FocusDirection direction) {
+bool MiniappView::moveFocus(RenderNode* from, brls::FocusDirection direction) {
     if (!from || focusNodes.empty()) {
         if (!focusNodes.empty()) {
             focusPath = focusNodes.front()->path;
             ensureVisible(focusNodes.front());
+            return true;
         }
-        return;
+        return false;
     }
 
     RenderNode* best = nullptr;
@@ -2386,7 +2385,9 @@ void MiniappView::moveFocus(RenderNode* from, brls::FocusDirection direction) {
     if (best) {
         focusPath = best->path;
         ensureVisible(best);
+        return true;
     }
+    return false;
 }
 
 RenderNode* MiniappView::findFocusByPath(const std::string& path) const {

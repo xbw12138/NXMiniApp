@@ -183,8 +183,9 @@ private:
     RenderNode* hitTestNode(RenderNode& node, float x, float y) const;
     RenderNode* findNodeByPath(RenderNode& node, const std::string& path) const;
     RenderNode* findNodeById(RenderNode& node, const std::string& id) const;
-    void handleDirection(brls::FocusDirection direction);
-    void moveFocus(RenderNode* from, brls::FocusDirection direction);
+    // 返回 true 表示事件被小程序内部消费；false 表示已到边界，交给 borealis 焦点导航（可逃逸到外层 UI）
+    bool handleDirection(brls::FocusDirection direction);
+    bool moveFocus(RenderNode* from, brls::FocusDirection direction);
     RenderNode* findFocusByPath(const std::string& path) const;
     RenderNode* firstFocusable() const;
     void ensureVisible(RenderNode* node);
