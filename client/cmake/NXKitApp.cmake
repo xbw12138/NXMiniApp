@@ -76,12 +76,10 @@ function(nxkit_add_app APP_NAME)
                 COMMAND ${NX_NACPTOOL_EXE} --create "${APP_TITLE}"
                 "${APP_AUTHOR}" "${APP_VERSION}" ${APP_NAME}.nacp --titleid=${APP_TITLEID}
                 COMMAND ${CMAKE_COMMAND} -E copy_directory ${NXKIT_RESOURCES_DIR} ${CMAKE_BINARY_DIR}/resources
-                # Switch 的 RomFS 只保留一份主字体 font.ttf（任天堂系统字体，
-                # 含 CJK）：applet 模式下 pl 共享字体不可用，borealis 会回退
-                # 加载 romfs:/font/font.ttf，保证中文/图标任何启动方式都能显示。
-                COMMAND ${CMAKE_COMMAND} -E copy
-                ${NXKIT_RESOURCES_DIR}/font/switch_font.ttf
-                ${CMAKE_BINARY_DIR}/resources/font/font.ttf
+                # Switch 的 RomFS 只保留一份主字体 font.ttf（Noto Sans SC 的
+                # GB2312+ASCII 子集）：applet 模式下 pl 共享字体不可用，且系统
+                # 字体缺常用汉字（务/还/页等），borealis 直接加载 romfs:/font/font.ttf。
+                # switch_font.ttf 是任天堂系统字体镜像（子集），仅桌面端作兜底，不打进 RomFS。
                 COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/resources/font/switch_font.ttf
                 COMMAND ${NX_ELF2NRO_EXE} ${APP_NAME}.elf ${APP_NAME}.nro --icon=${APP_ICON}
                 --nacp=${APP_NAME}.nacp --romfsdir=${CMAKE_BINARY_DIR}/resources
