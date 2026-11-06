@@ -1,6 +1,7 @@
 package api
 
 import (
+	"io/fs"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -8,6 +9,7 @@ import (
 
 	"nxminiapp/server/internal/config"
 	"nxminiapp/server/internal/docs"
+	"nxminiapp/server/web"
 )
 
 func corsMiddleware() gin.HandlerFunc {
@@ -59,6 +61,21 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 	r.GET("/", func(c *gin.Context) { servePortal(c, "index.html") })
 	r.GET("/submit", func(c *gin.Context) { servePortal(c, "submit.html") })
 	r.GET("/download", func(c *gin.Context) { servePortal(c, "download.html") })
+	// 开发 Skill 直接打包下载，避免国内访问 GitHub 打不开。
+	r.GET("/skill/nxminiapp-dev.zip", func(c *gin.Context) {
+		portal, err := web.Portal()
+		if err != nil {
+			c.String(http.StatusServiceUnavailable, "portal not built")
+			return
+		}
+		data, err := fs.ReadFile(portal, "nxminiapp-dev.zip")
+		if err != nil {
+			Abort(c, http.StatusNotFound, "Not Found")
+			return
+		}
+		c.Header("Content-Disposition", `attachment; filename="nxminiapp-dev.zip"`)
+		c.Data(http.StatusOK, "application/zip", data)
+	})
 
 	// 文档站：页面内容在数据库，assets 静态文件在 DocsDir。
 	docs.Register(r, db, cfg.DocsDir)

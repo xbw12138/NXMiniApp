@@ -505,12 +505,13 @@ a { color: var(--accent); text-decoration: none; }
         自动完成打包与投稿，避开 webview / canvas 等不支持的特性。
       </p>
       <div class="actions">
-        <a class="btn primary" href="https://github.com/xbw12138/NXMiniApp/tree/main/skill/nxminiapp-dev" target="_blank" rel="noopener">获取 Skill</a>
+        <a class="btn primary" href="/skill/nxminiapp-dev.zip" download="nxminiapp-dev.zip">下载 Skill</a>
+        <a class="btn ghost" href="https://github.com/xbw12138/NXMiniApp/tree/main/skill/nxminiapp-dev" target="_blank" rel="noopener">在 GitHub 查看</a>
         <a class="btn ghost" href="/docs/index.html">查看开发文档</a>
       </div>
     </div>
-    <pre class="code"># 安装到当前项目
-cp -r skill/nxminiapp-dev \
+    <pre class="code"># 解压到当前项目
+unzip nxminiapp-dev.zip -d \
   your-project/.trae/skills/
 
 # 然后直接告诉 AI
