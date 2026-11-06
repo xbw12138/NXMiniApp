@@ -59,7 +59,7 @@ YGSize measureTextNode(YGNodeRef yogaNode, float width, YGMeasureMode widthMode,
 }
 
 void setupNode(RenderNode& node, bool root, float rootWidth, float rootHeight,
-               float rpxScale) {
+               float rpxScale, float extraMarginLeft = 0.0f, float extraMarginTop = 0.0f) {
     node.yoga = YGNodeNew();
     YGNodeSetContext(node.yoga, nullptr);
     gNodeOwners[node.yoga] = &node;
@@ -144,10 +144,10 @@ void setupNode(RenderNode& node, bool root, float rootWidth, float rootHeight,
     YGNodeStyleSetPadding(node.yoga, YGEdgeBottom, style.padding.bottom);
     YGNodeStyleSetPadding(node.yoga, YGEdgeLeft, style.padding.left);
 
-    YGNodeStyleSetMargin(node.yoga, YGEdgeTop, style.margin.top);
+    YGNodeStyleSetMargin(node.yoga, YGEdgeTop, style.margin.top + extraMarginTop);
     YGNodeStyleSetMargin(node.yoga, YGEdgeRight, style.margin.right);
     YGNodeStyleSetMargin(node.yoga, YGEdgeBottom, style.margin.bottom);
-    YGNodeStyleSetMargin(node.yoga, YGEdgeLeft, style.margin.left);
+    YGNodeStyleSetMargin(node.yoga, YGEdgeLeft, style.margin.left + extraMarginLeft);
 
     if (root) {
         YGNodeStyleSetWidth(node.yoga, rootWidth);
@@ -224,15 +224,18 @@ void setupNode(RenderNode& node, bool root, float rootWidth, float rootHeight,
 
     for (size_t i = 0; i < node.children.size(); ++i) {
         auto& child = *node.children[i];
-        // Yoga 1.19 没有 gap，用子节点外边距模拟列/行间距。
+        // Yoga 1.19 没有 gap，用额外的外边距模拟列/行间距；不能写回 style，
+        // 否则每次重建布局都会累加，节点会持续偏移。
+        float extraLeft = 0.0f;
+        float extraTop = 0.0f;
         if (style.gap > 0.0f && i > 0) {
             if (style.flexDirection == 1) {
-                child.style.margin.left += style.gap;
+                extraLeft = style.gap;
             } else {
-                child.style.margin.top += style.gap;
+                extraTop = style.gap;
             }
         }
-        setupNode(child, false, rootWidth, rootHeight, rpxScale);
+        setupNode(child, false, rootWidth, rootHeight, rpxScale, extraLeft, extraTop);
         YGNodeInsertChild(node.yoga, child.yoga, i);
     }
 }
