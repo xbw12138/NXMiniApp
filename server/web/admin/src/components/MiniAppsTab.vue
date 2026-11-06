@@ -17,6 +17,7 @@
             <th>版本</th>
             <th>大小</th>
             <th>发布</th>
+            <th>精选</th>
             <th></th>
           </tr>
         </thead>
@@ -35,7 +36,17 @@
                 <input
                   type="checkbox"
                   :checked="m.published"
-                  @change="toggleFlag(m, $event.target.checked)"
+                  @change="toggleFlag(m, 'published', $event.target.checked)"
+                />
+                <span></span>
+              </label>
+            </td>
+            <td>
+              <label class="switch">
+                <input
+                  type="checkbox"
+                  :checked="m.featured"
+                  @change="toggleFlag(m, 'featured', $event.target.checked)"
                 />
                 <span></span>
               </label>
@@ -43,7 +54,7 @@
             <td><button class="btn small" @click="openDetail(m)">管理</button></td>
           </tr>
           <tr v-if="!items.length">
-            <td colspan="7" class="empty">暂无数据</td>
+            <td colspan="8" class="empty">暂无数据</td>
           </tr>
         </tbody>
       </table>
@@ -61,6 +72,7 @@
         <label>版本号<input v-model="createForm.version" placeholder="默认：1.0.0" /></label>
         <div class="row">
           <label class="check"><input type="checkbox" v-model="createForm.published" /> 立即发布</label>
+          <label class="check"><input type="checkbox" v-model="createForm.featured" /> 设为精选</label>
         </div>
         <p v-if="createError" class="error">{{ createError }}</p>
         <div class="actions">
@@ -163,7 +175,8 @@ function emptyCreateForm() {
     category: '',
     developer: '',
     version: '',
-    published: true
+    published: true,
+    featured: false
   }
 }
 
@@ -193,9 +206,9 @@ function applyItem(data) {
   }
 }
 
-async function toggleFlag(m, value) {
+async function toggleFlag(m, field, value) {
   try {
-    const updated = await api.patch(`/api/v1/admin/miniapps/${m.id}/flags`, { published: value })
+    const updated = await api.patch(`/api/v1/admin/miniapps/${m.id}/flags`, { [field]: value })
     applyItem(updated)
   } catch (err) {
     error.value = err.message || '操作失败'
@@ -215,7 +228,8 @@ async function createMiniApp() {
       category: form.category.trim(),
       developer: form.developer.trim(),
       version: form.version.trim(),
-      published: form.published
+      published: form.published,
+      featured: form.featured
     })
     showCreate.value = false
     await reload()

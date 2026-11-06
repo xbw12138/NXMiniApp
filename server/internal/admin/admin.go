@@ -556,6 +556,7 @@ func createMiniApp(e *api.Env) gin.HandlerFunc {
 			Developer   string `json:"developer"`
 			Version     string `json:"version"`
 			Published   *bool  `json:"published"`
+			Featured    *bool  `json:"featured"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			api.Abort(c, http.StatusBadRequest, "请求体无效")
@@ -589,6 +590,10 @@ func createMiniApp(e *api.Env) gin.HandlerFunc {
 			version = "1.0.0"
 		}
 		now := api.NowMS()
+		featured := false
+		if body.Featured != nil {
+			featured = *body.Featured
+		}
 		row := models.MiniApp{
 			ID:          id,
 			Title:       title,
@@ -598,6 +603,7 @@ func createMiniApp(e *api.Env) gin.HandlerFunc {
 			Developer:   strings.TrimSpace(body.Developer),
 			Version:     version,
 			Published:   published,
+			Featured:    featured,
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		}
