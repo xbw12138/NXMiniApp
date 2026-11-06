@@ -8,6 +8,7 @@
   </view>
 
   <scroll-view class="detail" scroll-y="{{true}}">
+    <image wx:if="{{cover}}" class="detail-cover" src="{{cover}}" mode="aspectFill"/>
     <text class="detail-summary">{{summary}}</text>
     <text class="detail-body">{{body}}</text>
     <view wx:if="{{status !== ''}}" class="empty">

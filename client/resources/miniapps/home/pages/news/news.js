@@ -3,6 +3,7 @@ Page({
     title: '资讯',
     summary: '',
     body: '',
+    cover: '',
     status: '正在加载…'
   },
 
@@ -20,6 +21,7 @@ Page({
           title: item.title || '资讯',
           summary: item.summary || '',
           body: item.body || item.summary || '',
+          cover: item.cover_url || '',
           status: ''
         });
       },

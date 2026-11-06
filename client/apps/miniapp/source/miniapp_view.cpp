@@ -1374,11 +1374,25 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
 
     const bool remote =
         src.rfind("http://", 0) == 0 || src.rfind("https://", 0) == 0;
-    std::string key = remote ? src : resolveLocalPath(src, pageDir);
+    std::string key;
+    bool fetchRemote = remote;
+    if (remote) {
+        key = src;
+    } else {
+        std::string local = resolveLocalPath(src, pageDir);
+        std::ifstream probe(local, std::ios::binary);
+        if (src[0] == '/' && !probe.good() && MiniAppApi::instance().ready()) {
+            // 服务端下发的资源路径（如 /media/covers/x.jpg）：包内没有，按商店地址远程加载。
+            key = MiniAppApi::instance().serverUrl() + src;
+            fetchRemote = true;
+        } else {
+            key = local;
+        }
+    }
     auto it = imageTextures.find(key);
     if (it != imageTextures.end()) return it->second;
 
-    if (remote) {
+    if (fetchRemote) {
         // 远程图先返回占位，下载完成后再绘制。
         if (pendingImages.insert(key).second) requestRemoteImage(key);
         return -1;
@@ -1406,6 +1420,7 @@ void MiniappView::requestRemoteImage(const std::string& url) {
                 if (!token || !*token) return;
                 pendingImages.erase(url);
                 imageTextures[url] = -1;
+                this->invalidate();
             });
             return;
         }
@@ -1424,6 +1439,7 @@ void MiniappView::requestRemoteImage(const std::string& url) {
                 texture = -1;
             }
             imageTextures[url] = texture;
+            this->invalidate();
         });
     }).detach();
 }

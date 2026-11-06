@@ -7,16 +7,14 @@
 
   <view class="body">
     <view class="left">
-      <swiper wx:if="{{banners.length > 0}}" class="banner" autoplay="{{true}}" interval="{{4000}}" duration="{{500}}">
-        <swiper-item wx:for="{{banners}}" wx:key="id">
-          <view class="banner-item" data-target="{{item.id}}" bindtap="onNewsTap">
-            <image class="banner-cover" src="{{item.cover_url}}" mode="aspectFill"/>
-            <view class="banner-caption">
-              <text class="banner-title">{{item.title}}</text>
-            </view>
+      <view wx:if="{{banner.cover_url}}" class="banner">
+        <view class="banner-item" data-target="{{banner.id}}" bindtap="onNewsTap">
+          <image class="banner-cover" src="{{banner.cover_url}}" mode="aspectFill"/>
+          <view class="banner-caption">
+            <text class="banner-title">{{banner.title}}</text>
           </view>
-        </swiper-item>
-      </swiper>
+        </view>
+      </view>
 
       <text class="section-title">推荐小程序</text>
       <scroll-view class="scroll" scroll-y="{{true}}">
@@ -48,8 +46,11 @@
       <text class="section-title">最新资讯</text>
       <scroll-view class="scroll" scroll-y="{{true}}">
         <view class="news-item" wx:for="{{news}}" wx:key="id" data-target="{{item.id}}" bindtap="onNewsTap">
-          <text class="news-title">{{item.title}}</text>
-          <text class="news-summary">{{item.summary}}</text>
+          <image wx:if="{{item.cover_url}}" class="news-cover" src="{{item.cover_url}}" mode="aspectFill"/>
+          <view class="news-meta">
+            <text class="news-title">{{item.title}}</text>
+            <text class="news-summary">{{item.summary}}</text>
+          </view>
         </view>
         <view wx:if="{{news.length === 0}}" class="empty">
           <text class="empty-text">暂无资讯</text>
