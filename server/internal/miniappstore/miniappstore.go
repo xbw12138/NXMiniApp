@@ -35,6 +35,12 @@ func PackageDir(dataDir, id string) string {
 	return filepath.Join(MiniAppDir(dataDir, id), "package")
 }
 
+// GrayPackageDir 存放灰度版本包：按比例/白名单命中的设备下载这里的包，
+// 其余设备继续使用 PackageDir 中的稳定版本。
+func GrayPackageDir(dataDir, id string) string {
+	return filepath.Join(MiniAppDir(dataDir, id), "package-gray")
+}
+
 func fileExists(p string) bool {
 	info, err := os.Stat(p)
 	return err == nil && !info.IsDir()

@@ -5,12 +5,36 @@
 #include "miniapp/api/miniapp_api.hpp"
 
 #include <cctype>
+#include <cstdio>
+#include <random>
 
 #include <nlohmann/json.hpp>
+#include <nxkit/config.hpp>
 
 namespace miniapp {
 
 namespace {
+
+// 设备标识：首次启动随机生成并持久化，服务端据此做灰度分流（百分比 + 白名单）。
+std::string ensureDeviceId() {
+    static std::string cached;
+    if (!cached.empty()) return cached;
+
+    nxkit::Config& config = nxkit::Config::instance();
+    std::string id = config.getString("miniapp.device_id", "");
+    if (id.empty()) {
+        std::random_device seed;
+        std::mt19937_64 engine(static_cast<std::mt19937_64::result_type>(seed()));
+        char buffer[20];
+        std::snprintf(buffer, sizeof(buffer), "%016llx",
+                      static_cast<unsigned long long>(engine()));
+        id = buffer;
+        config.setString("miniapp.device_id", id);
+        config.save();
+    }
+    cached = id;
+    return cached;
+}
 
 std::string asString(const nlohmann::json& value, const char* key,
                      const std::string& fallback = "") {
@@ -133,6 +157,8 @@ void MiniAppApi::configure(const std::string& serverUrl) {
 #endif
     http.setBaseUrl(base);
     http.setTimeout(15000);
+    // 所有请求（商店、首页 feed、下载）统一带上设备标识，供服务端灰度分流。
+    nxkit::HttpClient::setDefaultHeader("X-Device-Id", ensureDeviceId());
 }
 
 std::string MiniAppApi::resolveUrl(const std::string& path) const {

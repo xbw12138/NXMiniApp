@@ -29,7 +29,11 @@
             </td>
             <td>{{ m.title }}</td>
             <td class="mono">{{ m.id }}</td>
-            <td class="mono">{{ m.version }}</td>
+            <td class="mono">
+              {{ m.version }}
+              <div v-if="m.visible_percent < 100" class="muted">可见 {{ m.visible_percent }}%</div>
+              <div v-if="m.gray_version" class="muted">灰度 {{ m.gray_version }} · {{ m.gray_percent }}%</div>
+            </td>
             <td>{{ formatBytes(m.size) }}</td>
             <td>
               <label class="switch">
@@ -134,6 +138,42 @@
           </div>
         </div>
 
+        <div class="card section">
+          <h3>灰度发布</h3>
+          <p class="muted">
+            「可见比例」控制上架曝光；「灰度版本」只下发给命中比例或白名单的设备，其余设备继续使用
+            {{ detail.version }}。白名单填设备 ID，逗号分隔。
+          </p>
+
+          <label>可见比例（0-100）<input v-model.number="rolloutForm.visible_percent" type="number" min="0" max="100" /></label>
+          <label>可见白名单<textarea v-model="rolloutForm.visible_whitelist" rows="2" placeholder="device-a, device-b"></textarea></label>
+
+          <label>灰度版本比例（0-100）<input v-model.number="rolloutForm.gray_percent" type="number" min="0" max="100" /></label>
+          <label>灰度白名单<textarea v-model="rolloutForm.gray_whitelist" rows="2" placeholder="device-a, device-b"></textarea></label>
+          <button class="btn" @click="saveRollout">保存灰度配置</button>
+
+          <div v-if="detail.gray_version" class="gray-status">
+            当前灰度版本：<strong>{{ detail.gray_version }}</strong>（{{ detail.gray_percent }}% + 白名单
+            {{ detail.gray_whitelist || '空' }}）
+          </div>
+
+          <input v-model="grayForm.version" placeholder="灰度版本号，例如 1.2.0" />
+          <input ref="grayFileInput" type="file" accept=".nxpkg,.zip" hidden @change="onGrayFile" />
+          <div class="row">
+            <button type="button" class="btn" @click="grayFileInput && grayFileInput.click()">
+              {{ grayForm.file ? grayForm.file.name : '选择灰度包' }}
+            </button>
+            <button class="btn primary" :disabled="!grayForm.file || uploadingGray" @click="uploadGrayPackage">
+              {{ uploadingGray ? '上传中…' : '上传灰度包' }}
+            </button>
+          </div>
+
+          <div class="row">
+            <button class="btn" :disabled="!detail.gray_version" @click="promoteRollout">全量发布灰度版本</button>
+            <button class="btn danger" :disabled="!detail.gray_version" @click="discardRollout">撤销灰度</button>
+          </div>
+        </div>
+
         <div class="card section danger-zone">
           <h3>危险操作</h3>
           <div>
@@ -165,6 +205,16 @@ const iconInput = ref(null)
 const packageFileInput = ref(null)
 const packageForm = ref({ version: '', file: null })
 const uploadingPackage = ref(false)
+
+const grayFileInput = ref(null)
+const grayForm = ref({ version: '', file: null })
+const uploadingGray = ref(false)
+const rolloutForm = ref({
+  visible_percent: 100,
+  visible_whitelist: '',
+  gray_percent: 0,
+  gray_whitelist: ''
+})
 
 function emptyCreateForm() {
   return {
@@ -243,6 +293,13 @@ async function createMiniApp() {
 function openDetail(m) {
   drawerError.value = ''
   packageForm.value = { version: '', file: null }
+  grayForm.value = { version: '', file: null }
+  rolloutForm.value = {
+    visible_percent: m.visible_percent ?? 100,
+    visible_whitelist: m.visible_whitelist || '',
+    gray_percent: m.gray_percent ?? 0,
+    gray_whitelist: m.gray_whitelist || ''
+  }
   detail.value = m
   infoForm.value = {
     title: m.title,
@@ -316,6 +373,73 @@ async function uploadPackage() {
     drawerError.value = err.message || '上传失败'
   } finally {
     uploadingPackage.value = false
+  }
+}
+
+async function saveRollout() {
+  drawerError.value = ''
+  try {
+    const updated = await api.patch(`/api/v1/admin/miniapps/${detail.value.id}/rollout`, {
+      visible_percent: Number(rolloutForm.value.visible_percent) || 0,
+      visible_whitelist: rolloutForm.value.visible_whitelist,
+      gray_percent: Number(rolloutForm.value.gray_percent) || 0,
+      gray_whitelist: rolloutForm.value.gray_whitelist
+    })
+    applyItem(updated)
+  } catch (err) {
+    drawerError.value = err.message || '保存失败'
+  }
+}
+
+function onGrayFile(event) {
+  grayForm.value.file = (event.target.files && event.target.files[0]) || null
+}
+
+async function uploadGrayPackage() {
+  const form = grayForm.value
+  if (!form.file) return
+  if (!form.version.trim()) {
+    drawerError.value = '请填写灰度版本号'
+    return
+  }
+  uploadingGray.value = true
+  drawerError.value = ''
+  const data = new FormData()
+  data.append('file', form.file)
+  data.append('version', form.version.trim())
+  data.append('percent', String(Number(rolloutForm.value.gray_percent) || 0))
+  data.append('whitelist', rolloutForm.value.gray_whitelist || '')
+  try {
+    const updated = await api.postForm(`/api/v1/admin/miniapps/${detail.value.id}/rollout/package`, data)
+    applyItem(updated)
+    grayForm.value = { version: '', file: null }
+  } catch (err) {
+    drawerError.value = err.message || '上传失败'
+  } finally {
+    uploadingGray.value = false
+  }
+}
+
+async function promoteRollout() {
+  if (!window.confirm(`确认把灰度版本 ${detail.value.gray_version} 全量发布？所有设备都会收到该版本。`)) return
+  drawerError.value = ''
+  try {
+    const updated = await api.post(`/api/v1/admin/miniapps/${detail.value.id}/rollout/promote`, {})
+    applyItem(updated)
+    await reload()
+  } catch (err) {
+    drawerError.value = err.message || '发布失败'
+  }
+}
+
+async function discardRollout() {
+  if (!window.confirm('确认撤销灰度？灰度包会被删除，设备回到稳定版本。')) return
+  drawerError.value = ''
+  try {
+    const updated = await api.post(`/api/v1/admin/miniapps/${detail.value.id}/rollout/discard`, {})
+    applyItem(updated)
+  } catch (err) {
+    drawerError.value = err.message || '撤销失败'
   }
 }
 

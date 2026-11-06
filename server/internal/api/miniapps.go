@@ -17,6 +17,11 @@ import (
 // MiniAppJSON serializes a mini program row to the public contract; size is
 // computed live from the on-disk package directory.
 func MiniAppJSON(cfg config.Config, m *models.MiniApp) gin.H {
+	return MiniAppJSONDevice(cfg, m, "")
+}
+
+// MiniAppJSONDevice 按设备返回有效版本（灰度命中时返回灰度版本号）。
+func MiniAppJSONDevice(cfg config.Config, m *models.MiniApp, device string) gin.H {
 	iconURL := ""
 	if m.Icon != "" && FileExists(filepath.Join(miniappstore.MiniAppDir(cfg.DataDir, m.ID), m.Icon)) {
 		iconURL = "/api/v1/miniapps/" + m.ID + "/icon"
@@ -25,10 +30,7 @@ func MiniAppJSON(cfg config.Config, m *models.MiniApp) gin.H {
 	if category == "" {
 		category = "其他"
 	}
-	version := m.Version
-	if version == "" {
-		version = "1.0.0"
-	}
+	version := effectiveVersion(m, device)
 	return gin.H{
 		"id":           m.ID,
 		"title":        m.Title,
@@ -64,8 +66,9 @@ func (e *Env) GetMiniApp(c *gin.Context, id string) *models.MiniApp {
 func (e *Env) ListMiniApps(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
 	category := strings.TrimSpace(c.Query("category"))
+	device := deviceID(c)
 
-	query := e.DB.Where("published = ?", true)
+	query := e.DB.Model(&models.MiniApp{})
 	if category != "" {
 		query = query.Where("category = ?", category)
 	}
@@ -78,10 +81,13 @@ func (e *Env) ListMiniApps(c *gin.Context) {
 
 	items := make([]gin.H, 0, len(rows))
 	for i := range rows {
+		if !visibleTo(&rows[i], device) {
+			continue
+		}
 		if !DirExists(miniappstore.PackageDir(e.Cfg.DataDir, rows[i].ID)) {
 			continue
 		}
-		items = append(items, MiniAppJSON(e.Cfg, &rows[i]))
+		items = append(items, MiniAppJSONDevice(e.Cfg, &rows[i], device))
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items, "updated_at": NowMS()})
 }
@@ -91,11 +97,15 @@ func (e *Env) MiniAppDetail(c *gin.Context) {
 	if m == nil {
 		return
 	}
+	if !visibleTo(m, deviceID(c)) {
+		Abort(c, http.StatusNotFound, "mini app not found")
+		return
+	}
 	if !DirExists(miniappstore.PackageDir(e.Cfg.DataDir, m.ID)) {
 		Abort(c, http.StatusNotFound, "package missing")
 		return
 	}
-	c.JSON(http.StatusOK, MiniAppJSON(e.Cfg, m))
+	c.JSON(http.StatusOK, MiniAppJSONDevice(e.Cfg, m, deviceID(c)))
 }
 
 func (e *Env) MiniAppIcon(c *gin.Context) {
@@ -120,7 +130,16 @@ func (e *Env) DownloadMiniApp(c *gin.Context) {
 	if m == nil {
 		return
 	}
+	device := deviceID(c)
+	version := effectiveVersion(m, device)
+
 	pkgDir := miniappstore.PackageDir(e.Cfg.DataDir, m.ID)
+	grayDir := miniappstore.GrayPackageDir(e.Cfg.DataDir, m.ID)
+	// 命中灰度且灰度包已上传时，下发灰度包。
+	if strings.TrimSpace(m.GrayVersion) != "" && version == strings.TrimSpace(m.GrayVersion) &&
+		DirExists(grayDir) {
+		pkgDir = grayDir
+	}
 	if !DirExists(pkgDir) {
 		Abort(c, http.StatusNotFound, "package missing")
 		return
@@ -134,10 +153,6 @@ func (e *Env) DownloadMiniApp(c *gin.Context) {
 
 	e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Update("downloads", gorm.Expr("downloads + 1"))
 
-	version := m.Version
-	if version == "" {
-		version = "1.0.0"
-	}
 	c.Header("Content-Disposition",
 		"attachment; filename=\""+m.ID+"-"+version+".nxpkg\"")
 	c.Data(http.StatusOK, "application/zip", buf.Bytes())

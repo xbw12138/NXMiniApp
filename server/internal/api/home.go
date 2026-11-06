@@ -43,19 +43,22 @@ func ContentJSON(item *models.ContentItem) gin.H {
 }
 
 // HomeMiniAppJSON 返回首页小程序描述；未配置或包缺失时返回 nil。
-func (e *Env) homeMiniAppJSON() any {
+func (e *Env) homeMiniAppJSON(device string) any {
 	id := e.SettingValue(SettingHomeMiniApp)
 	if id == "" {
 		return nil
 	}
 	var m models.MiniApp
-	if err := e.DB.Where("id = ? AND published = ?", id, true).Take(&m).Error; err != nil {
+	if err := e.DB.Where("id = ?", id).Take(&m).Error; err != nil {
+		return nil
+	}
+	if !visibleTo(&m, device) {
 		return nil
 	}
 	if !DirExists(miniappstore.PackageDir(e.Cfg.DataDir, m.ID)) {
 		return nil
 	}
-	return MiniAppJSON(e.Cfg, &m)
+	return MiniAppJSONDevice(e.Cfg, &m, device)
 }
 
 // MiniAppHome 是容器启动时调用的首页接口：返回首页小程序描述与内容 feed。
@@ -69,19 +72,23 @@ func (e *Env) MiniAppHome(c *gin.Context) {
 	e.DB.Where("kind = ? AND published = ?", "news", true).
 		Order("sort ASC, id DESC").Limit(8).Find(&news)
 
+	device := deviceID(c)
 	featuredRows := make([]models.MiniApp, 0)
-	e.DB.Where("published = ? AND featured = ?", true, true).
+	e.DB.Where("featured = ?", true).
 		Order("sort ASC, updated_at DESC").Limit(12).Find(&featuredRows)
 	featured := make([]gin.H, 0, len(featuredRows))
 	for i := range featuredRows {
+		if !visibleTo(&featuredRows[i], device) {
+			continue
+		}
 		if !DirExists(miniappstore.PackageDir(e.Cfg.DataDir, featuredRows[i].ID)) {
 			continue
 		}
-		featured = append(featured, MiniAppJSON(e.Cfg, &featuredRows[i]))
+		featured = append(featured, MiniAppJSONDevice(e.Cfg, &featuredRows[i], device))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"home":       e.homeMiniAppJSON(),
+		"home":       e.homeMiniAppJSON(device),
 		"banners":    contentListJSON(banners),
 		"news":       contentListJSON(news),
 		"featured":   featured,

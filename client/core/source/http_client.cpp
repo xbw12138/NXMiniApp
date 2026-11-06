@@ -119,6 +119,15 @@ void HttpClient::removeHeader(const std::string& name) { extraHeaders.erase(name
 
 void HttpClient::clearHeaders() { extraHeaders.clear(); }
 
+std::map<std::string, std::string>& defaultHeaderStorage() {
+    static std::map<std::string, std::string> headers;
+    return headers;
+}
+
+void HttpClient::setDefaultHeader(const std::string& name, const std::string& value) {
+    defaultHeaderStorage()[name] = value;
+}
+
 std::string HttpClient::urlFor(const std::string& path) const {
     if (path.empty()) return base;
     if (path.compare(0, 7, "http://") == 0 || path.compare(0, 8, "https://") == 0) return path;
@@ -128,6 +137,7 @@ std::string HttpClient::urlFor(const std::string& path) const {
 
 cpr::Header HttpClient::headers() const {
     cpr::Header header;
+    for (const auto& entry : defaultHeaderStorage()) header[entry.first] = entry.second;
     for (const auto& entry : extraHeaders) header[entry.first] = entry.second;
     if (!cookieValue.empty()) header["Cookie"] = cookieValue;
     if (!bearer.empty()) header["Authorization"] = "Bearer " + bearer;

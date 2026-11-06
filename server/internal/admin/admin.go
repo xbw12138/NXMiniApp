@@ -43,6 +43,10 @@ func Register(r *gin.Engine, e *api.Env) {
 	auth.PUT("/miniapps/:id", updateMiniApp(e))
 	auth.DELETE("/miniapps/:id", deleteMiniApp(e))
 	auth.PATCH("/miniapps/:id/flags", patchMiniAppFlags(e))
+	auth.PATCH("/miniapps/:id/rollout", updateMiniAppRollout(e))
+	auth.POST("/miniapps/:id/rollout/package", uploadGrayMiniAppPackage(e))
+	auth.POST("/miniapps/:id/rollout/promote", promoteMiniAppRollout(e))
+	auth.POST("/miniapps/:id/rollout/discard", discardMiniAppRollout(e))
 	auth.POST("/miniapps/:id/icon", uploadMiniAppIcon(e))
 	auth.POST("/miniapps/:id/package", uploadMiniAppPackage(e))
 	auth.GET("/releases", listReleases(e))
@@ -539,7 +543,11 @@ func listMiniApps(e *api.Env) gin.HandlerFunc {
 		e.DB.Order("updated_at DESC").Find(&rows)
 		items := make([]gin.H, 0, len(rows))
 		for i := range rows {
-			items = append(items, api.MiniAppJSON(e.Cfg, &rows[i]))
+			item := api.MiniAppJSON(e.Cfg, &rows[i])
+			for key, value := range api.RolloutJSON(&rows[i]) {
+				item[key] = value
+			}
+			items = append(items, item)
 		}
 		c.JSON(http.StatusOK, gin.H{"items": items})
 	}
@@ -595,17 +603,18 @@ func createMiniApp(e *api.Env) gin.HandlerFunc {
 			featured = *body.Featured
 		}
 		row := models.MiniApp{
-			ID:          id,
-			Title:       title,
-			Summary:     strings.TrimSpace(body.Summary),
-			Description: body.Description,
-			Category:    category,
-			Developer:   strings.TrimSpace(body.Developer),
-			Version:     version,
-			Published:   published,
-			Featured:    featured,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			ID:             id,
+			Title:          title,
+			VisiblePercent: 100,
+			Summary:        strings.TrimSpace(body.Summary),
+			Description:    body.Description,
+			Category:       category,
+			Developer:      strings.TrimSpace(body.Developer),
+			Version:        version,
+			Published:      published,
+			Featured:       featured,
+			CreatedAt:      now,
+			UpdatedAt:      now,
 		}
 		if err := e.DB.Create(&row).Error; err != nil {
 			api.Abort(c, http.StatusInternalServerError, "创建失败")
@@ -788,6 +797,145 @@ func uploadMiniAppPackage(e *api.Env) gin.HandlerFunc {
 	}
 }
 
+// updateMiniAppRollout 调整可见比例与版本灰度参数（不涉及安装包）。
+func updateMiniAppRollout(e *api.Env) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		m := e.GetMiniApp(c, c.Param("id"))
+		if m == nil {
+			return
+		}
+		var body struct {
+			VisiblePercent   *int    `json:"visible_percent"`
+			VisibleWhitelist *string `json:"visible_whitelist"`
+			GrayPercent      *int    `json:"gray_percent"`
+			GrayWhitelist    *string `json:"gray_whitelist"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			api.Abort(c, http.StatusBadRequest, "参数错误")
+			return
+		}
+		updates := map[string]any{"updated_at": api.NowMS()}
+		if body.VisiblePercent != nil {
+			updates["visible_percent"] = api.ClampPercent(fmt.Sprint(*body.VisiblePercent))
+		}
+		if body.VisibleWhitelist != nil {
+			updates["visible_whitelist"] = api.NormalizeDevices(*body.VisibleWhitelist)
+		}
+		if body.GrayPercent != nil {
+			updates["gray_percent"] = api.ClampPercent(fmt.Sprint(*body.GrayPercent))
+		}
+		if body.GrayWhitelist != nil {
+			updates["gray_whitelist"] = api.NormalizeDevices(*body.GrayWhitelist)
+		}
+		e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(updates)
+		refetchMiniApp(c, e, m.ID)
+	}
+}
+
+// uploadGrayMiniAppPackage 上传灰度版本包，只下发给命中的设备。
+func uploadGrayMiniAppPackage(e *api.Env) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		m := e.GetMiniApp(c, c.Param("id"))
+		if m == nil {
+			return
+		}
+		file, err := c.FormFile("file")
+		if err != nil {
+			api.Abort(c, http.StatusBadRequest, "请选择小程序包")
+			return
+		}
+		ext := strings.ToLower(filepath.Ext(file.Filename))
+		if ext != ".nxpkg" && ext != ".zip" {
+			api.Abort(c, http.StatusBadRequest, "安装包必须是 .nxpkg 或 .zip 文件")
+			return
+		}
+		version := strings.TrimSpace(c.PostForm("version"))
+		if version == "" {
+			api.Abort(c, http.StatusBadRequest, "请填写灰度版本号")
+			return
+		}
+
+		tmp, err := os.CreateTemp("", "nxpkg-gray-*")
+		if err != nil {
+			api.Abort(c, http.StatusInternalServerError, "安装包保存失败")
+			return
+		}
+		tmpPath := tmp.Name()
+		_ = tmp.Close()
+		defer os.Remove(tmpPath)
+		if err := c.SaveUploadedFile(file, tmpPath); err != nil {
+			api.Abort(c, http.StatusInternalServerError, "安装包保存失败")
+			return
+		}
+
+		grayDir := miniappstore.GrayPackageDir(e.Cfg.DataDir, m.ID)
+		_ = os.RemoveAll(grayDir)
+		if err := miniappstore.ExtractPackage(tmpPath, grayDir); err != nil {
+			api.Abort(c, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(map[string]any{
+			"gray_version":   version,
+			"gray_percent":   api.ClampPercent(c.PostForm("percent")),
+			"gray_whitelist": api.NormalizeDevices(c.PostForm("whitelist")),
+			"updated_at":     api.NowMS(),
+		})
+		refetchMiniApp(c, e, m.ID)
+	}
+}
+
+// promoteMiniAppRollout 灰度转全量：灰度包替换稳定包，清空灰度状态。
+func promoteMiniAppRollout(e *api.Env) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		m := e.GetMiniApp(c, c.Param("id"))
+		if m == nil {
+			return
+		}
+		if strings.TrimSpace(m.GrayVersion) == "" {
+			api.Abort(c, http.StatusBadRequest, "当前没有灰度版本")
+			return
+		}
+		grayDir := miniappstore.GrayPackageDir(e.Cfg.DataDir, m.ID)
+		if info, err := os.Stat(grayDir); err != nil || !info.IsDir() {
+			api.Abort(c, http.StatusBadRequest, "灰度包不存在")
+			return
+		}
+		stableDir := miniappstore.PackageDir(e.Cfg.DataDir, m.ID)
+		_ = os.RemoveAll(stableDir)
+		if err := os.Rename(grayDir, stableDir); err != nil {
+			api.Abort(c, http.StatusInternalServerError, "全量发布失败")
+			return
+		}
+		e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(map[string]any{
+			"version":        m.GrayVersion,
+			"gray_version":   "",
+			"gray_percent":   0,
+			"gray_whitelist": "",
+			"updated_at":     api.NowMS(),
+		})
+		refetchMiniApp(c, e, m.ID)
+	}
+}
+
+// discardMiniAppRollout 撤销灰度，设备回到稳定版本。
+func discardMiniAppRollout(e *api.Env) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		m := e.GetMiniApp(c, c.Param("id"))
+		if m == nil {
+			return
+		}
+		_ = os.RemoveAll(miniappstore.GrayPackageDir(e.Cfg.DataDir, m.ID))
+		e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(map[string]any{
+			"gray_version":   "",
+			"gray_percent":   0,
+			"gray_whitelist": "",
+			"updated_at":     api.NowMS(),
+		})
+		refetchMiniApp(c, e, m.ID)
+	}
+}
+
 // refetchMiniApp reloads the mini program row and writes its JSON response.
 func refetchMiniApp(c *gin.Context, e *api.Env, id string) {
 	var fresh models.MiniApp
@@ -795,5 +943,9 @@ func refetchMiniApp(c *gin.Context, e *api.Env, id string) {
 		api.Abort(c, http.StatusNotFound, "mini app not found")
 		return
 	}
-	c.JSON(http.StatusOK, api.MiniAppJSON(e.Cfg, &fresh))
+	item := api.MiniAppJSON(e.Cfg, &fresh)
+	for key, value := range api.RolloutJSON(&fresh) {
+		item[key] = value
+	}
+	c.JSON(http.StatusOK, item)
 }

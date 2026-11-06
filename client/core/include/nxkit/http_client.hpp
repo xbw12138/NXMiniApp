@@ -45,6 +45,9 @@ public:
     void setHeader(const std::string& name, const std::string& value);
     void removeHeader(const std::string& name);
     void clearHeaders();
+    /// Process-wide default header applied to every request of every client
+    /// (used for the device id that drives server-side rollout bucketing).
+    static void setDefaultHeader(const std::string& name, const std::string& value);
 
     void setCookie(const std::string& cookie) { cookieValue = cookie; }
     const std::string& cookie() const { return cookieValue; }

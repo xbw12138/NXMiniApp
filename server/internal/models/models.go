@@ -49,8 +49,14 @@ type MiniApp struct {
 	Sort        int    `gorm:"not null;default:0"`
 	Published   bool   `gorm:"not null;default:true"`
 	Downloads   int64  `gorm:"not null;default:0"`
-	CreatedAt   int64  `gorm:"not null;autoCreateTime:false"`
-	UpdatedAt   int64  `gorm:"not null;autoUpdateTime:false"`
+	// 灰度发布：可见性按设备比例 + 白名单；Version 为稳定版本，GrayVersion 为灰度版本。
+	VisiblePercent   int    `gorm:"not null;default:100"`
+	VisibleWhitelist string `gorm:"size:4000;not null;default:''"`
+	GrayVersion      string `gorm:"size:64;not null;default:''"`
+	GrayPercent      int    `gorm:"not null;default:0"`
+	GrayWhitelist    string `gorm:"size:4000;not null;default:''"`
+	CreatedAt        int64  `gorm:"not null;autoCreateTime:false"`
+	UpdatedAt        int64  `gorm:"not null;autoUpdateTime:false"`
 }
 
 func (MiniApp) TableName() string { return "miniapps" }
