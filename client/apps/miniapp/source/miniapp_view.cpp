@@ -18,14 +18,20 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <mutex>
 #include <sstream>
+#include <system_error>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #include "miniapp/api/miniapp_api.hpp"
 #include "miniapp/install/package_manager.hpp"
@@ -205,6 +211,69 @@ std::string formatClock(double seconds) {
     char buffer[24];
     std::snprintf(buffer, sizeof(buffer), "%d:%02d", total / 60, total % 60);
     return buffer;
+}
+
+// ---------------------------------------------------------------------------
+// 网络图片磁盘缓存：按 URL 哈希存原始字节，重启后命中直接解码，避免重复下载。
+// ---------------------------------------------------------------------------
+constexpr std::size_t kImageCacheLimit = 20u * 1024u * 1024u;
+
+std::string imageCacheDir() { return nxkit::dataPath("miniapp/image_cache"); }
+
+std::string imageCachePath(const std::string& url) {
+    // FNV-1a 64bit，跨进程稳定，避免用到 std::hash 的实现差异。
+    std::uint64_t hash = 1469598103934665603ULL;
+    for (unsigned char byte : url) {
+        hash ^= byte;
+        hash *= 1099511628211ULL;
+    }
+    char name[24];
+    std::snprintf(name, sizeof(name), "%016llx.img",
+                  static_cast<unsigned long long>(hash));
+    return imageCacheDir() + "/" + name;
+}
+
+std::shared_ptr<std::string> readImageCache(const std::string& url) {
+    std::ifstream file(imageCachePath(url), std::ios::binary);
+    if (!file.good()) return nullptr;
+    std::shared_ptr<std::string> bytes = std::make_shared<std::string>(
+        std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    if (bytes->empty()) return nullptr;
+    return bytes;
+}
+
+void trimImageCache() {
+    std::error_code error;
+    std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> entries;
+    std::uintmax_t total = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(imageCacheDir(), error)) {
+        if (error || !entry.is_regular_file(error)) continue;
+        std::uintmax_t size = entry.file_size(error);
+        if (error) continue;
+        total += size;
+        entries.emplace_back(entry.last_write_time(error), entry.path());
+    }
+    if (total <= kImageCacheLimit) return;
+    std::sort(entries.begin(), entries.end());
+    for (const auto& item : entries) {
+        if (total <= kImageCacheLimit) break;
+        std::uintmax_t size = std::filesystem::file_size(item.second, error);
+        if (error) size = 0;
+        std::filesystem::remove(item.second, error);
+        total -= size;
+    }
+}
+
+void writeImageCache(const std::string& url, const std::string& bytes) {
+    // 多个图片可能同时完成下载，写盘与淘汰需要串行。
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
+    nxkit::ensureDirectory(imageCacheDir());
+    std::ofstream file(imageCachePath(url), std::ios::binary | std::ios::trunc);
+    if (!file.good()) return;
+    file.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    file.close();
+    trimImageCache();
 }
 
 }  // namespace
@@ -1413,6 +1482,20 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
     if (it != imageTextures.end()) return it->second;
 
     if (fetchRemote) {
+        // 磁盘缓存命中：直接本地解码，不再走网络。
+        std::shared_ptr<std::string> cached = readImageCache(key);
+        if (cached) {
+            NVGcontext* vg = brls::Application::getNVGContext();
+            int texture =
+                nvgCreateImageMem(vg, 0,
+                                  reinterpret_cast<unsigned char*>(cached->data()),
+                                  static_cast<int>(cached->size()));
+            if (texture > 0) {
+                imageTextures[key] = texture;
+                return texture;
+            }
+            brls::Logger::warning("miniapp: cached image decode failed {}", key);
+        }
         // 远程图先返回占位，下载完成后再绘制。
         if (pendingImages.insert(key).second) requestRemoteImage(key);
         return -1;
@@ -1446,6 +1529,8 @@ void MiniappView::requestRemoteImage(const std::string& url) {
         }
         std::shared_ptr<std::string> bytes =
             std::make_shared<std::string>(result.body);
+        // 在工作线程落盘，避免主线程写存储卡。
+        writeImageCache(url, *bytes);
         brls::sync([this, url, weak, bytes] {
             auto token = weak.lock();
             if (!token || !*token) return;
