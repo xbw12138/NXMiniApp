@@ -44,8 +44,8 @@ Page({
   },
 
   onLaunch(e) {
-    const id = e.currentTarget.dataset.id;
-    if (id) wx.miniapp.launch(id);
+    const ds = e.currentTarget.dataset;
+    if (ds.id) wx.miniapp.launch(ds.id, ds.title || '');
   },
 
   onBack() {

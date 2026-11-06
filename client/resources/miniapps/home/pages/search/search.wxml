@@ -16,8 +16,9 @@
   </view>
 
   <scroll-view class="results" scroll-y="{{true}}">
-    <view class="app-card" wx:for="{{items}}" wx:key="id" data-id="{{item.id}}" bindtap="onLaunch">
-      <image class="app-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+    <view class="app-card" wx:for="{{items}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
+      <image wx:if="{{item.icon_url}}" class="app-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+      <view wx:else class="app-icon app-icon-empty"/>
       <view class="app-meta">
         <text class="app-title">{{item.title}}</text>
         <text class="app-sub">{{item.category}} · {{item.summary}}</text>

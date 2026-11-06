@@ -30,6 +30,7 @@ Page({
           featured: payload.featured || [],
           status: ''
         });
+        this.loadRecent();
         this.startBanner(banners.length);
       },
       fail: () => {
@@ -49,13 +50,21 @@ Page({
   },
 
   loadRecent() {
-    this.setData({ recent: wx.miniapp.listRecent() || [] });
+    const list = wx.miniapp.listRecent() || [];
+    // 老记录里可能只存了 id，用推荐列表里的应用名补齐。
+    const names = {};
+    (this.data.featured || []).forEach((f) => { names[f.id] = f.title; });
+    this.setData({
+      recent: list.map((r) => Object.assign({}, r, {
+        title: (r.title && r.title !== r.id) ? r.title : (names[r.id] || r.id)
+      }))
+    });
   },
 
   onLaunch(e) {
-    const id = e.currentTarget.dataset.id;
-    if (!id) return;
-    wx.miniapp.launch(id);
+    const ds = e.currentTarget.dataset;
+    if (!ds.id) return;
+    wx.miniapp.launch(ds.id, ds.title || '');
     this.loadRecent();
   },
 

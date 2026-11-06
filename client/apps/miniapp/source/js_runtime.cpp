@@ -886,14 +886,17 @@ struct RuntimeBridge {
         if (!runtime || !runtime->host || argc <= 0) return JS_UNDEFINED;
 
         std::string id;
+        std::string title;
         if (JS_IsString(argv[0])) {
             id = toStd(ctx, argv[0]);
+            if (argc > 1 && JS_IsString(argv[1])) title = toStd(ctx, argv[1]);
         } else if (JS_IsObject(argv[0])) {
             id = toStd(ctx, JS_GetPropertyStr(ctx, argv[0], "id"));
+            title = toStd(ctx, JS_GetPropertyStr(ctx, argv[0], "title"));
         }
         if (id.empty()) return JS_UNDEFINED;
 
-        bool ok = runtime->host->launchMiniApp(id);
+        bool ok = runtime->host->launchMiniApp(id, title);
         return JS_NewBool(ctx, ok);
     }
 

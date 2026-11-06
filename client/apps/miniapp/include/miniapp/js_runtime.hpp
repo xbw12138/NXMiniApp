@@ -51,7 +51,11 @@ public:
     virtual bool reLaunch(const std::string& url) = 0;
 
     /// wx.miniapp：启动另一个小程序 / 读取最近使用列表。
-    virtual bool launchMiniApp(const std::string& /*id*/) { return false; }
+    /// title 可选，用于"最近使用"展示应用名。
+    virtual bool launchMiniApp(const std::string& /*id*/,
+                               const std::string& /*title*/ = "") {
+        return false;
+    }
     virtual JsonValue recentMiniApps() { return JsonValue::array(); }
 
     virtual JsonValue systemInfo() = 0;

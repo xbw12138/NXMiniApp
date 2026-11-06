@@ -18,8 +18,9 @@
 
       <text class="section-title">推荐小程序</text>
       <scroll-view class="scroll" scroll-y="{{true}}">
-        <view class="app-card" wx:for="{{featured}}" wx:key="id" data-id="{{item.id}}" bindtap="onLaunch">
-          <image class="app-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+        <view class="app-card" wx:for="{{featured}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
+          <image wx:if="{{item.icon_url}}" class="app-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+          <view wx:else class="app-icon app-icon-empty"/>
           <view class="app-meta">
             <text class="app-title">{{item.title}}</text>
             <text class="app-sub">{{item.category}} · v{{item.version}}</text>
@@ -34,7 +35,7 @@
     <view class="right">
       <text class="section-title">最近使用</text>
       <scroll-view class="recent-scroll" scroll-y="{{true}}">
-        <view class="recent-row" wx:for="{{recent}}" wx:key="id" data-id="{{item.id}}" bindtap="onLaunch">
+        <view class="recent-row" wx:for="{{recent}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
           <text class="recent-title">{{item.title}}</text>
           <text class="recent-count">用过 {{item.count}} 次</text>
         </view>

@@ -48,7 +48,7 @@ public:
     bool navigateBack(int delta) override;
     bool redirectTo(const std::string& url) override;
     bool reLaunch(const std::string& url) override;
-    bool launchMiniApp(const std::string& id) override;
+    bool launchMiniApp(const std::string& id, const std::string& title = "") override;
     JsonValue recentMiniApps() override;
     JsonValue systemInfo() override;
     void vibrateShort() override;

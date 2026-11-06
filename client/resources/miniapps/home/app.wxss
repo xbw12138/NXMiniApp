@@ -124,6 +124,10 @@
   margin-right: 16rpx;
 }
 
+.app-icon-empty {
+  background: #1e262b;
+}
+
 .app-meta {
   flex: 1;
   flex-direction: column;

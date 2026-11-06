@@ -1513,7 +1513,7 @@ void MiniappView::drawImage(NVGcontext* vg, RenderNode& node, float alpha) {
     }
 
     nvgSave(vg);
-    nvgScissor(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight);
+    nvgIntersectScissor(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight);
     nvgBeginPath(vg);
     nvgRect(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight);
     NVGpaint paint = nvgImagePattern(vg, patternX, patternY, patternWidth,
@@ -1609,7 +1609,7 @@ void MiniappView::drawVideo(NVGcontext* vg, RenderNode& node, float alpha) {
     float videoHeight = std::max(1.0f, node.absHeight - barHeight);
 
     nvgSave(vg);
-    nvgScissor(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight);
+    nvgIntersectScissor(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight);
 
     // 视频画面区域。
     nvgBeginPath(vg);
@@ -2742,11 +2742,16 @@ void rememberMiniApp(const std::string& id, const std::string& title) {
 
 }  // namespace
 
-bool MiniappView::launchMiniApp(const std::string& id) {
+bool MiniappView::launchMiniApp(const std::string& id, const std::string& title) {
     if (id.empty()) return false;
 
     if (packages::installed(id, "")) {
-        rememberMiniApp(id, "");
+        // 调用方（首页卡片）通常知道应用名；没有时沿用已有的缓存标题。
+        std::string name = title;
+        if (name.empty()) {
+            name = nxkit::Config::instance().getString("miniapp.title." + id, "");
+        }
+        rememberMiniApp(id, name);
         brls::Application::pushActivity(new MiniappActivity(packages::directory(id)));
         return true;
     }
