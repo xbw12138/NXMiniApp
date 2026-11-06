@@ -202,6 +202,33 @@ void LauncherView::reload() {
         return;
     }
 
+    // 首页由服务端下发的小程序驱动：先用本地已安装的包立即渲染，
+    // 避免每次启动都等 /api/v1/miniapp-home 的网络往返；
+    // 随后在后台校验版本，有新版本再热更并重建。
+    if (!this->homeLaunched) {
+        std::string cachedId = nxkit::Config::instance().getString("miniapp.home.id", "");
+        if (!cachedId.empty() && packages::installed(cachedId, "")) {
+            MiniAppItem cached;
+            cached.id = cachedId;
+            cached.title = nxkit::Config::instance().getString("miniapp.home.title", "");
+            cached.version = nxkit::Config::instance().getString("miniapp.home.version", "");
+            this->openHome(cached);
+
+            MiniAppApi::instance().fetchHome(
+                [this, alive = this->alive](const HomeInfo& info, const std::string& error) {
+                    brls::sync([this, alive, info, error] {
+                        if (!*alive) return;
+                        // 仅在磁盘上没有该版本时下载，避免重复重建。
+                        if (error.empty() && info.hasHome &&
+                            !packages::installed(info.home.id, info.home.version)) {
+                            this->openHome(info.home);
+                        }
+                    });
+                });
+            return;
+        }
+    }
+
     // 首页由服务端下发的小程序驱动：先取首页描述，有则直接内嵌运行，否则回落商店列表。
     if (!this->homeLaunched) {
         this->grid->showSkeleton(6);
@@ -258,6 +285,12 @@ void LauncherView::embedHome(const MiniAppItem& home) {
     this->homeLaunched = true;
     this->loaded = true;
     this->homeItem = home;
+
+    // 记住首页小程序，下次启动可直接用本地包渲染。
+    nxkit::Config::instance().setString("miniapp.home.id", home.id);
+    nxkit::Config::instance().setString("miniapp.home.version", home.version);
+    nxkit::Config::instance().setString("miniapp.home.title", home.title);
+    nxkit::Config::instance().save();
     // 首页自带搜索入口，原生搜索/清除按钮只服务于商店网格。
     if (this->searchBtn) this->searchBtn->setVisibility(brls::Visibility::GONE);
     if (this->clearSearchBtn) this->clearSearchBtn->setVisibility(brls::Visibility::GONE);
