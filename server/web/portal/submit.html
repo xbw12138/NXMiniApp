@@ -283,6 +283,18 @@ a { color: var(--accent); text-decoration: none; }
   font-size: 12px;
 }
 
+/* ---------- 页脚 ---------- */
+.site-foot {
+  margin-top: 56px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.site-foot a { color: var(--text-3); }
+.site-foot a:hover { color: var(--accent); }
+
 @media (max-width: 640px) {
   .row { grid-template-columns: 1fr; }
   .wrap { padding: 32px 16px 72px; }
@@ -408,6 +420,10 @@ a { color: var(--accent); text-decoration: none; }
       <li>完整结构与发布流程见 <a href="/docs/guide/structure.html">目录结构</a> 与 <a href="/docs/reference/store.html">商店规范</a>。</li>
     </ul>
   </div>
+
+  <footer class="site-foot">
+    <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">鲁ICP备16004009号-2</a>
+  </footer>
 </div>
 
 <script>

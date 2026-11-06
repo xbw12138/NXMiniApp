@@ -52,6 +52,9 @@ const pageShell = `<!doctype html>
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="content">%s
+    <footer class="site-foot">
+      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">鲁ICP备16004009号-2</a>
+    </footer>
   </main>
 </div>
 

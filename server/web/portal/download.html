@@ -234,6 +234,18 @@ a { color: var(--accent); text-decoration: none; }
   font-size: 12.5px;
 }
 
+/* ---------- 页脚 ---------- */
+.site-foot {
+  margin-top: 56px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.site-foot a { color: var(--text-3); }
+.site-foot a:hover { color: var(--accent); }
+
 @media (max-width: 640px) {
   .wrap { padding: 32px 16px 72px; }
   .latest { padding: 22px 18px; }
@@ -282,6 +294,10 @@ a { color: var(--accent); text-decoration: none; }
       <li>下载后可对照页面上展示的 SHA-256 校验文件完整性。</li>
     </ol>
   </div>
+
+  <footer class="site-foot">
+    <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">鲁ICP备16004009号-2</a>
+  </footer>
 </div>
 
 <script>
