@@ -1371,6 +1371,7 @@ void MiniappView::drawTextBlock(NVGcontext* vg, const RenderNode& node, float x,
 
 int MiniappView::imageTexture(const std::string& src, const std::string& pageDir) {
     if (src.empty()) return -1;
+    constexpr int kMissingLocal = -2;
 
     const bool remote =
         src.rfind("http://", 0) == 0 || src.rfind("https://", 0) == 0;
@@ -1380,11 +1381,30 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
         key = src;
     } else {
         std::string local = resolveLocalPath(src, pageDir);
-        std::ifstream probe(local, std::ios::binary);
-        if (src[0] == '/' && !probe.good() && MiniAppApi::instance().ready()) {
-            // 服务端下发的资源路径（如 /media/covers/x.jpg）：包内没有，按商店地址远程加载。
-            key = MiniAppApi::instance().serverUrl() + src;
-            fetchRemote = true;
+        if (src[0] == '/') {
+            // 服务端下发的资源路径（如 /media/covers/x.jpg）包内通常不存在。
+            // 只探测一次并缓存结果，避免绘制时反复访问存储卡。
+            auto localIt = imageTextures.find(local);
+            bool missing = localIt != imageTextures.end() && localIt->second == kMissingLocal;
+            if (localIt == imageTextures.end()) {
+                std::ifstream probe(local, std::ios::binary);
+                if (probe.good()) {
+                    key = local;
+                } else {
+                    imageTextures[local] = kMissingLocal;
+                    missing = true;
+                }
+            }
+            if (missing) {
+                if (MiniAppApi::instance().ready()) {
+                    key = MiniAppApi::instance().serverUrl() + src;
+                    fetchRemote = true;
+                } else {
+                    return -1;
+                }
+            } else if (key.empty()) {
+                key = local;
+            }
         } else {
             key = local;
         }
@@ -1409,11 +1429,11 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
 }
 
 void MiniappView::requestRemoteImage(const std::string& url) {
+    // 走 nxkit 现成的异步请求路径（wx.request 也用它），避免自建线程。
     std::weak_ptr<bool> weak = aliveToken;
-    std::thread([this, url, weak]() {
-        nxkit::HttpClient client;
-        client.setTimeout(15000);
-        nxkit::HttpResult result = client.get(url);
+    nxkit::HttpClient client;
+    client.setTimeout(15000);
+    client.getAsync(url, {}, [this, url, weak](const nxkit::HttpResult& result) {
         if (!result.ok || result.body.empty()) {
             brls::sync([this, url, weak] {
                 auto token = weak.lock();
@@ -1425,14 +1445,14 @@ void MiniappView::requestRemoteImage(const std::string& url) {
             return;
         }
         std::shared_ptr<std::string> bytes =
-            std::make_shared<std::string>(std::move(result.body));
+            std::make_shared<std::string>(result.body);
         brls::sync([this, url, weak, bytes] {
             auto token = weak.lock();
             if (!token || !*token) return;
             pendingImages.erase(url);
             NVGcontext* vg = brls::Application::getNVGContext();
             int texture = nvgCreateImageMem(
-                vg, 0, reinterpret_cast<unsigned char*>(const_cast<char*>(bytes->data())),
+                vg, 0, reinterpret_cast<unsigned char*>(bytes->data()),
                 static_cast<int>(bytes->size()));
             if (texture <= 0) {
                 brls::Logger::warning("miniapp: cannot decode remote image {}", url);
@@ -1441,7 +1461,7 @@ void MiniappView::requestRemoteImage(const std::string& url) {
             imageTextures[url] = texture;
             this->invalidate();
         });
-    }).detach();
+    });
 }
 
 
