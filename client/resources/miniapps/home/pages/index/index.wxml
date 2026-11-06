@@ -18,12 +18,22 @@
 
       <text class="section-title">推荐小程序</text>
       <scroll-view class="scroll" scroll-y="{{true}}">
-        <view class="app-card" wx:for="{{featured}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
-          <image wx:if="{{item.icon_url}}" class="app-icon" src="{{item.icon_url}}" mode="aspectFill"/>
-          <view wx:else class="app-icon app-icon-empty"/>
-          <view class="app-meta">
-            <text class="app-title">{{item.title}}</text>
-            <text class="app-sub">{{item.category}} · v{{item.version}}</text>
+        <view class="app-grid">
+          <view class="app-col">
+            <view class="feat-card" wx:for="{{featuredLeft}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
+              <image wx:if="{{item.icon_url}}" class="feat-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+              <view wx:else class="feat-icon app-icon-empty"/>
+              <text class="feat-title">{{item.title}}</text>
+              <text class="feat-sub">{{item.category}} · v{{item.version}}</text>
+            </view>
+          </view>
+          <view class="app-col">
+            <view class="feat-card" wx:for="{{featuredRight}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
+              <image wx:if="{{item.icon_url}}" class="feat-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+              <view wx:else class="feat-icon app-icon-empty"/>
+              <text class="feat-title">{{item.title}}</text>
+              <text class="feat-sub">{{item.category}} · v{{item.version}}</text>
+            </view>
           </view>
         </view>
         <view wx:if="{{featured.length === 0}}" class="empty">

@@ -175,6 +175,7 @@ void LauncherView::willAppear(bool resetState) {
 void LauncherView::showAbout() {
     brls::Dialog* dialog = new brls::Dialog(
         "Switch小程序\n服务器：" + MiniAppApi::instance().serverUrl() +
+        "\n设备 ID：" + MiniAppApi::instance().deviceId() +
         "\n源码：github.com/xbw12138/NXMiniApp");
     dialog->addButton("知道了", [] {});
     dialog->open();

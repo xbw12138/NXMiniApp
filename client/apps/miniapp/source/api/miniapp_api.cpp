@@ -161,6 +161,8 @@ void MiniAppApi::configure(const std::string& serverUrl) {
     nxkit::HttpClient::setDefaultHeader("X-Device-Id", ensureDeviceId());
 }
 
+std::string MiniAppApi::deviceId() const { return ensureDeviceId(); }
+
 std::string MiniAppApi::resolveUrl(const std::string& path) const {
     return miniapp::absoluteUrl(base, path);
 }

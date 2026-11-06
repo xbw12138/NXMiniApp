@@ -4,6 +4,8 @@ Page({
     banner: {},
     news: [],
     featured: [],
+    featuredLeft: [],
+    featuredRight: [],
     recent: [],
     status: '正在加载…'
   },
@@ -23,11 +25,14 @@ Page({
       success: (res) => {
         const payload = res.data || {};
         const banners = payload.banners || [];
+        const featured = payload.featured || [];
         this.setData({
           banners: banners,
           banner: banners.length > 0 ? banners[0] : {},
           news: payload.news || [],
-          featured: payload.featured || [],
+          featured: featured,
+          featuredLeft: featured.filter((_, i) => i % 2 === 0),
+          featuredRight: featured.filter((_, i) => i % 2 === 1),
           status: ''
         });
         this.loadRecent();

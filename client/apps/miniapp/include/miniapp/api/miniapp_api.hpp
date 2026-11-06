@@ -58,6 +58,8 @@ public:
 
     void configure(const std::string& serverUrl);
     const std::string& serverUrl() const { return base; }
+    /// 本机设备标识（服务端灰度分流用），首次调用时生成并持久化。
+    std::string deviceId() const;
     bool ready() const { return !base.empty(); }
 
     void fetchList(ListCallback callback);
