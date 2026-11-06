@@ -2472,30 +2472,42 @@ bool MiniappView::moveFocus(RenderNode* from, brls::FocusDirection direction) {
 
         float primary = 0.0f;
         float secondary = 0.0f;
+        // 横向/纵向移动要求目标与当前节点在另一轴上有一定重叠，且位移至少达到节点
+        // 尺寸的 40%。这样双列卡片会按「先本列上下、再左右换列」的直觉移动，
+        // 不会因为资讯行与卡片高度不齐而误跳到资讯区。
         switch (direction) {
             case brls::FocusDirection::RIGHT:
-                if (dx < 8.0f) continue;
-                primary = dx;
+            case brls::FocusDirection::LEFT: {
+                float overlap = std::min(from->absTop + from->absHeight,
+                                          candidate->absTop + candidate->absHeight) -
+                                std::max(from->absTop, candidate->absTop);
+                if (overlap < std::min(from->absHeight, candidate->absHeight) * 0.25f) continue;
+                float step = std::min(from->absWidth, candidate->absWidth) * 0.4f;
+                if (std::fabs(dx) < step) continue;
+                primary = std::fabs(dx);
                 secondary = std::fabs(dy);
                 break;
-            case brls::FocusDirection::LEFT:
-                if (dx > -8.0f) continue;
-                primary = -dx;
-                secondary = std::fabs(dy);
-                break;
+            }
             case brls::FocusDirection::DOWN:
-                if (dy < 8.0f) continue;
-                primary = dy;
+            case brls::FocusDirection::UP: {
+                float overlap = std::min(from->absLeft + from->absWidth,
+                                          candidate->absLeft + candidate->absWidth) -
+                                std::max(from->absLeft, candidate->absLeft);
+                if (overlap < std::min(from->absWidth, candidate->absWidth) * 0.25f) continue;
+                float step = std::min(from->absHeight, candidate->absHeight) * 0.4f;
+                if (std::fabs(dy) < step) continue;
+                primary = std::fabs(dy);
                 secondary = std::fabs(dx);
                 break;
-            case brls::FocusDirection::UP:
-                if (dy > -8.0f) continue;
-                primary = -dy;
-                secondary = std::fabs(dx);
-                break;
+            }
             default:
                 continue;
         }
+        // 排除与按键方向相反的目标。
+        if (direction == brls::FocusDirection::RIGHT && dx <= 0.0f) continue;
+        if (direction == brls::FocusDirection::LEFT && dx >= 0.0f) continue;
+        if (direction == brls::FocusDirection::DOWN && dy <= 0.0f) continue;
+        if (direction == brls::FocusDirection::UP && dy >= 0.0f) continue;
         float score = primary + secondary * 0.6f;
         if (score < bestScore) {
             bestScore = score;
@@ -2703,7 +2715,8 @@ void MiniappView::httpRequest(const std::string& method, const std::string& url,
     }
     if (method == "GET" || method == "HEAD") {
         client.getAsync(target, {}, [done](const nxkit::HttpResult& result) {
-            done(result.ok, static_cast<int>(result.status), result.body, result.headers);
+            done(result.ok, static_cast<int>(result.status), result.body, result.headers,
+                 result.cookies);
         });
     } else {
         nlohmann::json payload = nlohmann::json::object();
@@ -2715,7 +2728,8 @@ void MiniappView::httpRequest(const std::string& method, const std::string& url,
             }
         }
         client.postJsonAsync(target, {}, payload, [done](const nxkit::HttpResult& result) {
-            done(result.ok, static_cast<int>(result.status), result.body, result.headers);
+            done(result.ok, static_cast<int>(result.status), result.body, result.headers,
+                 result.cookies);
         });
     }
 }
