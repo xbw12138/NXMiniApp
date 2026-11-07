@@ -44,6 +44,7 @@ func MiniAppJSONDevice(cfg config.Config, m *models.MiniApp, device string) gin.
 		"featured":     m.Featured,
 		"sort":         m.Sort,
 		"published":    m.Published,
+		"downloads":    m.Downloads,
 		"updated_at":   m.UpdatedAt,
 		"download_url": "/api/v1/miniapps/" + m.ID + "/download",
 	}
