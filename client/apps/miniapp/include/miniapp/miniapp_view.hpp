@@ -27,6 +27,10 @@ public:
     explicit MiniappView(std::string packagePath = "");
     ~MiniappView() override;
 
+    // 根页面再按 B 时的兜底回调。为空（默认）时直接 popActivity；
+    // 被内嵌到启动器时由启动器注入「退出到桌面」确认弹窗。
+    std::function<void()> onRequestExit;
+
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override;
     brls::View* getDefaultFocus() override;

@@ -313,8 +313,14 @@ MiniappView::MiniappView(std::string packagePath)
             return true;
         }
         if (!navigateBack(1)) {
-            brls::Logger::info("MiniappView: B pressed, popActivity");
-            brls::Application::popActivity();
+            // 根页面再按 B：内嵌模式下交给启动器弹「退出到桌面」确认，
+            // 独立 Activity 模式下保持原行为直接退出本页。
+            if (onRequestExit) {
+                onRequestExit();
+            } else {
+                brls::Logger::info("MiniappView: B pressed, popActivity");
+                brls::Application::popActivity();
+            }
         }
         return true;
     });

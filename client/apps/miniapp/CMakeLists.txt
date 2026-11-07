@@ -1,4 +1,16 @@
 # miniapp: WXML/WXSS + QuickJS 小程序容器 spike。
+set(MINIAPP_LIBS "")
+set(MINIAPP_INCLUDES "")
+
+if(PLATFORM_SWITCH AND BUILTIN_NSP)
+    # nspmini: 运行时把内置 NSP 转发器安装到 SD 卡，生成桌面图标。
+    set(NSPMINI_DIR ${CMAKE_SOURCE_DIR}/external/nspmini)
+    list(APPEND MINIAPP_LIBS ${NSPMINI_DIR}/lib/libnsp.a)
+    list(APPEND MINIAPP_INCLUDES ${NSPMINI_DIR}/include)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/../scripts/switch-forwarder
+                     ${CMAKE_BINARY_DIR}/forwarder)
+endif()
+
 nxkit_add_app(miniapp
         TITLEID "0x010FF000FFFF0103"
         TITLE "Switch小程序"
@@ -20,7 +32,13 @@ nxkit_add_app(miniapp
         source/pages/launcher_view.cpp
         LIBS
         quickjs
-        # borealis 内置的 yogacore 已经提供 Yoga 头文件和实现；不能再链接
-        # library/yoga，否则两套 Yoga 符号会在运行期互相覆盖。
         yogacore
+        ${MINIAPP_LIBS}
         )
+
+if(PLATFORM_SWITCH AND BUILTIN_NSP)
+    target_include_directories(miniapp PRIVATE ${MINIAPP_INCLUDES})
+    target_compile_definitions(miniapp PRIVATE BUILTIN_NSP)
+    # 先构建转发器 NSP 并放进资源目录，再打包 NRO romfs。
+    add_dependencies(miniapp.nro nsp_forwarder.nsp)
+endif()

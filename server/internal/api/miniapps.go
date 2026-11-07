@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -46,6 +47,7 @@ func MiniAppJSONDevice(cfg config.Config, m *models.MiniApp, device string) gin.
 		"published":    m.Published,
 		"downloads":    m.Downloads,
 		"opens":        m.Opens,
+		"uv":           m.UV,
 		"updated_at":   m.UpdatedAt,
 		"download_url": "/api/v1/miniapps/" + m.ID + "/download",
 	}
@@ -160,12 +162,26 @@ func (e *Env) DownloadMiniApp(c *gin.Context) {
 	c.Data(http.StatusOK, "application/zip", buf.Bytes())
 }
 
-// OpenMiniApp 上报一次小程序启动，opens + 1。容器每次打开小程序时调用。
+// OpenMiniApp 上报一次小程序启动。body 可带 {"device_id":"..."}。
+// opens (PV) + 1；若该设备首次打开此小程序，uv + 1。
 func (e *Env) OpenMiniApp(c *gin.Context) {
 	m := e.GetMiniApp(c, c.Param("id"))
 	if m == nil {
 		return
 	}
+	var body struct {
+		DeviceID string `json:"device_id"`
+	}
+	_ = c.ShouldBindJSON(&body)
+
 	e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Update("opens", gorm.Expr("opens + 1"))
+
+	if body.DeviceID != "" {
+		open := models.MiniAppOpen{MiniAppID: m.ID, DeviceID: body.DeviceID, CreatedAt: time.Now().UnixMilli()}
+		result := e.DB.Create(&open)
+		if result.RowsAffected > 0 {
+			e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Update("uv", gorm.Expr("uv + 1"))
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

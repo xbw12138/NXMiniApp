@@ -16,3 +16,7 @@ data/
 
 # macOS
 .DS_Store
+
+# Switch NSP forwarder keys & artifacts
+scripts/switch-forwarder/prod.keys
+client/resources/nsp_forwarder.nsp

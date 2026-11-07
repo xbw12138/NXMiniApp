@@ -42,6 +42,9 @@ elseif(PLATFORM_SWITCH)
     set(__SWITCH__ ON)
     set(CMAKE_C_FLAGS "-I${DEVKITPRO}/libnx/include -I${DEVKITPRO}/portlibs/switch/include")
     set(CMAKE_CXX_FLAGS "-I${DEVKITPRO}/libnx/include -I${DEVKITPRO}/portlibs/switch/include")
+    # 内置 NSP 转发器：运行时安装到桌面（home menu）作为图标入口。
+    # 需要 nspmini 库与 hacbrewpack（见 external/bin、scripts/switch-forwarder）。
+    option(BUILTIN_NSP "Built in NSP forwarder (install home-menu icon)" ON)
 elseif(PLATFORM_PSV)
     message("building for PSVita")
     set(USE_GLFW ON)

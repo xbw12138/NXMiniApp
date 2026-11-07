@@ -21,7 +21,11 @@
         </div>
         <div class="card stat">
           <span class="stat-value">{{ stats.opens }}</span>
-          <span class="stat-label">启动次数</span>
+          <span class="stat-label">启动次数(PV)</span>
+        </div>
+        <div class="card stat">
+          <span class="stat-value">{{ stats.uv }}</span>
+          <span class="stat-label">独立设备(UV)</span>
         </div>
         <div class="card stat">
           <span class="stat-value">{{ formatBytes(stats.storage_bytes) }}</span>
@@ -38,6 +42,8 @@
               <th>分类</th>
               <th>版本</th>
               <th>下载</th>
+              <th>启动</th>
+              <th>UV</th>
               <th>更新时间</th>
             </tr>
           </thead>
@@ -54,10 +60,12 @@
               <td>{{ app.category }}</td>
               <td>{{ app.version }}</td>
               <td>{{ app.downloads }}</td>
+              <td>{{ app.opens }}</td>
+              <td>{{ app.uv }}</td>
               <td class="muted">{{ formatTime(app.updated_at) }}</td>
             </tr>
             <tr v-if="!stats.recent.length">
-              <td colspan="6" class="empty">暂无小程序</td>
+              <td colspan="8" class="empty">暂无小程序</td>
             </tr>
           </tbody>
         </table>

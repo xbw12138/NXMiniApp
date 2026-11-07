@@ -20,6 +20,11 @@
 #include "miniapp/miniapp_view.hpp"
 #include "nxkit/config.hpp"
 
+#ifdef BUILTIN_NSP
+#include <nspmini.hpp>
+#include <switch.h>
+#endif
+
 namespace miniapp {
 
 namespace {
@@ -140,6 +145,18 @@ LauncherView::LauncherView() {
     about->setMarginLeft(8);
     header->addView(about);
 
+#ifdef BUILTIN_NSP
+    // 桌面图标：安装 NSP 转发器后可直接从桌面启动。
+    brls::Button* desktop = new brls::Button();
+    desktop->setText("装到桌面");
+    desktop->setMarginLeft(8);
+    desktop->registerClickAction([this](brls::View*) {
+        this->installDesktopIcon();
+        return true;
+    });
+    header->addView(desktop);
+#endif
+
     this->addView(header);
 
     this->grid = new nxkit::CoverGridPage();
@@ -157,6 +174,13 @@ LauncherView::LauncherView() {
         this->reload();
     });
     this->addView(this->grid);
+
+    // 首页按 B：弹确认框再退出到桌面（内嵌小程序根页面的 B 也走这里，
+    // 由 MiniappView::onRequestExit 转发过来）。
+    this->registerAction("退出", brls::BUTTON_B, [this](brls::View*) {
+        this->showExitDialog();
+        return true;
+    });
 }
 
 LauncherView::~LauncherView() { *this->alive = false; }
@@ -179,6 +203,28 @@ void LauncherView::showAbout() {
         "\n源码：github.com/xbw12138/NXMiniApp");
     dialog->addButton("知道了", [] {});
     dialog->open();
+}
+
+void LauncherView::showExitDialog() {
+    brls::Dialog* dialog = new brls::Dialog("确定要退出到桌面吗？");
+    dialog->addButton("取消", [] {});
+    dialog->addButton("退出", [] { brls::Application::quit(); });
+    dialog->open();
+}
+
+void LauncherView::installDesktopIcon() {
+#ifdef BUILTIN_NSP
+    brls::Dialog* dialog = new brls::Dialog(
+        "将在桌面安装「Switch小程序」图标，之后可直接从桌面启动。\n安装完成会自动跳转，是否继续？");
+    dialog->addButton("取消", []() {});
+    dialog->addButton("安装", []() {
+        brls::Application::blockInputs();
+        mini::InstallSD("romfs:/nsp_forwarder.nsp");
+        u64 titleId = mini::GetTitleID();
+        appletRequestLaunchApplication(titleId, NULL);
+    });
+    dialog->open();
+#endif
 }
 
 void LauncherView::reload() {
@@ -306,6 +352,8 @@ void LauncherView::embedHome(const MiniAppItem& home) {
     this->addView(view);
     this->homeView = view;
     miniapp::MiniAppApi::instance().reportOpen(home.id);
+    // 内嵌模式下，小程序根页面按 B 转发为「退出到桌面」确认弹窗。
+    view->onRequestExit = [this] { this->showExitDialog(); };
     brls::Application::giveFocus(view->getDefaultFocus());
 
     // 网格在内嵌模式下不再需要，延迟移除避免打断当前焦点。

@@ -50,6 +50,7 @@ type MiniApp struct {
 	Published   bool   `gorm:"not null;default:true"`
 	Downloads   int64  `gorm:"not null;default:0"`
 	Opens       int64  `gorm:"not null;default:0"`
+	UV          int64  `gorm:"not null;default:0"`
 	// 灰度发布：可见性按设备比例 + 白名单；Version 为稳定版本，GrayVersion 为灰度版本。
 	VisiblePercent   int    `gorm:"not null;default:100"`
 	VisibleWhitelist string `gorm:"size:4000;not null;default:''"`
@@ -61,6 +62,17 @@ type MiniApp struct {
 }
 
 func (MiniApp) TableName() string { return "miniapps" }
+
+// MiniAppOpen 记录某设备打开过某小程序，用于统计 UV（独立设备数）。
+// (miniapp_id, device_id) 唯一，同一设备重复打开只算一次 UV。
+type MiniAppOpen struct {
+	ID         uint64 `gorm:"primaryKey;autoIncrement"`
+	MiniAppID  string `gorm:"size:64;not null;index;uniqueIndex:uk_miniapp_open_app_device,priority:1"`
+	DeviceID   string `gorm:"size:64;not null;index;uniqueIndex:uk_miniapp_open_app_device,priority:2"`
+	CreatedAt  int64  `gorm:"not null;autoCreateTime:false"`
+}
+
+func (MiniAppOpen) TableName() string { return "miniapp_opens" }
 
 // ContainerRelease 是容器本体（NXMiniApp NRO）的一个可下载版本，
 // 文件存于 <DATA_DIR>/releases/ 下。Published/Downloads 不带 default 标签，

@@ -274,8 +274,9 @@ void MiniAppApi::download(const std::string& id, DownloadCallback callback) {
 
 void MiniAppApi::reportOpen(const std::string& id) {
     if (!ready() || id.empty()) return;
-    // fire-and-forget：上报启动次数，失败不影响使用。
-    http.postJsonAsync("/api/v1/miniapps/" + id + "/open", {}, nlohmann::json::object(),
+    // fire-and-forget：上报启动次数，失败不影响使用。device_id 用于 UV 统计。
+    nlohmann::json payload = {{"device_id", ensureDeviceId()}};
+    http.postJsonAsync("/api/v1/miniapps/" + id + "/open", {}, payload,
                        [](const nxkit::HttpResult&) {}, 5000);
 }
 

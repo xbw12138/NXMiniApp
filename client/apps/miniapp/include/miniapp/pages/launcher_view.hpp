@@ -28,6 +28,10 @@ private:
     void reload();
     // 关于弹窗：版本/服务器/源码信息。
     void showAbout();
+    // 把内置 NSP 转发器安装到桌面（home menu）作为图标入口。
+    void installDesktopIcon();
+    // 首页按 B 的退出确认弹窗。
+    void showExitDialog();
     // 启动时优先拉起服务端配置的首页小程序；未配置或失败时回落到商店列表。
     void fetchStoreList();
     void openHome(const MiniAppItem& home);

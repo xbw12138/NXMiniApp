@@ -16,6 +16,9 @@
             <th>ID</th>
             <th>版本</th>
             <th>大小</th>
+            <th>下载</th>
+            <th>启动</th>
+            <th>UV</th>
             <th>发布</th>
             <th>精选</th>
             <th></th>
@@ -35,6 +38,9 @@
               <div v-if="m.gray_version" class="muted">灰度 {{ m.gray_version }} · {{ m.gray_percent }}%</div>
             </td>
             <td>{{ formatBytes(m.size) }}</td>
+            <td>{{ m.downloads }}</td>
+            <td>{{ m.opens }}</td>
+            <td>{{ m.uv }}</td>
             <td>
               <label class="switch">
                 <input
@@ -58,7 +64,7 @@
             <td><button class="btn small" @click="openDetail(m)">管理</button></td>
           </tr>
           <tr v-if="!items.length">
-            <td colspan="8" class="empty">暂无数据</td>
+            <td colspan="11" class="empty">暂无数据</td>
           </tr>
         </tbody>
       </table>
