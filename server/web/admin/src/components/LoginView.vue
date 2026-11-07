@@ -6,7 +6,6 @@
 
       <template v-if="step === 'password'">
         <p class="muted">请输入管理员密码</p>
-        <input v-model="username" type="text" placeholder="用户名" autocomplete="username" />
         <input
           v-model="password"
           type="password"
@@ -44,7 +43,6 @@ import { api } from '../api'
 
 const emit = defineEmits(['success'])
 const step = ref('password')
-const username = ref('admin')
 const password = ref('')
 const code = ref('')
 const challenge = ref('')
@@ -71,7 +69,6 @@ async function submit() {
   try {
     if (step.value === 'password') {
       const data = await api.post('/api/v1/admin/login/password', {
-        username: username.value.trim() || 'admin',
         password: password.value
       })
       challenge.value = data.challenge

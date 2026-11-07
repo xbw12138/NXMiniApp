@@ -14,9 +14,10 @@ import (
 
 func main() {
 	genAdmin := flag.Bool("gen-admin", false, "生成后台登录凭据（密码 + TOTP 密钥）后退出")
+	genPassword := flag.String("password", "", "配合 -gen-admin 使用：指定后台密码，为空则随机生成")
 	flag.Parse()
 	if *genAdmin {
-		admin.PrintCredentials()
+		admin.PrintCredentials(*genPassword)
 		return
 	}
 

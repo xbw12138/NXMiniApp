@@ -258,8 +258,11 @@ func cookieValid(c *gin.Context) bool {
 }
 
 // PrintCredentials 生成一套登录凭据（密码、bcrypt 哈希、TOTP 密钥），供 -gen-admin 使用。
-func PrintCredentials() {
-	password := randomPassword()
+// password 为空时随机生成；指定时可用于把后台密码改成固定值。
+func PrintCredentials(password string) {
+	if password == "" {
+		password = randomPassword()
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		panic(err)
@@ -274,7 +277,7 @@ func PrintCredentials() {
 	fmt.Println("NXKIT_ADMIN_USER=admin")
 	fmt.Printf("NXKIT_ADMIN_PASSWORD_HASH='%s'\n", hash)
 	fmt.Printf("NXKIT_ADMIN_TOTP_SECRET=%s\n\n", secret)
-	fmt.Printf("# 登录密码（只显示这一次，请立即保存到密码管理器）: %s\n", password)
+	fmt.Printf("# 登录密码: %s\n", password)
 	fmt.Printf("# 在 2FAS 中手动添加，或把下面链接生成二维码后扫描:\n")
 	fmt.Printf("otpauth://totp/NXMiniApp:admin?secret=%s&issuer=NXMiniApp\n", secret)
 }
