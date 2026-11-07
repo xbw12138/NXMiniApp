@@ -98,24 +98,25 @@ func login(e *api.Env) gin.HandlerFunc {
 
 func stats(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var apps, published, versions int64
-		var downloads, storage int64
-		e.DB.Model(&models.StoreApp{}).Count(&apps)
-		e.DB.Model(&models.StoreApp{}).Where("published = ?", true).Count(&published)
-		e.DB.Model(&models.Version{}).Count(&versions)
-		_ = e.DB.Model(&models.StoreApp{}).Select("COALESCE(SUM(downloads), 0)").Row().Scan(&downloads)
-		_ = e.DB.Model(&models.Version{}).Select("COALESCE(SUM(size), 0)").Row().Scan(&storage)
+		var miniapps, published, releases int64
+		var downloads int64
+		e.DB.Model(&models.MiniApp{}).Count(&miniapps)
+		e.DB.Model(&models.MiniApp{}).Where("published = ?", true).Count(&published)
+		e.DB.Model(&models.ContainerRelease{}).Count(&releases)
+		_ = e.DB.Model(&models.MiniApp{}).Select("COALESCE(SUM(downloads), 0)").Row().Scan(&downloads)
 
-		recent := make([]models.StoreApp, 0)
+		storage := miniappstore.DirSize(e.Cfg.MiniAppsDir()) + miniappstore.DirSize(e.Cfg.ReleasesDir())
+
+		recent := make([]models.MiniApp, 0)
 		e.DB.Order("updated_at DESC").Limit(6).Find(&recent)
 		items := make([]gin.H, 0, len(recent))
 		for i := range recent {
-			items = append(items, api.AppJSON(e.DB, &recent[i], true))
+			items = append(items, api.MiniAppJSON(e.Cfg, &recent[i]))
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"apps":          apps,
+			"miniapps":      miniapps,
 			"published":     published,
-			"versions":      versions,
+			"releases":      releases,
 			"downloads":     downloads,
 			"storage_bytes": storage,
 			"recent":        items,

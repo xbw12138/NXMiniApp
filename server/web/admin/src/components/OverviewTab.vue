@@ -4,16 +4,16 @@
     <template v-if="stats">
       <div class="cards">
         <div class="card stat">
-          <span class="stat-value">{{ stats.apps }}</span>
-          <span class="stat-label">应用总数</span>
+          <span class="stat-value">{{ stats.miniapps }}</span>
+          <span class="stat-label">小程序总数</span>
         </div>
         <div class="card stat">
           <span class="stat-value">{{ stats.published }}</span>
           <span class="stat-label">已发布</span>
         </div>
         <div class="card stat">
-          <span class="stat-value">{{ stats.versions }}</span>
-          <span class="stat-label">版本数</span>
+          <span class="stat-value">{{ stats.releases }}</span>
+          <span class="stat-label">容器版本</span>
         </div>
         <div class="card stat">
           <span class="stat-value">{{ stats.downloads }}</span>
@@ -29,10 +29,10 @@
         <table class="table">
           <thead>
             <tr>
-              <th>应用</th>
+              <th>小程序</th>
               <th>ID</th>
               <th>分类</th>
-              <th>版本数</th>
+              <th>版本</th>
               <th>下载</th>
               <th>更新时间</th>
             </tr>
@@ -48,12 +48,12 @@
               </td>
               <td class="mono">{{ app.id }}</td>
               <td>{{ app.category }}</td>
-              <td>{{ app.version_count }}</td>
+              <td>{{ app.version }}</td>
               <td>{{ app.downloads }}</td>
               <td class="muted">{{ formatTime(app.updated_at) }}</td>
             </tr>
             <tr v-if="!stats.recent.length">
-              <td colspan="6" class="empty">暂无应用</td>
+              <td colspan="6" class="empty">暂无小程序</td>
             </tr>
           </tbody>
         </table>
