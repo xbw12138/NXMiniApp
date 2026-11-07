@@ -207,7 +207,15 @@ ${DEVKITPRO:-/opt/devkitpro}/devkitA64/bin/aarch64-none-elf-addr2line \
 
 ## 后台管理 API
 
-鉴权：`Authorization: Bearer $NXKIT_ADMIN_TOKEN`（线上值为 `xbw12138`，配置在服务器 `.env`）。
+鉴权：`Authorization: Bearer <token>`。token 来自服务器 `/root/NXMiniApp/.env` 的 `NXKIT_ADMIN_TOKEN`（该文件已在 `.gitignore` 中）。
+
+**不要把 token 写进任何提交到仓库的文件或对话记录**；需要时在服务器上读取，例如：
+
+```bash
+ssh root@ecfun.cc "cd /root/NXMiniApp && grep ^NXKIT_ADMIN_TOKEN= .env"
+```
+
+本地开发可用 `NXKIT_ADMIN_TOKEN=dev-token docker compose up -d`，代码里的缺省值仅供本地调试，线上必须由 `.env` 覆盖。
 
 | 用途 | 接口 |
 |---|---|
@@ -233,10 +241,11 @@ ${DEVKITPRO:-/opt/devkitpro}/devkitA64/bin/aarch64-none-elf-addr2line \
 ## 远程部署
 
 ```bash
-sshpass -p '<root 密码>' ssh root@ecfun.cc \
+ssh root@ecfun.cc \
   "cd /root/NXMiniApp && git pull --ff-only && docker compose up -d --build"
 ```
 
+- **凭据不落盘、不进命令、不进对话**：用 SSH 密钥登录（`~/.ssh/config` 里配 `Host ecfun` 即可 `ssh ecfun ...`）。若必须用密码，用 `sshpass -e`（从 `SSHPASS` 环境变量读取）而不是 `-p`，避免密码留在 shell 历史与进程列表。
 - 后台前端（Vue/Vite）**只在 Docker 构建阶段编译**，本地没有 npm，不要尝试本地构建前端。
 - 部署后用 `curl -s https://ecfun.cc/api/v1/health` 确认，并检查容器已 Started。
 - 数据库迁移靠 GORM `AutoMigrate`，加字段/加表只需改 `server/internal/models` 与 `database.go`，重启即生效。
