@@ -207,24 +207,23 @@ ${DEVKITPRO:-/opt/devkitpro}/devkitA64/bin/aarch64-none-elf-addr2line \
 
 ## 后台登录与鉴权
 
-**后台页面：密码 + TOTP 两步登录**，登录后下发 HttpOnly Cookie（`nxkit_admin_session`，7 天），刷新/重开浏览器免登录。
+**后台页面：密码 + TOTP 两步登录**（只需密码，无用户名），登录后下发 HttpOnly Cookie（`nxkit_admin_session`，7 天），刷新/重开浏览器免登录。
 
 凭据只在服务器 `/root/NXMiniApp/.env`（已 gitignore）：
 
 | 变量 | 含义 |
 |---|---|
-| `NXKIT_ADMIN_USER` | 用户名，默认 `admin` |
 | `NXKIT_ADMIN_PASSWORD_HASH` | bcrypt 哈希，`.env` 里用**单引号**包住（含 `$`） |
 | `NXKIT_ADMIN_TOTP_SECRET` | base32 密钥，无填充 |
 | `NXKIT_ADMIN_TOKEN` | 脚本/CI 用的 Bearer token，也是忘记密码时的应急入口 |
 
-重置密码或更换验证器：
+重置密码或更换验证器（`-password` 省略则随机生成）：
 
 ```bash
-ssh root@ecfun.cc "cd /root/NXMiniApp && docker compose run --rm --no-deps -T server -gen-admin"
+ssh root@ecfun.cc "cd /root/NXMiniApp && docker compose run --rm --no-deps -T server -gen-admin -password <新密码>"
 ```
 
-输出包含 `.env` 行、一次性明文密码和 `otpauth://` 链接；导入 2FAS 后立刻删掉输出文件，并手动替换 `.env` 中对应的三行再 `docker compose up -d`。
+输出包含 `.env` 行、明文密码和 `otpauth://` 链接；替换 `.env` 中对应两行后 `docker compose up -d`，并删除输出文件。
 
 API 鉴权有两条通道，二选一即可：
 
