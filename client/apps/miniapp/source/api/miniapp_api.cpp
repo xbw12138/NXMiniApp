@@ -272,4 +272,11 @@ void MiniAppApi::download(const std::string& id, DownloadCallback callback) {
                   30000);
 }
 
+void MiniAppApi::reportOpen(const std::string& id) {
+    if (!ready() || id.empty()) return;
+    // fire-and-forget：上报启动次数，失败不影响使用。
+    http.postJsonAsync("/api/v1/miniapps/" + id + "/open", {}, nlohmann::json::object(),
+                       [](const nxkit::HttpResult&) {}, 5000);
+}
+
 }  // namespace miniapp

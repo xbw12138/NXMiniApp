@@ -66,6 +66,8 @@ public:
     void search(const std::string& keyword, ListCallback callback);
     void fetchHome(HomeCallback callback);
     void download(const std::string& id, DownloadCallback callback);
+    /// 上报一次小程序启动（opens + 1），fire-and-forget。
+    void reportOpen(const std::string& id);
 
 private:
     std::string resolveUrl(const std::string& path) const;

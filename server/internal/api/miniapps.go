@@ -45,6 +45,7 @@ func MiniAppJSONDevice(cfg config.Config, m *models.MiniApp, device string) gin.
 		"sort":         m.Sort,
 		"published":    m.Published,
 		"downloads":    m.Downloads,
+		"opens":        m.Opens,
 		"updated_at":   m.UpdatedAt,
 		"download_url": "/api/v1/miniapps/" + m.ID + "/download",
 	}
@@ -157,4 +158,14 @@ func (e *Env) DownloadMiniApp(c *gin.Context) {
 	c.Header("Content-Disposition",
 		"attachment; filename=\""+m.ID+"-"+version+".nxpkg\"")
 	c.Data(http.StatusOK, "application/zip", buf.Bytes())
+}
+
+// OpenMiniApp 上报一次小程序启动，opens + 1。容器每次打开小程序时调用。
+func (e *Env) OpenMiniApp(c *gin.Context) {
+	m := e.GetMiniApp(c, c.Param("id"))
+	if m == nil {
+		return
+	}
+	e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Update("opens", gorm.Expr("opens + 1"))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

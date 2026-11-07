@@ -49,6 +49,7 @@ type MiniApp struct {
 	Sort        int    `gorm:"not null;default:0"`
 	Published   bool   `gorm:"not null;default:true"`
 	Downloads   int64  `gorm:"not null;default:0"`
+	Opens       int64  `gorm:"not null;default:0"`
 	// 灰度发布：可见性按设备比例 + 白名单；Version 为稳定版本，GrayVersion 为灰度版本。
 	VisiblePercent   int    `gorm:"not null;default:100"`
 	VisibleWhitelist string `gorm:"size:4000;not null;default:''"`

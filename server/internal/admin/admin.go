@@ -99,11 +99,12 @@ func login(e *api.Env) gin.HandlerFunc {
 func stats(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var miniapps, published, releases int64
-		var downloads int64
+		var downloads, opens int64
 		e.DB.Model(&models.MiniApp{}).Count(&miniapps)
 		e.DB.Model(&models.MiniApp{}).Where("published = ?", true).Count(&published)
 		e.DB.Model(&models.ContainerRelease{}).Count(&releases)
 		_ = e.DB.Model(&models.MiniApp{}).Select("COALESCE(SUM(downloads), 0)").Row().Scan(&downloads)
+		_ = e.DB.Model(&models.MiniApp{}).Select("COALESCE(SUM(opens), 0)").Row().Scan(&opens)
 
 		storage := miniappstore.DirSize(e.Cfg.MiniAppsDir()) + miniappstore.DirSize(e.Cfg.ReleasesDir())
 
@@ -118,6 +119,7 @@ func stats(e *api.Env) gin.HandlerFunc {
 			"published":     published,
 			"releases":      releases,
 			"downloads":     downloads,
+			"opens":         opens,
 			"storage_bytes": storage,
 			"recent":        items,
 		})

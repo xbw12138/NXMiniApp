@@ -20,6 +20,10 @@
           <span class="stat-label">累计下载</span>
         </div>
         <div class="card stat">
+          <span class="stat-value">{{ stats.opens }}</span>
+          <span class="stat-label">启动次数</span>
+        </div>
+        <div class="card stat">
           <span class="stat-value">{{ formatBytes(stats.storage_bytes) }}</span>
           <span class="stat-label">存储占用</span>
         </div>

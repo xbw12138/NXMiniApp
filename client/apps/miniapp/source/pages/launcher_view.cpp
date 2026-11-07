@@ -305,6 +305,7 @@ void LauncherView::embedHome(const MiniAppItem& home) {
     view->setGrow(1);
     this->addView(view);
     this->homeView = view;
+    miniapp::MiniAppApi::instance().reportOpen(home.id);
     brls::Application::giveFocus(view->getDefaultFocus());
 
     // 网格在内嵌模式下不再需要，延迟移除避免打断当前焦点。
@@ -478,6 +479,7 @@ void LauncherView::openItem(const MiniAppItem& item) {
 void LauncherView::enter(const MiniAppItem& item) {
     this->touchRecent(item.id);
     this->bumpUsage(item.id);
+    miniapp::MiniAppApi::instance().reportOpen(item.id);
     // 缓存标题，供首页小程序通过 wx.miniapp.listRecent 展示最近使用。
     nxkit::Config::instance().setValue("miniapp.title." + item.id, item.title);
     nxkit::Config::instance().save();
