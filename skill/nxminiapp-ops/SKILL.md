@@ -132,16 +132,23 @@ cmake --build build_desktop --target miniapp -j 8
 
 ### 换电脑时先拿到 swlink-cli
 
-工具源码与使用文档在远端仓库，不在项目仓库里：
+优先用预编译包，无需编译、无需 brew 依赖（macOS x86_64，已内置 libusb；Apple Silicon 需装 Rosetta）：
+
+```bash
+curl -LO https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-cli-macos-x64.zip
+unzip swlink-cli-macos-x64.zip -d swlink-cli
+xattr -dr com.apple.quarantine swlink-cli      # 首次运行需去除隔离属性
+./swlink-cli/swlink-cli ls /switch
+```
+
+解压出的 `swlink-cli` 与 `libusb-1.0.0.dylib` 必须放在同一目录。只有在要改工具源码、或需要其他架构时才从源码构建：
 
 ```bash
 git clone git@github.com:xbw12138/SwitchTools.git
-cd SwitchTools && cat README.md          # 协议、sysmodule 安装、使用教程
-cd mac && ./setup.sh                     # 装依赖（brew + 精简 ffmpeg）并构建
-# 产物：mac/build/swlink-cli
+cd SwitchTools/mac && ./setup.sh               # 产物 mac/build/swlink-cli
 ```
 
-仓库内还带了两份可直接使用的资料：`.trae/skills/swlink-cli/SKILL.md`（CLI 用法 skill）、`docs/使用教程.md`（分步教程与排错表）。构建产物 `mac/build/` 被 gitignore，新机器必须自己编译一次。
+仓库内还带了 `.trae/skills/swlink-cli/SKILL.md`（CLI 用法 skill）与 `docs/使用教程.md`（分步教程与排错表）。
 
 **必须先让用户在 Switch 上按 B 完全退出容器**（只按 Home 挂起会锁住文件，报「设备错误 1/3」）。
 
