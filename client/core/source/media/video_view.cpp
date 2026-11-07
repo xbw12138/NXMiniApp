@@ -9,10 +9,19 @@
 namespace nxkit {
 
 VideoView::VideoView() {
-#ifdef NXKIT_WITH_MPV
-    registerMpvEvent();
-#endif
+    // 注意：这里不能调 registerMpvEvent()。MPVCore 单例一旦触达就会做
+    // mpv_initialize（内置脚本加载等大量分配），而桌面转发器（NSP）启动的
+    // 进程内存池比 hbmenu 小，启动期初始化会直接崩在 malloc。
+    // 因此 MPV 改为首次真正播放（mpv()）时才初始化。
 }
+
+#ifdef NXKIT_WITH_MPV
+MPVCore& VideoView::mpv() {
+    auto& core = MPVCore::instance();
+    registerMpvEvent();
+    return core;
+}
+#endif
 
 VideoView::~VideoView() {
 #ifdef NXKIT_WITH_MPV
@@ -29,8 +38,8 @@ void VideoView::setUrl(const std::string& url, const std::string& headers) {
     fireState();
     // http-header-fields 必须通过全局 set 设置，不能走 loadfile 的 per-file 选项
     // （mpv 会把选项串按 option=value 解析，破坏 Cookie 等含 =/; 的值）。
-    MPVCore::instance().setHttpHeaders(headers);
-    MPVCore::instance().setUrl(url);
+    mpv().setHttpHeaders(headers);
+    mpv().setUrl(url);
 #else
     (void)url;
     (void)headers;
@@ -43,19 +52,19 @@ void VideoView::setUrl(const std::string& url, const std::string& headers) {
 
 void VideoView::resume() {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().resume();
+    mpv().resume();
 #endif
 }
 
 void VideoView::pause() {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().pause();
+    mpv().pause();
 #endif
 }
 
 void VideoView::stop() {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().stop();
+    mpv().stop();
 #endif
     state.ended = false;
     state.playing = false;
@@ -66,60 +75,60 @@ void VideoView::stop() {
 
 void VideoView::togglePlay() {
 #ifdef NXKIT_WITH_MPV
-    auto& mpv = MPVCore::instance();
-    if (mpv.isPaused()) {
-        mpv.resume();
+    auto& core = mpv();
+    if (core.isPaused()) {
+        core.resume();
     } else {
-        mpv.pause();
+        core.pause();
     }
 #endif
 }
 
 void VideoView::seek(double seconds) {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().seek(static_cast<int64_t>(seconds));
+    mpv().seek(static_cast<int64_t>(seconds));
 #endif
 }
 
 void VideoView::seekRelative(double seconds) {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().seekRelative(static_cast<int64_t>(seconds));
+    mpv().seekRelative(static_cast<int64_t>(seconds));
 #endif
 }
 
 void VideoView::seekPercent(double percent) {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().seekPercent(percent);
+    mpv().seekPercent(percent);
 #endif
 }
 
 void VideoView::setSpeed(double speed) {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().setSpeed(speed);
+    mpv().setSpeed(speed);
 #endif
 }
 
 void VideoView::setVolume(int64_t volume) {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().setVolume(volume);
+    mpv().setVolume(volume);
 #endif
 }
 
 void VideoView::setMute(bool mute) {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().command_async("set", "mute", mute ? "yes" : "no");
+    mpv().command_async("set", "mute", mute ? "yes" : "no");
 #endif
 }
 
 void VideoView::setLoop(bool loop) {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().command_async("set", "loop-file", loop ? "inf" : "no");
+    mpv().command_async("set", "loop-file", loop ? "inf" : "no");
 #endif
 }
 
 bool VideoView::isValid() const {
 #ifdef NXKIT_WITH_MPV
-    return MPVCore::instance().isValid();
+    return registered && MPVCore::instance().isValid();
 #else
     return false;
 #endif
@@ -137,7 +146,7 @@ double VideoView::getDuration() const { return state.duration; }
 
 void VideoView::draw(brls::Rect rect, float alpha) {
 #ifdef NXKIT_WITH_MPV
-    MPVCore::instance().draw(rect, alpha);
+    mpv().draw(rect, alpha);
 #else
     (void)rect;
     (void)alpha;

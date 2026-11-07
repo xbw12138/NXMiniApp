@@ -100,6 +100,8 @@ private:
 #ifdef NXKIT_WITH_MPV
     void registerMpvEvent();
     void unregisterMpvEvent();
+    // 首次触达才真正初始化 MPVCore（桌面转发器内存受限，启动期初始化会崩）。
+    MPVCore& mpv();
 
     MpvEvent::Subscription eventToken;
     bool registered = false;
