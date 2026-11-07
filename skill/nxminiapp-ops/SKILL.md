@@ -205,20 +205,49 @@ ${DEVKITPRO:-/opt/devkitpro}/devkitA64/bin/aarch64-none-elf-addr2line \
 
 也可用 `aarch64-none-elf-objdump -d --start-address=... --stop-address=...` 看崩溃指令在做什么。
 
-## 后台管理 API
+## 后台登录与鉴权
 
-鉴权：`Authorization: Bearer <token>`。token 来自服务器 `/root/NXMiniApp/.env` 的 `NXKIT_ADMIN_TOKEN`（该文件已在 `.gitignore` 中）。
+**后台页面：密码 + TOTP 两步登录**，登录后下发 HttpOnly Cookie（`nxkit_admin_session`，7 天），刷新/重开浏览器免登录。
 
-**不要把 token 写进任何提交到仓库的文件或对话记录**；需要时在服务器上读取，例如：
+凭据只在服务器 `/root/NXMiniApp/.env`（已 gitignore）：
+
+| 变量 | 含义 |
+|---|---|
+| `NXKIT_ADMIN_USER` | 用户名，默认 `admin` |
+| `NXKIT_ADMIN_PASSWORD_HASH` | bcrypt 哈希，`.env` 里用**单引号**包住（含 `$`） |
+| `NXKIT_ADMIN_TOTP_SECRET` | base32 密钥，无填充 |
+| `NXKIT_ADMIN_TOKEN` | 脚本/CI 用的 Bearer token，也是忘记密码时的应急入口 |
+
+重置密码或更换验证器：
 
 ```bash
-ssh root@ecfun.cc "cd /root/NXMiniApp && grep ^NXKIT_ADMIN_TOKEN= .env"
+ssh root@ecfun.cc "cd /root/NXMiniApp && docker compose run --rm --no-deps -T server -gen-admin"
 ```
 
-本地开发可用 `NXKIT_ADMIN_TOKEN=dev-token docker compose up -d`，代码里的缺省值仅供本地调试，线上必须由 `.env` 覆盖。
+输出包含 `.env` 行、一次性明文密码和 `otpauth://` 链接；导入 2FAS 后立刻删掉输出文件，并手动替换 `.env` 中对应的三行再 `docker compose up -d`。
+
+API 鉴权有两条通道，二选一即可：
+
+- 后台页面：Cookie 会话（`credentials: same-origin`）
+- 脚本 / CI：`Authorization: Bearer <NXKIT_ADMIN_TOKEN>`
+
+失败限流：同 IP 5 分钟内 5 次失败即返回 429；`challenge` 一次性、2 分钟过期。
+
+**禁止把 token、密码、TOTP 密钥写进任何提交到仓库的文件或对话记录**。需要时在服务器上读取：
+
+```bash
+ssh root@ecfun.cc "grep -E '^NXKIT_ADMIN_(TOKEN|USER)=' /root/NXMiniApp/.env"
+```
+
+本地开发：`NXKIT_ADMIN_TOKEN=dev-token docker compose up -d`；不设 `NXKIT_ADMIN_PASSWORD_HASH` 时自动退回「只认 token」模式。
+
+## 后台接口速查
 
 | 用途 | 接口 |
 |---|---|
+| 登录第一步 | `POST /api/v1/admin/login/password`，JSON `{"username","password"}` → `{"challenge"}` |
+| 登录第二步 | `POST /api/v1/admin/login/totp`，JSON `{"challenge","code"}` → 下发 Cookie |
+| 会话探测 / 退出 | `GET /api/v1/admin/session`、`POST /api/v1/admin/logout` |
 | 发布容器版本 | `POST /api/v1/admin/releases`，form `file`(.nro) `version` `notes` `published`(默认 true) |
 | 改发布状态 | `PATCH /api/v1/admin/releases/:id/flags`，JSON `{"published":true}` |
 | 上传小程序包 | `POST /api/v1/admin/miniapps/:id/package`，form `file`(.nxpkg/.zip) `version` |
