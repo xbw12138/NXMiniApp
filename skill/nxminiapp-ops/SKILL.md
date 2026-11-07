@@ -9,13 +9,15 @@ description: NXMiniApp（Switch 小程序容器）的工程与运维手册，含
 
 | 项 | 值 |
 |---|---|
-| 代码仓库 | `/Users/mr/Project/Switch/NXMiniApp` |
-| USB 工具 | `/Users/mr/Project/Switch/Tools/mac/build/swlink-cli` |
-| 线上站点 | `https://ecfun.cc`（部署目录 `/root/NXMiniApp`） |
+| 代码仓库 | 当前仓库根目录（NXMiniApp） |
+| USB 工具 | `<SwitchTools>/mac/build/swlink-cli`，或解压预编译包后的 `./swlink-cli/swlink-cli` |
+| 线上站点 | `https://ecfun.cc`（服务器上的部署目录 `/root/NXMiniApp`） |
 | Switch 容器 | `sdmc:/switch/miniapp.nro` |
 | Switch 配置 | `sdmc:/switch/nxkit/config.json` |
 | 运行日志 | `sdmc:/switch/miniapp/miniapp.log` |
 | 崩溃报告 | `sdmc:/atmosphere/crash_reports/` |
+
+下文命令里的 `$CLI` 指 swlink-cli 可执行文件，`$DEVKITPRO` 指 devkitPro 安装目录（默认 `/opt/devkitpro`），按本机实际情况替换。
 
 ## 架构原理
 
@@ -112,11 +114,14 @@ cd <包目录> && zip -X -0 -r ../myapp.nxpkg .
 
 ## 构建
 
-Switch 真机（首次配置见 `README.md`）：
+以下命令都在**仓库根目录**执行。首次配置（toolchain、devkitPro 依赖）见 `README.md`。
+
+Switch 真机：
 
 ```bash
-cd /Users/mr/Project/Switch/NXMiniApp/client
-DEVKITPRO=/opt/devkitpro cmake --build build_switch --target miniapp.nro -j 8
+cd client
+export DEVKITPRO=${DEVKITPRO:-/opt/devkitpro}
+cmake --build build_switch --target miniapp.nro -j 8
 ```
 
 产物：`client/build_switch/apps/miniapp/miniapp.nro`。
@@ -124,7 +129,7 @@ DEVKITPRO=/opt/devkitpro cmake --build build_switch --target miniapp.nro -j 8
 桌面预览：
 
 ```bash
-cd /Users/mr/Project/Switch/NXMiniApp/client
+cd client
 cmake --build build_desktop --target miniapp -j 8
 ```
 
@@ -153,12 +158,12 @@ cd SwitchTools/mac && ./setup.sh               # 产物 mac/build/swlink-cli
 **必须先让用户在 Switch 上按 B 完全退出容器**（只按 Home 挂起会锁住文件，报「设备错误 1/3」）。
 
 ```bash
-CLI=/Users/mr/Project/Switch/Tools/mac/build/swlink-cli
+CLI=<SwitchTools>/mac/build/swlink-cli      # 或预编译包解压出的 ./swlink-cli/swlink-cli
 $CLI put <本地 miniapp.nro> /switch/miniapp2.nro
 $CLI rm /switch/miniapp.nro
 $CLI mv /switch/miniapp2.nro /switch/miniapp.nro
-$CLI get /switch/miniapp.nro /tmp/card.nro
-shasum -a 256 /tmp/card.nro <本地 miniapp.nro>
+$CLI get /switch/miniapp.nro ./card.nro
+shasum -a 256 ./card.nro <本地 miniapp.nro>
 ```
 
 **只能靠 sha256 确认版本**：不同版本的 NRO 大小经常完全相同（约 36.5MB），`ls` 看不出新旧。
@@ -166,16 +171,16 @@ shasum -a 256 /tmp/card.nro <本地 miniapp.nro>
 ## 读日志与崩溃排查
 
 ```bash
-$CLI get /switch/miniapp/miniapp.log /tmp/miniapp.log          # 每次启动会截断
+$CLI get /switch/miniapp/miniapp.log ./miniapp.log          # 每次启动会截断
 $CLI ls /atmosphere/crash_reports | grep "\.log" | tail -5
-$CLI get /atmosphere/crash_reports/<name>.log /tmp/cr.log
+$CLI get /atmosphere/crash_reports/<name>.log ./cr.log
 ```
 
 崩溃报告关键字段：`Type`/`Address`（真正的出错访问地址）、`PC`、`ReturnAddress[NN]`、`Stack Region`。
 符号化（**必须用产生该崩溃的同一次构建的 ELF**，否则地址全错位）：
 
 ```bash
-/opt/devkitpro/devkitA64/bin/aarch64-none-elf-addr2line \
+${DEVKITPRO:-/opt/devkitpro}/devkitA64/bin/aarch64-none-elf-addr2line \
   -e client/build_switch/apps/miniapp/miniapp.elf -f -C 0x1618e98
 ```
 
