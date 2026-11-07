@@ -33,6 +33,10 @@ HttpResult fromResponse(const cpr::Response& response) {
 
     if (response.error) {
         result.error = response.error.message;
+        // curl 的错误缓冲区在某些失败路径（如 multi 接口中断）不会写入文本，
+        // 只留错误码，这里兜底把码补上，否则日志/界面上看不到失败原因。
+        if (result.error.empty())
+            result.error = "curl code " + std::to_string(static_cast<int>(response.error.code));
         return result;
     }
 

@@ -1,0 +1,30 @@
+<view class="page">
+  <view class="topbar">
+    <text class="crumb">{{name}}</text>
+    <button class="btn btn-ghost topbtn" bindtap="onRefresh">刷新</button>
+    <button class="btn btn-ghost topbtn" bindtap="goSearch">搜索</button>
+    <button class="btn btn-ghost topbtn" bindtap="goHome">首页</button>
+  </view>
+
+  <scroll-view class="scroll" scroll-y="{{true}}" style="height: 100%;">
+    <view wx:for="{{items}}" wx:key="fid"
+          class="row-item"
+          data-fid="{{item.fid}}" data-name="{{item.name}}" data-kind="{{item.kind}}"
+          data-size="{{item.sizeText}}" data-time="{{item.timeText}}"
+          bindtap="onItem">
+      <view class="tag tag-{{item.kind}}"><text class="tag-text">{{item.badge}}</text></view>
+      <text class="fname">{{item.name}}</text>
+      <text class="fmeta">{{item.sizeText}}</text>
+    </view>
+
+    <view wx:if="{{items.length === 0 && !loading}}" class="empty">
+      <text class="hint">{{errMsg || '此目录为空'}}</text>
+    </view>
+
+    <view class="pager" wx:if="{{pages > 1}}">
+      <button class="btn btn-ghost topbtn" bindtap="prevPage">上一页</button>
+      <text class="hint" style="margin-top: 0;">第 {{page}} / {{pages}} 页 · 共 {{total}} 项</text>
+      <button class="btn btn-ghost topbtn" bindtap="nextPage">下一页</button>
+    </view>
+  </scroll-view>
+</view>

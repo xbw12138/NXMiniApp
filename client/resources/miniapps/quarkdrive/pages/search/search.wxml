@@ -1,0 +1,30 @@
+<view class="page">
+  <view class="topbar">
+    <input class="input sinput" placeholder="输入文件名关键词，按确认搜索" value="{{q}}" bindinput="onQuery" bindconfirm="onQuery"/>
+    <button class="btn topbtn" bindtap="onSearch">搜索</button>
+  </view>
+
+  <scroll-view class="scroll" scroll-y="{{true}}" style="height: 100%;">
+    <view wx:if="{{searched && total > 0}}" class="sumline">
+      <text class="hint" style="margin-top: 0;">找到 {{total}} 个结果，显示前 {{items.length}} 个</text>
+    </view>
+
+    <view wx:for="{{items}}" wx:key="fid"
+          class="row-item"
+          data-fid="{{item.fid}}" data-name="{{item.name}}" data-kind="{{item.kind}}"
+          data-size="{{item.sizeText}}" data-time="{{item.timeText}}"
+          bindtap="onItem">
+      <view class="tag tag-{{item.kind}}"><text class="tag-text">{{item.badge}}</text></view>
+      <text class="fname">{{item.name}}</text>
+      <text class="fmeta">{{item.sizeText}}</text>
+    </view>
+
+    <view wx:if="{{searched && items.length === 0}}" class="empty">
+      <text class="hint">{{errMsg || '没有找到相关文件'}}</text>
+    </view>
+
+    <view wx:if="{{!searched}}" class="empty">
+      <text class="hint">输入关键词后按确认开始搜索，支持模糊匹配文件名</text>
+    </view>
+  </scroll-view>
+</view>

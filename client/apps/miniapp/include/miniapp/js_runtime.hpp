@@ -40,7 +40,9 @@ public:
 
     /// 异步网络请求；done 可能在工作线程被调用。
     using HttpDone = std::function<void(bool ok, int status, const std::string& body,
-                                       const std::map<std::string, std::string>& headers)>;
+                                       const std::map<std::string, std::string>& headers,
+                                       const std::map<std::string, std::string>& cookies,
+                                       const std::string& error)>;
     virtual void httpRequest(const std::string& method, const std::string& url,
                              const std::map<std::string, std::string>& headers,
                              const std::string& body, HttpDone done) = 0;

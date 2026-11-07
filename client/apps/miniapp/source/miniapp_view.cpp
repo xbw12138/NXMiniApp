@@ -1057,6 +1057,7 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
     if (tag == "image") {
         render->src = attributeText(node, "src", locals);
         render->imageMode = attributeText(node, "mode", locals);
+        render->imageHeaders = attributeText(node, "http-headers", locals);
         if (render->imageMode.empty()) render->imageMode = "scaleToFill";
         render->imageLabel = baseName(render->src);
         if (render->imageLabel.empty()) render->imageLabel = "image";
@@ -1165,6 +1166,7 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
     } else if (tag == "video") {
         render->videoSrc = attributeText(node, "src", locals);
         render->videoPoster = attributeText(node, "poster", locals);
+        render->videoHeaders = attributeText(node, "http-headers", locals);
         render->videoObjectFit = attributeText(node, "object-fit", locals);
         if (render->videoObjectFit.empty()) {
             render->videoObjectFit = attributeText(node, "objectFit", locals);
@@ -1438,7 +1440,8 @@ void MiniappView::drawTextBlock(NVGcontext* vg, const RenderNode& node, float x,
     }
 }
 
-int MiniappView::imageTexture(const std::string& src, const std::string& pageDir) {
+int MiniappView::imageTexture(const std::string& src, const std::string& pageDir,
+                              const std::string& headers) {
     if (src.empty()) return -1;
     constexpr int kMissingLocal = -2;
 
@@ -1497,7 +1500,7 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
             brls::Logger::warning("miniapp: cached image decode failed {}", key);
         }
         // 远程图先返回占位，下载完成后再绘制。
-        if (pendingImages.insert(key).second) requestRemoteImage(key);
+        if (pendingImages.insert(key).second) requestRemoteImage(key, headers);
         return -1;
     }
 
@@ -1511,11 +1514,22 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
     return texture;
 }
 
-void MiniappView::requestRemoteImage(const std::string& url) {
+void MiniappView::requestRemoteImage(const std::string& url, const std::string& headers) {
     // 走 nxkit 现成的异步请求路径（wx.request 也用它），避免自建线程。
     std::weak_ptr<bool> weak = aliveToken;
     nxkit::HttpClient client;
     client.setTimeout(15000);
+    if (!headers.empty()) {
+        // 约定格式："Cookie: a=b; c=d"，只取第一个冒号前的头名。
+        size_t colon = headers.find(':');
+        if (colon != std::string::npos) {
+            std::string name = headers.substr(0, colon);
+            std::string value = headers.substr(colon + 1);
+            while (!name.empty() && name.front() == ' ') name.erase(name.begin());
+            while (!value.empty() && value.front() == ' ') value.erase(value.begin());
+            if (!name.empty()) client.setHeader(name, value);
+        }
+    }
     client.getAsync(url, {}, [this, url, weak](const nxkit::HttpResult& result) {
         if (!result.ok || result.body.empty()) {
             brls::sync([this, url, weak] {
@@ -1557,7 +1571,8 @@ std::string MiniappView::resolveLocalPath(const std::string& src, const std::str
 }
 
 void MiniappView::drawImage(NVGcontext* vg, RenderNode& node, float alpha) {
-    int texture = imageTexture(node.src, current ? current->dir : packageDir);
+    int texture = imageTexture(node.src, current ? current->dir : packageDir,
+                               node.imageHeaders);
     if (texture <= 0) {
         if (!node.style.hasBackground) {
             nvgBeginPath(vg);
@@ -1989,6 +2004,47 @@ void MiniappView::drawSwiper(NVGcontext* vg, RenderNode& node, float alpha,
 }
 
 void MiniappView::drawFocusRing(NVGcontext* vg, const RenderNode& node) {
+    // 焦点框要跟随最近的滚动/裁剪祖先一起裁剪，否则列表滚动后卡片被裁掉，
+    // 焦点框却会画到列表外的上方区域（表现为压在横幅或资讯上）。
+    // 焦点框比卡片外扩 3px、描边 3px，最多伸出卡片 6px。剪裁区要按这个外扩量
+    // 放大，否则贴着列表边缘的卡片（第一行/最左一列）选中框会被裁掉一圈，
+    // 看起来像被别的东西挡住。
+    constexpr float kRingOverhang = 7.0f;
+    bool hasClip = false;
+    float clipLeft = 0.0f;
+    float clipTop = 0.0f;
+    float clipWidth = 0.0f;
+    float clipHeight = 0.0f;
+    for (const RenderNode* parent = node.parent; parent; parent = parent->parent) {
+        if (!parent->isScrollView() && !parent->style.overflowHidden) continue;
+        float left = parent->absLeft - kRingOverhang;
+        float top = parent->absTop - kRingOverhang;
+        float right = parent->absLeft + parent->absWidth + kRingOverhang;
+        float bottom = parent->absTop + parent->absHeight + kRingOverhang;
+        if (!hasClip) {
+            clipLeft = left;
+            clipTop = top;
+            clipWidth = right - left;
+            clipHeight = bottom - top;
+            hasClip = true;
+        } else {
+            float mergedLeft = std::max(clipLeft, left);
+            float mergedTop = std::max(clipTop, top);
+            float mergedRight = std::min(clipLeft + clipWidth, right);
+            float mergedBottom = std::min(clipTop + clipHeight, bottom);
+            clipLeft = mergedLeft;
+            clipTop = mergedTop;
+            clipWidth = std::max(0.0f, mergedRight - mergedLeft);
+            clipHeight = std::max(0.0f, mergedBottom - mergedTop);
+        }
+    }
+    if (hasClip && (clipWidth <= 0.0f || clipHeight <= 0.0f)) return;
+
+    if (hasClip) {
+        nvgSave(vg);
+        nvgScissor(vg, clipLeft, clipTop, clipWidth, clipHeight);
+    }
+
     float radius = clampRadius(node.style.borderRadius + 4.0f, node.absWidth, node.absHeight);
     nvgBeginPath(vg);
     nvgRoundedRect(vg, node.absLeft - 3.0f, node.absTop - 3.0f,
@@ -2003,6 +2059,8 @@ void MiniappView::drawFocusRing(NVGcontext* vg, const RenderNode& node) {
     nvgStrokeColor(vg, toColor(kAccent));
     nvgStrokeWidth(vg, 3.0f);
     nvgStroke(vg);
+
+    if (hasClip) nvgRestore(vg);
 }
 
 void MiniappView::drawOverlays(NVGcontext* vg, float width, float height) {
@@ -2303,7 +2361,9 @@ void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
         return;
     }
 
-    std::string resolved = resolveLocalPath(node->videoSrc, current->dir);
+    const bool remote =
+        node->videoSrc.rfind("http://", 0) == 0 || node->videoSrc.rfind("https://", 0) == 0;
+    std::string resolved = remote ? node->videoSrc : resolveLocalPath(node->videoSrc, current->dir);
     activeVideoPath = node->path;
 
     auto& player = nxkit::VideoView::instance();
@@ -2319,7 +2379,9 @@ void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
 
     std::string& loaded = current->videoLoadedSrc[node->path];
     if (forceLoad || loaded != resolved) {
-        player.setUrl(resolved);
+        // 需要鉴权的直链（如夸克转码后的 m3u8）必须带上 Cookie，否则 CDN 返回 412。
+        // http-header-fields 走 mpv 全局 set（见 VideoView::setUrl）。
+        player.setUrl(resolved, node->videoHeaders);
         loaded = resolved;
         activeVideoSrc = resolved;
     }
@@ -2541,14 +2603,13 @@ RenderNode* MiniappView::firstFocusable() const {
 
 void MiniappView::ensureVisible(RenderNode* node) {
     if (!node || !current) return;
-    RenderNode* child = node;
+    // 必须以焦点节点自身的矩形计算滚动目标。之前把目标退化成「最近的非滚动祖先」，
+    // 推荐区的 app-grid 包住了整列卡片，它总是比视口高，于是永远只能滚到底部，
+    // 焦点回到第一行时卡片不会滚出来（右列最近使用没有外层容器，所以不受影响）。
     for (RenderNode* parent = node->parent; parent; parent = parent->parent) {
-        if (!parent->isScrollView()) {
-            child = parent;
-            continue;
-        }
-        float contentTop = (child->absTop - parent->absTop) + parent->scrollOffset;
-        float contentBottom = contentTop + child->absHeight;
+        if (!parent->isScrollView()) continue;
+        float contentTop = node->absTop - parent->absTop + parent->scrollOffset;
+        float contentBottom = contentTop + node->absHeight;
         float offset = parent->scrollOffset;
         float visibleBottom = offset + parent->absHeight;
         if (contentTop < offset) {
@@ -2560,7 +2621,6 @@ void MiniappView::ensureVisible(RenderNode* node) {
         offset = std::max(0.0f, std::min(offset, maxOffset));
         parent->scrollOffset = offset;
         current->scrollOffsets[parent->path] = offset;
-        child = parent;
     }
 }
 
@@ -2714,9 +2774,12 @@ void MiniappView::httpRequest(const std::string& method, const std::string& url,
         target = MiniAppApi::instance().serverUrl() + target;
     }
     if (method == "GET" || method == "HEAD") {
-        client.getAsync(target, {}, [done](const nxkit::HttpResult& result) {
+        client.getAsync(target, {}, [done, target](const nxkit::HttpResult& result) {
+            if (!result.ok)
+                brls::Logger::error("miniapp httpRequest GET {} failed: status={} error={}",
+                                    target, static_cast<int>(result.status), result.error);
             done(result.ok, static_cast<int>(result.status), result.body, result.headers,
-                 result.cookies);
+                 result.cookies, result.error);
         });
     } else {
         nlohmann::json payload = nlohmann::json::object();
@@ -2727,9 +2790,12 @@ void MiniappView::httpRequest(const std::string& method, const std::string& url,
                 payload = body;
             }
         }
-        client.postJsonAsync(target, {}, payload, [done](const nxkit::HttpResult& result) {
+        client.postJsonAsync(target, {}, payload, [done, target](const nxkit::HttpResult& result) {
+            if (!result.ok)
+                brls::Logger::error("miniapp httpRequest POST {} failed: status={} error={}",
+                                    target, static_cast<int>(result.status), result.error);
             done(result.ok, static_cast<int>(result.status), result.body, result.headers,
-                 result.cookies);
+                 result.cookies, result.error);
         });
     }
 }
@@ -2844,44 +2910,65 @@ void rememberMiniApp(const std::string& id, const std::string& title) {
 bool MiniappView::launchMiniApp(const std::string& id, const std::string& title) {
     if (id.empty()) return false;
 
-    if (packages::installed(id, "")) {
-        // 调用方（首页卡片）通常知道应用名；没有时沿用已有的缓存标题。
-        std::string name = title;
-        if (name.empty()) {
-            name = nxkit::Config::instance().getString("miniapp.title." + id, "");
-        }
-        rememberMiniApp(id, name);
-        brls::Application::pushActivity(new MiniappActivity(packages::directory(id)));
-        return true;
-    }
-
-    // 未安装时先按商店目录查版本，下载安装后再进入。
+    // 先按商店目录校验版本：有更新（或未安装）则下载安装后进入；
+    // 商店不可达但本地有包时退回本地版本，保证离线可用。
     std::weak_ptr<bool> weak = aliveToken;
-    MiniAppApi::instance().fetchList([weak, id](const std::vector<MiniAppItem>& list,
-                                                const std::string& error) {
-        if (!error.empty()) return;
-        for (const auto& candidate : list) {
-            if (candidate.id != id) continue;
-            MiniAppApi::instance().download(
-                id, [weak, candidate](const std::string& archive, const std::string& error) {
-                    brls::sync([weak, candidate, archive, error] {
-                        auto token = weak.lock();
-                        if (!token || !*token) return;
-                        if (!error.empty() || archive.empty()) return;
-                        std::string installError;
-                        if (!packages::install(candidate.id, candidate.version, archive,
-                                               installError)) {
-                            brls::Logger::warning("miniapp: install {} failed: {}", candidate.id,
-                                                  installError);
-                            return;
-                        }
-                        rememberMiniApp(candidate.id, candidate.title);
-                        brls::Application::pushActivity(
-                            new MiniappActivity(packages::directory(candidate.id)));
-                    });
-                });
+    MiniAppApi::instance().fetchList([weak, id, title](const std::vector<MiniAppItem>& list,
+                                                       const std::string& error) {
+        const MiniAppItem* latest = nullptr;
+        if (error.empty()) {
+            for (const auto& candidate : list) {
+                if (candidate.id == id) {
+                    latest = &candidate;
+                    break;
+                }
+            }
+        }
+
+        // 本地包已是最新（或拿不到商店数据但本地有包）：直接进入。
+        if (!latest || packages::installed(id, latest->version)) {
+            if (!packages::installed(id, "")) return;
+            brls::sync([weak, id, title] {
+                auto token = weak.lock();
+                if (!token || !*token) return;
+                // 调用方（首页卡片）通常知道应用名；没有时沿用已有的缓存标题。
+                std::string name = title;
+                if (name.empty()) {
+                    name = nxkit::Config::instance().getString("miniapp.title." + id, "");
+                }
+                rememberMiniApp(id, name);
+                brls::Application::pushActivity(new MiniappActivity(packages::directory(id)));
+            });
             return;
         }
+
+        MiniAppItem item = *latest;
+        brls::sync([item] {
+            brls::Application::notify("正在下载 " + item.title);
+        });
+        MiniAppApi::instance().download(
+            id, [weak, item](const std::string& archive, const std::string& dlError) {
+                brls::sync([weak, item, archive, dlError] {
+                    auto token = weak.lock();
+                    if (!token || !*token) return;
+                    std::string installError;
+                    if (!dlError.empty() || archive.empty() ||
+                        !packages::install(item.id, item.version, archive, installError)) {
+                        brls::Logger::warning("miniapp: install {} failed: {}", item.id,
+                                              dlError.empty() ? installError : dlError);
+                        // 更新下载失败时若本地有旧版本，仍进入旧版本。
+                        if (!packages::installed(item.id, "")) return;
+                        brls::Application::notify("更新失败，进入旧版本");
+                        rememberMiniApp(item.id, item.title);
+                        brls::Application::pushActivity(
+                            new MiniappActivity(packages::directory(item.id)));
+                        return;
+                    }
+                    rememberMiniApp(item.id, item.title);
+                    brls::Application::pushActivity(
+                        new MiniappActivity(packages::directory(item.id)));
+                });
+            });
     });
     return true;
 }
@@ -2924,7 +3011,7 @@ JsonValue MiniappView::systemInfo() {
     info.setMember("pixelRatio", JsonValue::number(1.0));
     info.setMember("statusBarHeight", JsonValue::number(0.0));
     info.setMember("language", JsonValue::string("zh_CN"));
-    info.setMember("version", JsonValue::string("1.0.0"));
+    info.setMember("version", JsonValue::string("1.1.2"));
     return info;
 }
 

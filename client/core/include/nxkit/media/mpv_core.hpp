@@ -78,10 +78,16 @@ public:
     double getDouble(const std::string& key);
     int64_t getInt(const std::string& key);
 
-    /// Loads a url, `extra` holds additional per-file mpv options
-    /// (e.g. "http-header-fields=..."), see the mpv manual.
+    /// Loads a url, `extra` holds additional per-file mpv options, see the mpv manual.
+    /// Note: `http-header-fields` does NOT work as a per-file option (mpv parses the
+    /// options string as option=value pairs and mangles the header value); use
+    /// setHttpHeaders() before setUrl() instead.
     void setUrl(const std::string& url, const std::string& extra = "",
                 const std::string& method = "replace");
+
+    /// Sets the global `http-header-fields` property for subsequent loads.
+    /// Pass an empty string to clear.
+    void setHttpHeaders(const std::string& headers);
 
     void setVolume(int64_t value);
     void resume();

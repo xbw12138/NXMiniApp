@@ -1,0 +1,125 @@
+/* 夸克网盘 · 全局样式（与启动器一致的深色主题） */
+.page {
+  background-color: #141518;
+  color: #f0f1f3;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 20rpx;
+}
+
+.scroll {
+  flex: 1;
+  height: 100%;
+}
+
+.hero {
+  align-items: center;
+  padding: 30rpx 0 6rpx;
+}
+
+.logo {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 28rpx;
+}
+
+.app-title {
+  font-size: 44rpx;
+  font-weight: bold;
+  margin-top: 16rpx;
+}
+
+.app-sub {
+  font-size: 24rpx;
+  color: #8b949e;
+  margin-top: 8rpx;
+}
+
+.card {
+  background-color: #1c1e22;
+  border-radius: 18rpx;
+  padding: 26rpx;
+  margin: 18rpx 10rpx;
+}
+
+.card-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #9aa1ab;
+  margin-bottom: 16rpx;
+}
+
+.row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.btns {
+  margin-top: 18rpx;
+}
+
+.btn {
+  height: 64rpx;
+  padding: 0 28rpx;
+  margin-right: 14rpx;
+  border-radius: 14rpx;
+  background-color: #0fdc78;
+  color: #07130d;
+  font-size: 24rpx;
+  font-weight: bold;
+}
+
+.btn-ghost {
+  background-color: #2a2d33;
+  color: #e8eaee;
+}
+
+.btn-on {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+.hint {
+  font-size: 23rpx;
+  color: #8b949e;
+  margin-top: 8rpx;
+}
+
+.error {
+  font-size: 23rpx;
+  color: #ff6b6b;
+  margin-top: 12rpx;
+}
+
+.input {
+  height: 72rpx;
+  background-color: #25282e;
+  border-radius: 12rpx;
+  padding: 0 18rpx;
+  color: #eef0f3;
+  font-size: 24rpx;
+  margin-top: 16rpx;
+}
+
+.tag {
+  width: 110rpx;
+  height: 44rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8rpx;
+  margin-right: 14rpx;
+  flex-shrink: 0;
+}
+
+.tag-text {
+  font-size: 20rpx;
+  color: #ffffff;
+}
+
+.tag-dir { background-color: #2563eb; }
+.tag-video { background-color: #16a34a; }
+.tag-audio { background-color: #9333ea; }
+.tag-image { background-color: #d97706; }
+.tag-doc { background-color: #0891b2; }
+.tag-file { background-color: #4b5563; }

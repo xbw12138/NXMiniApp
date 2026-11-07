@@ -715,6 +715,10 @@ void MPVCore::setUrl(const std::string& url, const std::string& extra,
     }
 }
 
+void MPVCore::setHttpHeaders(const std::string& headers) {
+    command_async("set", "http-header-fields", headers);
+}
+
 void MPVCore::setVolume(int64_t value) {
     if (value < 0 || value > 100) return;
     command_async("set", "volume", value);
@@ -781,7 +785,11 @@ void MPVCore::_command_async(const std::vector<std::string>& commands) {
         res.emplace_back(i.c_str());
     }
     res.emplace_back(nullptr);
-    mpv_command_async(mpv, 0, res.data());
+    int ret = mpv_command_async(mpv, 0, res.data());
+    if (ret < 0) {
+        brls::Logger::error("mpv_command_async failed: {} (cmd={})",
+                            mpv_error_string(ret), commands.empty() ? "" : commands[0]);
+    }
 }
 
 }  // namespace nxkit

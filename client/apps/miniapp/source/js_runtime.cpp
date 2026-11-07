@@ -768,9 +768,12 @@ struct RuntimeBridge {
             method, url, headers, body,
             [runtime, weak, successDup, failDup, completeDup](
                 bool requestOk, int status, const std::string& responseBody,
-                const std::map<std::string, std::string>& responseHeaders) {
+                const std::map<std::string, std::string>& responseHeaders,
+                const std::map<std::string, std::string>& responseCookies,
+                const std::string& responseError) {
                 brls::sync([runtime, weak, successDup, failDup, completeDup, requestOk,
-                            status, responseBody, responseHeaders]() {
+                            status, responseBody, responseHeaders, responseCookies,
+                            responseError]() {
                     auto token = weak.lock();
                     if (!token || !*token || !runtime->context) return;
                     JSContext* ctx = runtime->context;
@@ -791,13 +794,16 @@ struct RuntimeBridge {
                     JS_SetPropertyStr(ctx, result, "data", responseData);
                     JS_SetPropertyStr(ctx, result, "header",
                                       makeStringMap(ctx, responseHeaders));
-                    JS_SetPropertyStr(ctx, result, "cookies", JS_NewObject(ctx));
+                    JS_SetPropertyStr(ctx, result, "cookies",
+                                      makeStringMap(ctx, responseCookies));
                     if (requestOk) {
                         invoke(runtime, successDup, runtime->page, 1, &result);
                     } else {
+                        std::string errMsg = "request:fail";
+                        if (!responseError.empty()) errMsg += " " + responseError;
                         JSValue failed = JS_NewObject(ctx);
                         JS_SetPropertyStr(ctx, failed, "errMsg",
-                                          JS_NewString(ctx, "request:fail"));
+                                          JS_NewString(ctx, errMsg.c_str()));
                         invoke(runtime, failDup, runtime->page, 1, &failed);
                         JS_FreeValue(ctx, failed);
                     }

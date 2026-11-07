@@ -1,0 +1,21 @@
+<view class="page">
+  <video id="player" class="player" src="{{videoSrc}}" http-headers="{{headers}}" controls="{{true}}" autoplay="{{false}}"
+         object-fit="contain"
+         bindplay="onPlay" bindpause="onPause" bindended="onEnded" binderror="onError"/>
+
+  <view class="panel">
+    <text class="pname">{{name}}</text>
+    <text wx:if="{{statusText}}" class="error">{{statusText}}</text>
+
+    <view class="row btns">
+      <button wx:for="{{sources}}" wx:key="url"
+              class="btn btn-res {{current === item.label && mode === 'transcode' ? 'btn-on' : 'btn-ghost'}}"
+              data-url="{{item.url}}" data-label="{{item.label}}"
+              bindtap="onPickSource">{{item.label}}</button>
+      <button class="btn {{mode === 'direct' ? 'btn-on' : 'btn-ghost'}}" bindtap="useDirect">原始文件</button>
+      <button class="btn btn-ghost" bindtap="onToggle">{{playing ? '暂停' : '播放'}}</button>
+    </view>
+
+    <text class="hint">当前：{{current || '加载中'}}{{mode === 'direct' ? '（原始文件直连）' : '（转码流）'}} · 点击画面或按 A 播放/暂停 · B 返回</text>
+  </view>
+</view>

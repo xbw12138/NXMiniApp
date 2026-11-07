@@ -49,7 +49,9 @@ public:
     ~VideoView();
 
     /// Load a new media url. Passing an empty url is a no-op.
-    void setUrl(const std::string& url);
+    /// `headers` is set as mpv's `http-header-fields` before loading (e.g.
+    /// "Cookie: a=b; c=d"). Pass empty to clear.
+    void setUrl(const std::string& url, const std::string& headers = "");
     /// Resume playback (no-op if nothing loaded).
     void resume();
     /// Pause playback.

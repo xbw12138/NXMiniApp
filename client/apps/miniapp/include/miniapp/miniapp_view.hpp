@@ -205,8 +205,9 @@ private:
                             const std::string& type);
     void saveStorage();
     void loadStorage();
-    int imageTexture(const std::string& src, const std::string& pageDir);
-    void requestRemoteImage(const std::string& url);
+    int imageTexture(const std::string& src, const std::string& pageDir,
+                     const std::string& headers = std::string());
+    void requestRemoteImage(const std::string& url, const std::string& headers);
     std::string resolveLocalPath(const std::string& src, const std::string& pageDir);
 
     std::string packagePathOverride;

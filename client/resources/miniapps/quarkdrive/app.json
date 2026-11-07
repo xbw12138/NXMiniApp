@@ -1,0 +1,13 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/list/list",
+    "pages/search/search",
+    "pages/play/play",
+    "pages/image/image"
+  ],
+  "window": {
+    "backgroundColor": "#141518",
+    "navigationBarTitleText": "夸克网盘"
+  }
+}

@@ -1,0 +1,75 @@
+<view class="page">
+  <scroll-view class="scroll" scroll-y="{{true}}" style="height: 100%;">
+    <view class="hero">
+      <image class="logo" src="/images/logo.png" mode="aspectFit"/>
+      <text class="app-title">夸克网盘</text>
+      <text class="app-sub">在 Switch / 桌面上浏览与播放你的夸克云盘</text>
+    </view>
+
+    <view wx:if="{{checking}}" class="card">
+      <text class="card-title">正在检查登录状态…</text>
+    </view>
+
+    <view wx:elif="{{logged}}">
+      <view class="card">
+        <view class="row">
+          <icon type="success" size="40"/>
+          <text class="card-title" style="margin-bottom: 0; margin-left: 12rpx;">已登录：{{nickname}}</text>
+        </view>
+        <view class="row btns">
+          <button class="btn" bindtap="goList">进入网盘</button>
+          <button class="btn" bindtap="goSearch">搜索文件</button>
+          <button class="btn btn-ghost" bindtap="onLogout">退出登录</button>
+        </view>
+      </view>
+      <view class="card">
+        <text class="card-title">使用提示</text>
+        <text class="hint">A 确认 / B 返回；目录逐层进入，视频文件点击进入播放页。</text>
+        <text class="hint">播放默认使用转码流（m3u8），失败时自动尝试「原始文件直连」。</text>
+        <text class="hint">其他类型文件可获取下载链接并复制到剪贴板。</text>
+      </view>
+    </view>
+
+    <view wx:else>
+      <view class="card">
+        <text class="card-title">扫码登录</text>
+        <view class="qr-area">
+          <view wx:if="{{qrState === 'ready'}}" class="qr-box">
+            <view style="width: {{qrSize}}rpx; height: {{qrSize}}rpx;">
+              <view class="qr-row" wx:for="{{qrRows}}" wx:key="index" style="height: {{qrMod}}rpx;">
+                <view class="qr-black" wx:for="{{item}}" wx:for-item="run" wx:key="index" style="margin-left: {{run.g}}rpx; width: {{run.w}}rpx; height: {{qrMod}}rpx;"></view>
+              </view>
+            </view>
+          </view>
+          <view wx:elif="{{qrState === 'loading'}}" class="qr-box qr-placeholder">
+            <text class="qr-tip">{{qrStatus}}</text>
+          </view>
+          <view wx:else class="qr-box qr-placeholder">
+            <text class="qr-tip qr-tip-err">{{qrStatus}}</text>
+            <button class="btn" bindtap="onRefreshQr">刷新二维码</button>
+          </view>
+        </view>
+        <text wx:if="{{qrState === 'ready'}}" class="qr-status">{{qrStatus}}，二维码约 2 分钟内有效</text>
+        <text class="hint">打开夸克 App → 右上角「扫一扫」，确认后即可登录</text>
+        <view class="row btns">
+          <button class="btn btn-ghost" bindtap="onToggleCookie">{{showCookie ? '收起 Cookie 登录' : '使用 Cookie 登录'}}</button>
+        </view>
+        <view wx:if="{{showCookie}}">
+          <text class="hint">1. 在电脑浏览器打开 pan.quark.cn 并登录夸克网盘</text>
+          <text class="hint">2. 按 F12 打开开发者工具，切到 Network，刷新页面后选中任意请求</text>
+          <text class="hint">3. 复制请求头中的 Cookie 值，粘贴到下方输入框后按确认</text>
+          <input class="input" placeholder="粘贴 Cookie 后按确认" value="{{cookieInput}}" bindinput="onCookie" bindconfirm="onCookie"/>
+          <view class="row btns">
+            <button class="btn" bindtap="onLogin">保存并登录</button>
+          </view>
+          <text wx:if="{{errMsg}}" class="error">{{errMsg}}</text>
+        </view>
+      </view>
+      <view class="card">
+        <text class="card-title">说明</text>
+        <text class="hint">Cookie 仅保存在本机小程序缓存中，不会上传到任何第三方服务器。</text>
+        <text class="hint">登录状态过期后重新扫码或粘贴 Cookie 即可。</text>
+      </view>
+    </view>
+  </scroll-view>
+</view>

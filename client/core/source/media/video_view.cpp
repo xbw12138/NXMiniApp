@@ -20,16 +20,20 @@ VideoView::~VideoView() {
 #endif
 }
 
-void VideoView::setUrl(const std::string& url) {
+void VideoView::setUrl(const std::string& url, const std::string& headers) {
     currentUrl = url;
 #ifdef NXKIT_WITH_MPV
     if (url.empty()) return;
     state = VideoState{};
     state.loading = true;
     fireState();
+    // http-header-fields 必须通过全局 set 设置，不能走 loadfile 的 per-file 选项
+    // （mpv 会把选项串按 option=value 解析，破坏 Cookie 等含 =/; 的值）。
+    MPVCore::instance().setHttpHeaders(headers);
     MPVCore::instance().setUrl(url);
 #else
     (void)url;
+    (void)headers;
     state = VideoState{};
     state.error = true;
     state.errorText = "当前构建未启用视频播放";

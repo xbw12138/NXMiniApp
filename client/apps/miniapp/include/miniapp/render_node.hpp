@@ -33,6 +33,8 @@ struct RenderNode {
     // 组件状态
     std::string src;       // image
     std::string imageMode; // image
+    // 远程图需要的附加请求头，如 "Cookie: a=b"（鉴权直链预览用）。
+    std::string imageHeaders;
     std::string value;     // input / slider
     std::string placeholder;
     std::string navUrl;    // navigator
@@ -54,6 +56,8 @@ struct RenderNode {
     // video
     std::string videoSrc;
     std::string videoPoster;
+    // 形如 "Cookie: a=b; c=d" 的附加请求头，用于需要鉴权的直链（交给 mpv）。
+    std::string videoHeaders;
     std::string videoObjectFit = "contain";
     bool videoAutoplay = false;
     bool videoLoop = false;

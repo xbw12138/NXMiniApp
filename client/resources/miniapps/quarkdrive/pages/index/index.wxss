@@ -1,0 +1,43 @@
+/* index 页面样式（全局样式已覆盖大部分） */
+
+.qr-area {
+  align-items: center;
+  margin-top: 10rpx;
+}
+
+.qr-box {
+  background-color: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+}
+
+.qr-row {
+  flex-direction: row;
+}
+
+.qr-black {
+  background-color: #000000;
+}
+
+.qr-placeholder {
+  width: 468rpx;
+  height: 468rpx;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-tip {
+  font-size: 24rpx;
+  color: #444444;
+  margin-bottom: 12rpx;
+}
+
+.qr-tip-err {
+  color: #d03050;
+}
+
+.qr-status {
+  font-size: 24rpx;
+  color: #0fdc78;
+  margin-top: 14rpx;
+}
