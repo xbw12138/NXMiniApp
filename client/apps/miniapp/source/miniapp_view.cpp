@@ -33,6 +33,10 @@
 #include <utility>
 #include <vector>
 
+#ifdef __SWITCH__
+#include <malloc.h>
+#endif
+
 #include "miniapp/api/miniapp_api.hpp"
 #include "miniapp/install/package_manager.hpp"
 #include "miniapp/js_runtime.hpp"
@@ -231,6 +235,15 @@ std::string imageCachePath(const std::string& url) {
     std::snprintf(name, sizeof(name), "%016llx.img",
                   static_cast<unsigned long long>(hash));
     return imageCacheDir() + "/" + name;
+}
+
+// 诊断：解码前的堆余量（MB），排查真机解码 OOM 崩溃。
+int heapFreeMB() {
+#ifdef __SWITCH__
+    return static_cast<int>(mallinfo().fordblks / 1048576);
+#else
+    return -1;
+#endif
 }
 
 std::shared_ptr<std::string> readImageCache(const std::string& url) {
@@ -1495,6 +1508,8 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
         std::shared_ptr<std::string> cached = readImageCache(key);
         if (cached) {
             NVGcontext* vg = brls::Application::getNVGContext();
+            brls::Logger::info("miniapp: decode cached image {} ({} bytes, heapFree={}MB)",
+                               key, cached->size(), heapFreeMB());
             int texture =
                 nvgCreateImageMem(vg, 0,
                                   reinterpret_cast<unsigned char*>(cached->data()),
@@ -1504,6 +1519,9 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
                 return texture;
             }
             brls::Logger::warning("miniapp: cached image decode failed {}", key);
+            // 解码失败不再逐帧重试（否则每帧读盘 + 反复 malloc，直接把堆打干）。
+            imageTextures[key] = -1;
+            return -1;
         }
         // 远程图先返回占位，下载完成后再绘制。
         if (pendingImages.insert(key).second) requestRemoteImage(key, headers);

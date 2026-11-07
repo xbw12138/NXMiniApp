@@ -64,7 +64,9 @@ void VideoView::pause() {
 
 void VideoView::stop() {
 #ifdef NXKIT_WITH_MPV
-    mpv().stop();
+    // 未初始化过 MPV 时不要在这里触发初始化：退出流程也会调 stop()，
+    // 为了停止一个从没播放过的视频而去初始化 mpv 会白吃一大块内存。
+    if (registered) mpv().stop();
 #endif
     state.ended = false;
     state.playing = false;

@@ -71,8 +71,9 @@ int main(int, char**) {
         svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
         svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0);
         struct mallinfo mi = mallinfo();
-        brls::Logger::info("miniapp: mem total={}MB used={}MB heapUsed={}MB",
-                           total / 1048576, used / 1048576, mi.uordblks / 1048576);
+        brls::Logger::info("miniapp: mem total={}MB used={}MB heap arena={}MB used={}MB free={}MB",
+                           total / 1048576, used / 1048576, mi.arena / 1048576,
+                           mi.uordblks / 1048576, mi.fordblks / 1048576);
     }
 #endif
     nxkit::AppConfig config;
