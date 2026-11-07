@@ -58,7 +58,7 @@ void VideoView::resume() {
 
 void VideoView::pause() {
 #ifdef NXKIT_WITH_MPV
-    mpv().pause();
+    if (registered) mpv().pause();
 #endif
 }
 
@@ -130,7 +130,9 @@ void VideoView::setLoop(bool loop) {
 
 bool VideoView::isValid() const {
 #ifdef NXKIT_WITH_MPV
-    return registered && MPVCore::instance().isValid();
+    // MPV 是懒初始化的，播放前 registered 仍为 false，但构建本身支持播放。
+    // 只有初始化过且确实没拿到 mpv 上下文，才算不可用。
+    return !registered || MPVCore::instance().isValid();
 #else
     return false;
 #endif
@@ -148,7 +150,8 @@ double VideoView::getDuration() const { return state.duration; }
 
 void VideoView::draw(brls::Rect rect, float alpha) {
 #ifdef NXKIT_WITH_MPV
-    mpv().draw(rect, alpha);
+    // 从未播放过视频时不要为了画空白区域而初始化 MPV。
+    if (registered) mpv().draw(rect, alpha);
 #else
     (void)rect;
     (void)alpha;
