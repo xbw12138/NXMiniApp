@@ -32,11 +32,11 @@ async function request(path, { method = 'GET', json, form } = {}) {
   } else if (form !== undefined) {
     body = form
   }
-  const resp = await fetch(path, { method, headers, body })
-  if (resp.status === 401) {
+  const resp = await fetch(path, { method, headers, body, credentials: 'same-origin' })
+  const isLogin = path.startsWith('/api/v1/admin/login')
+  if (resp.status === 401 && !isLogin) {
     setToken('')
     window.dispatchEvent(new CustomEvent('nxkit-unauthorized'))
-    throw new ApiError('管理令牌无效', 401)
   }
   let data = null
   const text = await resp.text()

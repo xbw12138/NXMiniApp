@@ -9,9 +9,13 @@ import (
 type Config struct {
 	DataDir    string
 	AdminToken string
-	DBDSN      string
-	SeedDir    string
-	DocsDir    string
+	// 后台登录：密码 + TOTP 两步。为空时只保留 token 登录（兼容旧部署）。
+	AdminUser         string
+	AdminPasswordHash string
+	AdminTOTPSecret   string
+	DBDSN             string
+	SeedDir           string
+	DocsDir           string
 }
 
 func getenv(key, fallback string) string {
@@ -24,8 +28,11 @@ func getenv(key, fallback string) string {
 // Load reads the configuration from the process environment.
 func Load() Config {
 	return Config{
-		DataDir:    getenv("NXKIT_DATA_DIR", "/data"),
-		AdminToken: getenv("NXKIT_ADMIN_TOKEN", "nxkit-store-admin"),
+		DataDir:           getenv("NXKIT_DATA_DIR", "/data"),
+		AdminToken:        getenv("NXKIT_ADMIN_TOKEN", "nxkit-store-admin"),
+		AdminUser:         getenv("NXKIT_ADMIN_USER", "admin"),
+		AdminPasswordHash: getenv("NXKIT_ADMIN_PASSWORD_HASH", ""),
+		AdminTOTPSecret:   getenv("NXKIT_ADMIN_TOTP_SECRET", ""),
 		DBDSN: getenv("DB_DSN",
 			"nxkit:nxkit@tcp(127.0.0.1:3306)/nxkit_store?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci"),
 		SeedDir: getenv("NXKIT_SEED_DIR", "/seed/miniapps"),

@@ -24,6 +24,10 @@ services:
       DB_DSN: nxkit:nxkit@tcp(mysql:3306)/nxkit_store?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci
       # 线上 token 由部署机的 .env 提供（.env 已 gitignore）；缺失时直接报错，避免回落到弱默认值。
       NXKIT_ADMIN_TOKEN: ${NXKIT_ADMIN_TOKEN:?请在 .env 中设置 NXKIT_ADMIN_TOKEN}
+      # 后台登录（密码 + TOTP）。未设置哈希/密钥时只保留 token 登录。
+      NXKIT_ADMIN_USER: ${NXKIT_ADMIN_USER:-admin}
+      NXKIT_ADMIN_PASSWORD_HASH: ${NXKIT_ADMIN_PASSWORD_HASH:-}
+      NXKIT_ADMIN_TOTP_SECRET: ${NXKIT_ADMIN_TOTP_SECRET:-}
       NXKIT_DATA_DIR: /data
     volumes:
       - server-data:/data

@@ -31,7 +31,7 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { getToken, setToken } from './api'
+import { api, getToken, setToken } from './api'
 import LoginView from './components/LoginView.vue'
 import OverviewTab from './components/OverviewTab.vue'
 import MiniAppsTab from './components/MiniAppsTab.vue'
@@ -48,13 +48,18 @@ const tabs = [
 ]
 
 const tab = ref('overview')
-const authed = ref(!!getToken())
+const authed = ref(false)
 
 function onLogin() {
   authed.value = true
 }
 
-function logout() {
+async function logout() {
+  try {
+    await api.post('/api/v1/admin/logout')
+  } catch (err) {
+    // 会话可能已过期，忽略
+  }
   setToken('')
   authed.value = false
 }
@@ -63,6 +68,19 @@ function onUnauthorized() {
   authed.value = false
 }
 
-onMounted(() => window.addEventListener('nxkit-unauthorized', onUnauthorized))
+onMounted(async () => {
+  window.addEventListener('nxkit-unauthorized', onUnauthorized)
+  // 优先用 Cookie 会话（无需再次输入）；旧 token 仍兼容。
+  if (getToken()) {
+    authed.value = true
+    return
+  }
+  try {
+    await api.get('/api/v1/admin/session')
+    authed.value = true
+  } catch (err) {
+    authed.value = false
+  }
+})
 onBeforeUnmount(() => window.removeEventListener('nxkit-unauthorized', onUnauthorized))
 </script>

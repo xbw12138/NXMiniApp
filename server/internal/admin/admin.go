@@ -24,8 +24,12 @@ import (
 func Register(r *gin.Engine, e *api.Env) {
 	g := api.RegisterAdminGroup(r)
 	g.POST("/login", login(e))
+	g.POST("/login/password", passwordLogin(e))
+	g.POST("/login/totp", totpLogin(e))
+	g.POST("/logout", logout)
 
 	auth := g.Group("", authMiddleware(e))
+	auth.GET("/session", sessionStatus)
 	auth.GET("/stats", stats(e))
 	auth.GET("/apps", listApps(e))
 	auth.POST("/apps", createApp(e))
@@ -66,13 +70,18 @@ func Register(r *gin.Engine, e *api.Env) {
 
 func authMiddleware(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 后台页面走 Cookie 会话；脚本与 CI 继续用 Bearer token。
+		if cookieValid(c) {
+			c.Next()
+			return
+		}
 		header := c.GetHeader("Authorization")
 		token := ""
 		if len(header) > 7 && strings.EqualFold(header[:7], "bearer ") {
 			token = header[7:]
 		}
 		if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(e.Cfg.AdminToken)) != 1 {
-			api.Abort(c, http.StatusUnauthorized, "管理令牌无效")
+			api.Abort(c, http.StatusUnauthorized, "未登录或登录已过期")
 			return
 		}
 		c.Next()

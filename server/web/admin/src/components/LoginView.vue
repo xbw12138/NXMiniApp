@@ -3,37 +3,87 @@
     <form class="login-card" @submit.prevent="submit">
       <div class="logo big">NX</div>
       <h1>NX 商店管理后台</h1>
-      <p class="muted">请输入管理令牌以继续</p>
-      <input
-        v-model="token"
-        type="password"
-        placeholder="管理令牌"
-        autocomplete="current-password"
-      />
+
+      <template v-if="step === 'password'">
+        <p class="muted">请输入管理员密码</p>
+        <input v-model="username" type="text" placeholder="用户名" autocomplete="username" />
+        <input
+          v-model="password"
+          type="password"
+          placeholder="密码"
+          autocomplete="current-password"
+        />
+      </template>
+
+      <template v-else>
+        <p class="muted">输入 2FAS / 验证器中的 6 位动态码</p>
+        <input
+          v-model="code"
+          class="code"
+          inputmode="numeric"
+          maxlength="6"
+          placeholder="000000"
+          autocomplete="one-time-code"
+        />
+      </template>
+
       <p v-if="error" class="error">{{ error }}</p>
-      <button class="btn primary block" :disabled="loading || !token.trim()">
-        {{ loading ? '验证中…' : '登录' }}
+      <button class="btn primary block" :disabled="loading || !canSubmit">
+        {{ loading ? '验证中…' : step === 'password' ? '下一步' : '登录' }}
+      </button>
+      <button v-if="step === 'totp'" type="button" class="btn ghost block" @click="reset">
+        重新输入密码
       </button>
     </form>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { api, setToken } from '../api'
+import { computed, ref } from 'vue'
+import { api } from '../api'
 
 const emit = defineEmits(['success'])
-const token = ref('')
+const step = ref('password')
+const username = ref('admin')
+const password = ref('')
+const code = ref('')
+const challenge = ref('')
 const error = ref('')
 const loading = ref(false)
 
+const canSubmit = computed(() => {
+  if (loading.value) return false
+  return step.value === 'password' ? password.value.length > 0 : code.value.trim().length === 6
+})
+
+function reset() {
+  step.value = 'password'
+  password.value = ''
+  code.value = ''
+  challenge.value = ''
+  error.value = ''
+}
+
 async function submit() {
+  if (!canSubmit.value) return
   error.value = ''
   loading.value = true
   try {
-    const data = await api.post('/api/v1/admin/login', { token: token.value })
-    setToken((data && data.token) || token.value)
-    emit('success')
+    if (step.value === 'password') {
+      const data = await api.post('/api/v1/admin/login/password', {
+        username: username.value.trim() || 'admin',
+        password: password.value
+      })
+      challenge.value = data.challenge
+      step.value = 'totp'
+      code.value = ''
+    } else {
+      await api.post('/api/v1/admin/login/totp', {
+        challenge: challenge.value,
+        code: code.value.trim()
+      })
+      emit('success')
+    }
   } catch (err) {
     error.value = err.message || '登录失败'
   } finally {

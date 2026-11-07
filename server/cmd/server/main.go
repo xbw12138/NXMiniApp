@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 
 	"nxminiapp/server/internal/admin"
@@ -12,6 +13,13 @@ import (
 )
 
 func main() {
+	genAdmin := flag.Bool("gen-admin", false, "生成后台登录凭据（密码 + TOTP 密钥）后退出")
+	flag.Parse()
+	if *genAdmin {
+		admin.PrintCredentials()
+		return
+	}
+
 	cfg := config.Load()
 	if err := cfg.EnsureDirs(); err != nil {
 		log.Fatalf("创建数据目录失败: %v", err)
