@@ -155,6 +155,25 @@ cd SwitchTools/mac && ./setup.sh               # 产物 mac/build/swlink-cli
 
 仓库内还带了 `.trae/skills/swlink-cli/SKILL.md`（CLI 用法 skill）与 `docs/使用教程.md`（分步教程与排错表）。
 
+### 连不上 Switch 时先装 sysmodule
+
+USB 通道由 Switch 端的 SwLink sysmodule 提供，**没装它 CLI 报「未找到 Switch 设备 16C0:27DA」，与线缆无关**。现成安装包解压到 SD 卡根目录即可（目录已建好）：
+
+```bash
+curl -LO https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-sysmodule-sd.zip
+unzip swlink-sysmodule-sd.zip -d /Volumes/<SD 卡挂载点>
+```
+
+装完 SD 卡上应存在：
+
+```
+SD:/atmosphere/contents/00FF0000A53B5A57/exefs.nsp
+SD:/atmosphere/contents/00FF0000A53B5A57/toolbox.json
+SD:/atmosphere/contents/00FF0000A53B5A57/flags/boot2.flag   （空文件，开机自启）
+```
+
+重启主机（或 Tesla 菜单 → Sysmodules 启用 SwLink）后重试。仍失败依次排查：数据线是否支持传输、SwLink.app 是否占着 USB、Atmosphere 版本。
+
 **必须先让用户在 Switch 上按 B 完全退出容器**（只按 Home 挂起会锁住文件，报「设备错误 1/3」）。
 
 ```bash
