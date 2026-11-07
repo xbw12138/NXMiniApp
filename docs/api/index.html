@@ -31,13 +31,18 @@
     <table>
       <thead><tr><th>接口</th><th>参数</th><th>回调</th></tr></thead>
       <tbody>
-        <tr><td><code>wx.request</code></td><td><code>url</code>、<code>method</code>（GET/POST/PUT/DELETE）、<code>data</code>、<code>header</code></td><td><code>success({ data, statusCode, header })</code> / <code>fail({ errMsg })</code> / <code>complete()</code></td></tr>
+        <tr><td><code>wx.request</code></td><td><code>url</code>、<code>method</code>（GET/POST/PUT/DELETE）、<code>data</code>、<code>header</code></td><td><code>success({ data, statusCode, header, cookies })</code> / <code>fail({ errMsg })</code> / <code>complete()</code></td></tr>
         <tr><td><code>wx.getNetworkType</code></td><td>—</td><td><code>success({ networkType: "wifi" })</code></td></tr>
       </tbody>
     </table>
     <p>
       GET / HEAD 会把 <code>data</code> 序列化为查询串，其他方法发送 JSON 请求体；
       未显式设置时自动补 <code>Content-Type: application/json</code>。
+      <code>success</code> 回调的 <code>cookies</code> 字段汇总了整条重定向链上的
+      <code>Set-Cookie</code>（键为 cookie 名），可用于登录态透传。
+      <code>fail</code> 回调的 <code>errMsg</code> 形如
+      <code>"request:fail &lt;curl 错误描述或状态码&gt;"</code>，例如
+      <code>request:fail HTTP 401</code>、<code>request:fail curl code 35</code>。
       <code>url</code> 以 <code>/</code> 开头时按商店服务端地址解析，便于首页这类
       “由服务端下发、内容随服务端更新”的小程序直接请求 <code>/api/v1/miniapp-home</code>。
     </p>

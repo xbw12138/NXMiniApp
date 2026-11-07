@@ -70,11 +70,16 @@
 
     <h2 id="image">image / icon</h2>
     <p>
-      <code>image</code> 读取包内路径（以 <code>/</code> 开头）或启动器缓存的本地文件；
+      <code>image</code> 支持三种来源：包内路径（以 <code>/</code> 开头）、
+      启动器缓存的本地文件、以及 <code>http(s)://</code> 远程 URL（下载到缓存后解码）。
       支持 <code>scaleToFill</code>（默认）、<code>aspectFit</code>、<code>aspectFill</code>。
-      远程 URL 暂不下载，会显示占位。
+      远程图可通过 <code>http-headers</code> 附加请求头（如鉴权 Cookie），
+      格式为 <code>"Name: value"</code>（按第一个冒号分隔名值）。
+      解码依赖 NanoVG/stb，目前不支持 webp。
     </p>
-<pre><code>&lt;image src="/images/logo.png" mode="aspectFit" class="logo"/&gt;</code></pre>
+<pre><code>&lt;image src="/images/logo.png" mode="aspectFit" class="logo"/&gt;
+&lt;!-- 远程鉴权图：带 Cookie 头预览 --&gt;
+&lt;image src="{{url}}" http-headers="{{headers}}" mode="aspectFit"/&gt;</code></pre>
     <p>
       <code>icon</code> 为原生绘制：<code>type</code> 可取
       <code>success</code> / <code>info</code> / <code>warn</code> / <code>waiting</code> /
@@ -142,8 +147,11 @@
     <h2 id="video">video</h2>
     <p>
       支持 <code>src</code>、<code>poster</code>、<code>autoplay</code>、<code>loop</code>、
-      <code>muted</code>、<code>controls</code> 与 <code>object-fit</code>（<code>contain</code> /
-      <code>cover</code> / <code>fill</code>）。点击画面或按 A 键播放/暂停，
+      <code>muted</code>、<code>controls</code>、<code>http-headers</code> 与
+      <code>object-fit</code>（<code>contain</code> / <code>cover</code> / <code>fill</code>）。
+      <code>http-headers</code> 会作为 mpv 的 <code>http-header-fields</code> 下发，
+      用于需要鉴权的直链（如带 Cookie 的 m3u8 / 视频直链），格式
+      <code>"Cookie: a=b; c=d"</code>。点击画面或按 A 键播放/暂停，
       底部控制条显示进度、时间与状态。
     </p>
     <p>

@@ -6,6 +6,8 @@
 package docs
 
 import (
+	"archive/zip"
+	"bytes"
 	"errors"
 	"fmt"
 	"html"
@@ -53,6 +55,8 @@ const pageShell = `<!doctype html>
 
   <main class="content">%s
     <footer class="site-foot">
+      <a href="/api/v1/docs/export" title="下载离线文档 zip">下载离线文档</a>
+      <span class="dot">·</span>
       <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">鲁ICP备16004009号-2</a>
     </footer>
   </main>
@@ -138,6 +142,17 @@ func Seed(db *gorm.DB, docsDir string) error {
 
 // Register 挂载文档站公共路由：/docs、/docs/*（assets 静态文件 + 页面渲染）。
 func Register(r *gin.Engine, db *gorm.DB, docsDir string) {
+	// 离线文档导出：打包所有页面 + assets，解压后可直接浏览。
+	r.GET("/api/v1/docs/export", func(c *gin.Context) {
+		data, err := buildZip(db, docsDir, true)
+		if err != nil {
+			abort(c, http.StatusInternalServerError, "导出失败")
+			return
+		}
+		c.Header("Content-Disposition", `attachment; filename="nxminiapp-docs.zip"`)
+		c.Data(http.StatusOK, "application/zip", data)
+	})
+
 	r.GET("/docs", func(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, "/docs/index.html")
 	})
@@ -174,6 +189,60 @@ func Register(r *gin.Engine, db *gorm.DB, docsDir string) {
 
 func render(title, meta, content string) string {
 	return fmt.Sprintf(pageShell, html.EscapeString(title), html.EscapeString(meta), content)
+}
+
+// buildZip 将所有文档页面打包为 zip。
+// offline=true 时把资源路径改为相对路径 assets/ 并把 assets 目录一并打进包，
+// 解压后可直接离线浏览 index.html；
+// offline=false 时输出 seed 格式（资源用 /docs/assets/ 绝对路径），可被 Seed 重新导入。
+func buildZip(db *gorm.DB, docsDir string, offline bool) ([]byte, error) {
+	rows := make([]models.DocPage, 0)
+	if err := db.Order("path").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	buf := &bytes.Buffer{}
+	zw := zip.NewWriter(buf)
+	for _, p := range rows {
+		html := render(p.Title, p.Meta, p.Content)
+		if offline {
+			html = strings.ReplaceAll(html, "/docs/assets/", "assets/")
+		}
+		name := p.Path + pageSuffix
+		fw, err := zw.Create(name)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := fw.Write([]byte(html)); err != nil {
+			return nil, err
+		}
+	}
+	if offline {
+		// 把 assets 目录下的静态资源也打包进来，保证离线可用。
+		assetDir := filepath.Join(docsDir, "assets")
+		filepath.WalkDir(assetDir, func(full string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(docsDir, full)
+			if err != nil {
+				return nil
+			}
+			data, err := os.ReadFile(full)
+			if err != nil {
+				return nil
+			}
+			fw, err := zw.Create(filepath.ToSlash(rel))
+			if err != nil {
+				return nil
+			}
+			_, _ = fw.Write(data)
+			return nil
+		})
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // RegisterAdmin 在已鉴权的 admin 分组上挂载文档管理接口。
@@ -258,6 +327,17 @@ func RegisterAdmin(g *gin.RouterGroup, db *gorm.DB, docsDir string) {
 		})
 		db.Where("path = ?", page.Path).Take(page)
 		writePage(c, page)
+	})
+
+	// 管理员备份导出：输出 seed 格式 HTML，可放入 DocsDir 重新导入。
+	g.GET("/docs/export", func(c *gin.Context) {
+		data, err := buildZip(db, docsDir, false)
+		if err != nil {
+			abort(c, http.StatusInternalServerError, "导出失败")
+			return
+		}
+		c.Header("Content-Disposition", `attachment; filename="nxminiapp-docs-seed.zip"`)
+		c.Data(http.StatusOK, "application/zip", data)
 	})
 }
 
