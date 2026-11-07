@@ -54,6 +54,7 @@ public:
     bool reLaunch(const std::string& url) override;
     bool launchMiniApp(const std::string& id, const std::string& title = "") override;
     JsonValue recentMiniApps() override;
+    std::string deviceId() override;
     JsonValue systemInfo() override;
     void vibrateShort() override;
     bool storageGet(const std::string& key, std::string& value) override;

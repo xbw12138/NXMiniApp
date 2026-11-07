@@ -116,11 +116,25 @@ type ContentItem struct {
 	LinkTarget string `gorm:"size:255;not null;default:''"`
 	Sort       int    `gorm:"not null;default:0"`
 	Published  bool   `gorm:"not null;default:true"`
-	CreatedAt  int64  `gorm:"not null;autoCreateTime:false"`
-	UpdatedAt  int64  `gorm:"not null;autoUpdateTime:false"`
+	// 曝光量（PV）与独立设备数（UV），由客户端点击资讯时上报。
+	Views     int64 `gorm:"not null;default:0"`
+	UV        int64 `gorm:"not null;default:0"`
+	CreatedAt int64 `gorm:"not null;autoCreateTime:false"`
+	UpdatedAt int64 `gorm:"not null;autoUpdateTime:false"`
 }
 
 func (ContentItem) TableName() string { return "content_items" }
+
+// ContentOpen 记录某设备看过某条首页内容（资讯），用于统计 UV。
+// (content_id, device_id) 唯一，同一设备重复点击只算一次 UV。
+type ContentOpen struct {
+	ID        uint64 `gorm:"primaryKey;autoIncrement"`
+	ContentID uint   `gorm:"not null;index;uniqueIndex:uk_content_open_item_device,priority:1"`
+	DeviceID  string `gorm:"size:64;not null;index;uniqueIndex:uk_content_open_item_device,priority:2"`
+	CreatedAt int64  `gorm:"not null;autoCreateTime:false"`
+}
+
+func (ContentOpen) TableName() string { return "content_opens" }
 
 // Setting 是服务端的键值配置，例如 home.miniapp_id 指定首页小程序。
 type Setting struct {

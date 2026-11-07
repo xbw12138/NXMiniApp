@@ -76,7 +76,24 @@ Page({
   onNewsTap(e) {
     const id = e.currentTarget.dataset.target;
     if (!id) return;
+    this.reportNewsOpen(id);
     wx.navigateTo({ url: '/pages/news/news?id=' + id });
+  },
+
+  // 资讯曝光明细：views(PV) + uv(独立设备)，后台可见。
+  reportNewsOpen(id) {
+    let device = '';
+    try {
+      device = (wx.miniapp && wx.miniapp.deviceId) ? wx.miniapp.deviceId() : '';
+    } catch (err) {
+      device = '';
+    }
+    wx.request({
+      url: '/api/v1/content/' + id + '/open',
+      method: 'POST',
+      data: { device_id: device },
+      fail: () => {}
+    });
   },
 
   onSearch() {

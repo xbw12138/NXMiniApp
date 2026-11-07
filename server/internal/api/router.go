@@ -46,6 +46,7 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 	v1.GET("/miniapps", e.ListMiniApps)
 	v1.GET("/miniapp-home", e.MiniAppHome)
 	v1.GET("/content/:id", e.ContentDetail)
+	v1.POST("/content/:id/open", e.OpenContent)
 	v1.GET("/miniapps/:id", e.MiniAppDetail)
 	v1.GET("/miniapps/:id/download", e.DownloadMiniApp)
 	v1.POST("/miniapps/:id/open", e.OpenMiniApp)

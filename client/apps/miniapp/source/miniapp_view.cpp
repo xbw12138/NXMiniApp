@@ -2979,6 +2979,8 @@ bool MiniappView::launchMiniApp(const std::string& id, const std::string& title)
     return true;
 }
 
+std::string MiniappView::deviceId() { return MiniAppApi::instance().deviceId(); }
+
 JsonValue MiniappView::recentMiniApps() {
     std::vector<JsonValue> items;
     const nlohmann::json& data = nxkit::Config::instance().data();

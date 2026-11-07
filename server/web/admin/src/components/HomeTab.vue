@@ -39,6 +39,8 @@
             <th>摘要</th>
             <th>跳转</th>
             <th>排序</th>
+            <th>曝光(PV)</th>
+            <th>UV</th>
             <th>发布</th>
             <th></th>
           </tr>
@@ -54,6 +56,8 @@
             <td class="muted ellipsis">{{ item.summary }}</td>
             <td class="mono">{{ linkLabel(item) }}</td>
             <td class="mono">{{ item.sort }}</td>
+            <td class="mono">{{ item.views || 0 }}</td>
+            <td class="mono">{{ item.uv || 0 }}</td>
             <td>
               <label class="switch">
                 <input
@@ -70,7 +74,7 @@
             </td>
           </tr>
           <tr v-if="!items.length">
-            <td colspan="8" class="empty">暂无内容，先新建一条横幅或资讯</td>
+            <td colspan="10" class="empty">暂无内容，先新建一条横幅或资讯</td>
           </tr>
         </tbody>
       </table>

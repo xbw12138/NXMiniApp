@@ -911,6 +911,12 @@ struct RuntimeBridge {
         if (!runtime || !runtime->host) return JS_NewArray(ctx);
         return runtime->valueFromJson(runtime->host->recentMiniApps());
     }
+
+    static JSValue wxMiniAppDeviceId(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host) return JS_NewString(ctx, "");
+        return JS_NewString(ctx, runtime->host->deviceId().c_str());
+    }
 };
 
 JsRuntime::JsRuntime(JsRuntimeHost* host, std::string packageDir, std::string pagePath,
@@ -1273,6 +1279,8 @@ void JsRuntime::installWx() {
                       JS_NewCFunction(context, RuntimeBridge::wxMiniAppLaunch, "launch", 1));
     JS_SetPropertyStr(context, miniappNamespace, "listRecent",
                       JS_NewCFunction(context, RuntimeBridge::wxMiniAppListRecent, "listRecent", 0));
+    JS_SetPropertyStr(context, miniappNamespace, "deviceId",
+                      JS_NewCFunction(context, RuntimeBridge::wxMiniAppDeviceId, "deviceId", 0));
     JS_SetPropertyStr(context, wx, "miniapp", miniappNamespace);
 
     JS_SetPropertyStr(context, global, "wx", wx);

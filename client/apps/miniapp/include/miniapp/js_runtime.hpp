@@ -59,6 +59,8 @@ public:
         return false;
     }
     virtual JsonValue recentMiniApps() { return JsonValue::array(); }
+    /// wx.miniapp.deviceId()：容器持久化的设备标识，用于服务端 UV 统计。
+    virtual std::string deviceId() { return {}; }
 
     virtual JsonValue systemInfo() = 0;
     virtual void vibrateShort() {}

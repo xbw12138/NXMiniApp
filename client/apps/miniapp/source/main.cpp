@@ -11,6 +11,11 @@
 #include <sys/stat.h>
 #endif
 
+#ifdef __SWITCH__
+#include <malloc.h>
+#include <switch.h>
+#endif
+
 #include "miniapp/api/miniapp_api.hpp"
 #include "miniapp/miniapp_activity.hpp"
 #include "miniapp/pages/launcher_activity.hpp"
@@ -59,6 +64,17 @@ void applyDarkTheme() {
 int main(int, char**) {
     setupFileLog();
     brls::Logger::info("miniapp: starting");
+#ifdef __SWITCH__
+    // 诊断：打印进程内存池与 newlib 堆余量（排查真机 malloc 失败）。
+    {
+        u64 total = 0, used = 0;
+        svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
+        svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0);
+        struct mallinfo mi = mallinfo();
+        brls::Logger::info("miniapp: mem total={}MB used={}MB heapUsed={}MB",
+                           total / 1048576, used / 1048576, mi.uordblks / 1048576);
+    }
+#endif
     nxkit::AppConfig config;
     config.title = "Switch小程序";
     config.lightAccent = nvgRGB(15, 220, 120);

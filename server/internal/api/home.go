@@ -2,8 +2,10 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"nxminiapp/server/internal/miniappstore"
 	"nxminiapp/server/internal/models"
@@ -38,6 +40,8 @@ func ContentJSON(item *models.ContentItem) gin.H {
 		"link_target": item.LinkTarget,
 		"sort":        item.Sort,
 		"published":   item.Published,
+		"views":       item.Views,
+		"uv":          item.UV,
 		"updated_at":  item.UpdatedAt,
 	}
 }
@@ -105,6 +109,33 @@ func (e *Env) ContentDetail(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, ContentJSON(&item))
+}
+
+// OpenContent 上报一次资讯曝光（点击）。body 可带 {"device_id":"..."}。
+// views (PV) + 1；若该设备首次看这条资讯，uv + 1。
+func (e *Env) OpenContent(c *gin.Context) {
+	id := PositiveInt(c.Param("id"), 0)
+	var item models.ContentItem
+	if id == 0 || e.DB.Where("id = ? AND published = ?", id, true).Take(&item).Error != nil {
+		Abort(c, http.StatusNotFound, "内容不存在")
+		return
+	}
+	var body struct {
+		DeviceID string `json:"device_id"`
+	}
+	_ = c.ShouldBindJSON(&body)
+
+	e.DB.Model(&models.ContentItem{}).Where("id = ?", item.ID).
+		Update("views", gorm.Expr("views + 1"))
+
+	if body.DeviceID != "" {
+		open := models.ContentOpen{ContentID: item.ID, DeviceID: body.DeviceID, CreatedAt: time.Now().UnixMilli()}
+		if result := e.DB.Create(&open); result.RowsAffected > 0 {
+			e.DB.Model(&models.ContentItem{}).Where("id = ?", item.ID).
+				Update("uv", gorm.Expr("uv + 1"))
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func contentListJSON(rows []models.ContentItem) []gin.H {

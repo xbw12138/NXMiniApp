@@ -93,6 +93,7 @@ ctx.seek(30);</code></pre>
       <tbody>
         <tr><td><code>wx.miniapp.launch(id)</code></td><td>小程序 ID，或 <code>{ id }</code></td><td>已安装则直接进入；未安装会先下载安装。返回布尔值表示是否已受理</td></tr>
         <tr><td><code>wx.miniapp.listRecent()</code></td><td>—</td><td>返回最近使用的数组：<code>[{ id, title, count, installed }]</code>，按最近使用倒序</td></tr>
+        <tr><td><code>wx.miniapp.deviceId()</code></td><td>—</td><td>返回容器持久化的设备标识（首次生成后写入配置），用于服务端 UV 统计上报</td></tr>
       </tbody>
     </table>
 <pre><code>const recent = wx.miniapp.listRecent();
