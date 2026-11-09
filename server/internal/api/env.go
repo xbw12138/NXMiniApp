@@ -208,7 +208,19 @@ func AppJSON(db *gorm.DB, app *models.StoreApp, admin bool) gin.H {
 		iconURL = "/media/icons/" + app.Icon
 	}
 	var latest any
-	if v := LatestVersion(db, app.ID); v != nil {
+	if app.Source == SourceContainer {
+		if rel := LatestContainerRelease(db); rel != nil {
+			latest = gin.H{
+				"id":           0,
+				"version":      rel.Version,
+				"changelog":    rel.Notes,
+				"size":         rel.Size,
+				"sha256":       rel.SHA256,
+				"created_at":   rel.CreatedAt,
+				"download_url": "/api/v1/apps/" + url.PathEscape(app.ID) + "/download?version=latest",
+			}
+		}
+	} else if v := LatestVersion(db, app.ID); v != nil {
 		latest = VersionJSON(app.ID, v)
 	}
 	payload := gin.H{
@@ -218,6 +230,7 @@ func AppJSON(db *gorm.DB, app *models.StoreApp, admin bool) gin.H {
 		"description":    app.Description,
 		"category":       app.Category,
 		"developer":      app.Developer,
+		"source":         app.Source,
 		"icon_url":       iconURL,
 		"screenshots":    screenshots,
 		"featured":       app.Featured,

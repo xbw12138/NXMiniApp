@@ -21,6 +21,7 @@
             <th>标题</th>
             <th>ID</th>
             <th>分类</th>
+            <th>来源</th>
             <th>下载</th>
             <th>发布</th>
             <th>精选</th>
@@ -36,6 +37,7 @@
             <td>{{ app.title }}</td>
             <td class="mono">{{ app.id }}</td>
             <td>{{ app.category }}</td>
+            <td>{{ app.source === 'container' ? '容器版本' : '上传' }}</td>
             <td>{{ app.downloads }}</td>
             <td>
               <label class="switch">
@@ -60,7 +62,7 @@
             <td><button class="btn small" @click="openDetail(app)">管理</button></td>
           </tr>
           <tr v-if="!items.length">
-            <td colspan="8" class="empty">暂无数据</td>
+            <td colspan="9" class="empty">暂无数据</td>
           </tr>
         </tbody>
       </table>
@@ -80,6 +82,12 @@
         <label>详细描述<textarea v-model="createForm.description" rows="3"></textarea></label>
         <label>分类<input v-model="createForm.category" placeholder="默认：其他" /></label>
         <label>开发者<input v-model="createForm.developer" /></label>
+        <label>下载来源
+          <select v-model="createForm.source">
+            <option value="upload">上传 NRO 版本</option>
+            <option value="container">跟随容器最新版本</option>
+          </select>
+        </label>
         <div class="row">
           <label class="check"><input type="checkbox" v-model="createForm.published" /> 立即发布</label>
           <label class="check"><input type="checkbox" v-model="createForm.featured" /> 精选</label>
@@ -107,6 +115,15 @@
           <label>详细描述<textarea v-model="infoForm.description" rows="4"></textarea></label>
           <label>分类<input v-model="infoForm.category" /></label>
           <label>开发者<input v-model="infoForm.developer" /></label>
+          <label>下载来源
+            <select v-model="infoForm.source">
+              <option value="upload">上传 NRO 版本</option>
+              <option value="container">跟随容器最新版本</option>
+            </select>
+          </label>
+          <p v-if="infoForm.source === 'container'" class="muted">
+            该应用直接下发「容器版本」中最新已发布的 NRO，无需在此单独上传。
+          </p>
           <button class="btn primary" :disabled="savingInfo">{{ savingInfo ? '保存中…' : '保存' }}</button>
         </form>
 
@@ -145,7 +162,7 @@
           </div>
         </div>
 
-        <div class="card section">
+        <div v-if="detail.source !== 'container'" class="card section">
           <h3>版本</h3>
           <table class="table">
             <thead>
@@ -236,6 +253,7 @@ function emptyCreateForm() {
     description: '',
     category: '',
     developer: '',
+    source: 'upload',
     featured: false,
     published: true
   }
@@ -276,18 +294,21 @@ async function createApp() {
   creating.value = true
   try {
     const form = createForm.value
-    await api.post('/api/v1/admin/apps', {
+    const created = await api.post('/api/v1/admin/apps', {
       id: form.id.trim(),
       title: form.title.trim(),
       summary: form.summary.trim(),
       description: form.description,
       category: form.category.trim(),
       developer: form.developer.trim(),
+      source: form.source,
       featured: form.featured,
       published: form.published
     })
     showCreate.value = false
     await reload(1)
+    // 创建后直接打开详情，方便接着上传图标。
+    if (created && created.id) await openDetail(created)
   } catch (err) {
     createError.value = err.message || '创建失败'
   } finally {
@@ -306,7 +327,8 @@ async function openDetail(app) {
       summary: data.summary,
       description: data.description,
       category: data.category,
-      developer: data.developer
+      developer: data.developer,
+      source: data.source || 'upload'
     }
   } catch (err) {
     error.value = err.message || '加载失败'
@@ -340,7 +362,8 @@ async function saveInfo() {
       summary: form.summary,
       description: form.description,
       category: form.category,
-      developer: form.developer
+      developer: form.developer,
+      source: form.source
     })
     applyDetail(Object.assign({}, detail.value, updated))
     await refreshDetail()

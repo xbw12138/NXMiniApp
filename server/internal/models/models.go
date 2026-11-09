@@ -10,6 +10,8 @@ type StoreApp struct {
 	Category    string `gorm:"size:64;not null;default:'其他'"`
 	Developer   string `gorm:"size:255;not null;default:''"`
 	Icon        string `gorm:"size:255;not null;default:''"`
+	// Source 决定下载来源：upload 用本应用上传的版本，container 直接跟随最新的容器版本。
+	Source      string `gorm:"size:32;not null;default:'upload'"`
 	Screenshots string `gorm:"type:text;not null"`
 	Featured    bool   `gorm:"not null;default:false"`
 	Published   bool   `gorm:"not null;default:true"`

@@ -182,6 +182,7 @@ func createApp(e *api.Env) gin.HandlerFunc {
 			Description string `json:"description"`
 			Category    string `json:"category"`
 			Developer   string `json:"developer"`
+			Source      string `json:"source"`
 			Featured    bool   `json:"featured"`
 			Published   *bool  `json:"published"`
 		}
@@ -212,6 +213,10 @@ func createApp(e *api.Env) gin.HandlerFunc {
 		if category == "" {
 			category = "其他"
 		}
+		source := strings.TrimSpace(body.Source)
+		if source != api.SourceContainer {
+			source = api.SourceUpload
+		}
 		now := api.NowMS()
 		app := models.StoreApp{
 			ID:          id,
@@ -220,6 +225,7 @@ func createApp(e *api.Env) gin.HandlerFunc {
 			Description: body.Description,
 			Category:    category,
 			Developer:   strings.TrimSpace(body.Developer),
+			Source:      source,
 			Screenshots: "[]",
 			Featured:    body.Featured,
 			Published:   published,
@@ -260,6 +266,7 @@ func updateApp(e *api.Env) gin.HandlerFunc {
 			Description *string `json:"description"`
 			Category    *string `json:"category"`
 			Developer   *string `json:"developer"`
+			Source      *string `json:"source"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			api.Abort(c, http.StatusBadRequest, "请求体无效")
@@ -289,6 +296,13 @@ func updateApp(e *api.Env) gin.HandlerFunc {
 		}
 		if body.Developer != nil {
 			updates["developer"] = strings.TrimSpace(*body.Developer)
+		}
+		if body.Source != nil {
+			source := strings.TrimSpace(*body.Source)
+			if source != api.SourceContainer {
+				source = api.SourceUpload
+			}
+			updates["source"] = source
 		}
 		if len(updates) > 0 {
 			updates["updated_at"] = api.NowMS()

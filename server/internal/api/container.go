@@ -12,6 +12,21 @@ import (
 	"nxminiapp/server/internal/models"
 )
 
+// StoreApp 的下载来源。
+const (
+	SourceUpload    = "upload"
+	SourceContainer = "container"
+)
+
+// LatestContainerRelease 返回最新的已发布容器版本（列表首个即最新）。
+func LatestContainerRelease(db *gorm.DB) *models.ContainerRelease {
+	var rel models.ContainerRelease
+	if err := db.Where("published = ?", true).Order("created_at DESC, id DESC").Take(&rel).Error; err != nil {
+		return nil
+	}
+	return &rel
+}
+
 // ReleaseJSON 是容器版本对外/对后台统一的 JSON 表示。
 func ReleaseJSON(r *models.ContainerRelease) gin.H {
 	return gin.H{

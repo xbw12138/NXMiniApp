@@ -153,6 +153,33 @@ func (e *Env) DownloadApp(c *gin.Context) {
 		return
 	}
 
+	// 跟随容器版本的应用：直接下发最新的官方容器 NRO。
+	if app.Source == SourceContainer {
+		rel := LatestContainerRelease(e.DB)
+		if rel == nil {
+			Abort(c, http.StatusNotFound, "容器版本不存在")
+			return
+		}
+		path := filepath.Join(e.Cfg.ReleasesDir(), rel.Filename)
+		if !FileExists(path) {
+			Abort(c, http.StatusGone, "安装包文件丢失")
+			return
+		}
+		e.DB.Model(&models.StoreApp{}).Where("id = ?", id).Update("downloads", gorm.Expr("downloads + 1"))
+		e.DB.Model(&models.ContainerRelease{}).Where("id = ?", rel.ID).
+			Update("downloads", gorm.Expr("downloads + 1"))
+
+		c.Header("X-Version", rel.Version)
+		c.Header("X-SHA256", rel.SHA256)
+		c.Header("X-File-Size", strconv.FormatInt(rel.Size, 10))
+		c.Header("Cache-Control", "no-store")
+		c.Header("Content-Type", "application/octet-stream")
+		c.Header("Content-Disposition",
+			fmt.Sprintf("attachment; filename=\"%s-%s.nro\"", id, SlugFor(rel.Version)))
+		c.File(path)
+		return
+	}
+
 	var target *models.Version
 	if c.DefaultQuery("version", "latest") == "latest" {
 		target = LatestVersion(e.DB, id)
