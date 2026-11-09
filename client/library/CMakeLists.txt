@@ -81,6 +81,17 @@ add_subdirectory(lunasvg EXCLUDE_FROM_ALL)
 # add mongoose
 add_subdirectory(mongoose EXCLUDE_FROM_ALL)
 
+# add libsmb2 (SMB2/3 client for miniapp SMB data source)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(ENABLE_LIBKRB5 OFF CACHE BOOL "" FORCE)
+set(ENABLE_GSSAPI OFF CACHE BOOL "" FORCE)
+set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory(libsmb2 EXCLUDE_FROM_ALL)
+if (PLATFORM_SWITCH)
+    # libsmb2 的 compat.h 用 __SWITCH__ 宏区分平台（类似 quickjs），需单独补上。
+    target_compile_definitions(smb2 PRIVATE __SWITCH__)
+endif()
+
 # add borealis
 set(BRLS_USE_OPENCC ON)
 if (_USE_SHARED_LIB)

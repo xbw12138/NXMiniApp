@@ -26,6 +26,8 @@ nxkit_add_app(miniapp
         source/style.cpp
         source/json.cpp
         source/js_runtime.cpp
+        source/smb_manager.cpp
+        source/media_library.cpp
         source/api/miniapp_api.cpp
         source/install/package_manager.cpp
         source/pages/launcher_activity.cpp
@@ -33,6 +35,8 @@ nxkit_add_app(miniapp
         LIBS
         quickjs
         yogacore
+        smb2
+        mongoose
         ${MINIAPP_LIBS}
         )
 
@@ -42,3 +46,27 @@ if(PLATFORM_SWITCH AND BUILTIN_NSP)
     # 先构建转发器 NSP 并放进资源目录，再打包 NRO romfs。
     add_dependencies(miniapp.nro nsp_forwarder.nsp)
 endif()
+
+# macOS：把可执行文件与资源打包成 .app，双击图标即可启动。
+# 布局沿用 borealis 的资源约定：工作目录 = Contents/MacOS，资源在其上一级的 resources/。
+if(PLATFORM_DESKTOP AND APPLE)
+    set(MINIAPP_BUNDLE "${CMAKE_CURRENT_BINARY_DIR}/Switch小程序.app")
+    add_custom_target(miniapp.app
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${MINIAPP_BUNDLE}/Contents/MacOS"
+            "${MINIAPP_BUNDLE}/Contents/Resources"
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:miniapp>
+            "${MINIAPP_BUNDLE}/Contents/MacOS/miniapp"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_BINARY_DIR}/resources"
+            "${MINIAPP_BUNDLE}/Contents/resources"
+            COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMAKE_CURRENT_SOURCE_DIR}/macos/Info.plist"
+            "${MINIAPP_BUNDLE}/Contents/Info.plist"
+            COMMAND sips -s format icns "${NXKIT_RESOURCES_DIR}/img/miniapp_icon.jpg"
+            --out "${MINIAPP_BUNDLE}/Contents/Resources/app.icns"
+            COMMAND codesign --force --sign - "${MINIAPP_BUNDLE}"
+            )
+    add_dependencies(miniapp.app miniapp)
+endif()
+

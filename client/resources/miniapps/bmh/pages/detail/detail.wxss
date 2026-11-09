@@ -1,0 +1,112 @@
+/* 详情页 */
+.head {
+  flex-direction: row;
+  margin-bottom: 20rpx;
+}
+
+.head-poster {
+  width: 240rpx;
+  height: 340rpx;
+  border-radius: 16rpx;
+  background-color: #1c2026;
+  margin-right: 24rpx;
+  flex-shrink: 0;
+}
+
+.head-info {
+  flex: 1;
+  flex-direction: column;
+}
+
+.head-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #f3f5f8;
+  margin-bottom: 12rpx;
+}
+
+.head-rating-row {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.head-rating {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffb800;
+}
+
+.head-rating-star {
+  font-size: 24rpx;
+  color: #ffb800;
+  margin-left: 6rpx;
+  margin-right: 16rpx;
+}
+
+.head-type-tag {
+  font-size: 20rpx;
+  color: #ff5b3a;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+  background-color: #2a1a16;
+}
+
+.head-line {
+  font-size: 23rpx;
+  color: #aab2bd;
+  margin-top: 6rpx;
+}
+
+.head-progress {
+  font-size: 22rpx;
+  color: #0fdc78;
+  margin-top: 10rpx;
+}
+
+.action-row {
+  margin-bottom: 18rpx;
+}
+
+.btn-play {
+  flex: 2;
+  margin-right: 14rpx;
+}
+
+.btn-fav {
+  flex: 1;
+}
+
+.summary {
+  font-size: 25rpx;
+  color: #d7dce2;
+  line-height: 1.7;
+}
+
+/* 选集网格 */
+.ep-grid {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.ep-btn {
+  padding: 14rpx 20rpx;
+  border-radius: 12rpx;
+  background-color: #25282e;
+  margin-right: 14rpx;
+  margin-bottom: 14rpx;
+}
+
+.ep-on {
+  background-color: #ff5b3a;
+}
+
+.ep-text {
+  font-size: 22rpx;
+  color: #e6e9ee;
+  font-weight: bold;
+}
+
+.ep-on .ep-text {
+  color: #ffffff;
+}

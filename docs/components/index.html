@@ -42,7 +42,7 @@
         <tr><td><code>progress</code></td><td>100% × 24rpx</td><td>否</td><td>—</td></tr>
         <tr><td><code>swiper</code></td><td>100% × 300rpx</td><td>自动轮播</td><td>—</td></tr>
         <tr><td><code>swiper-item</code></td><td>100% × 100%</td><td>否</td><td>—</td></tr>
-        <tr><td><code>video</code></td><td>100% × 360rpx</td><td>是</td><td><code>bindplay</code> / <code>bindpause</code> / <code>bindended</code> / <code>bindtimeupdate</code> / <code>binderror</code></td></tr>
+        <tr><td><code>video</code></td><td>100% × 360rpx</td><td>是</td><td><code>bindplay</code> / <code>bindpause</code> / <code>bindended</code> / <code>bindtimeupdate</code> / <code>binderror</code> / <code>bindloadedmetadata</code> / <code>bindwaiting</code> / <code>bindprogress</code> / <code>bindseekcomplete</code> / <code>bindfullscreenchange</code></td></tr>
         <tr><td><code>form</code> / <code>label</code> / <code>checkbox-group</code> / <code>radio-group</code> / <code>block</code></td><td>容器 / 不渲染</td><td>否</td><td>—</td></tr>
       </tbody>
     </table>
@@ -75,6 +75,8 @@
       支持 <code>scaleToFill</code>（默认）、<code>aspectFit</code>、<code>aspectFill</code>。
       远程图可通过 <code>http-headers</code> 附加请求头（如鉴权 Cookie），
       格式为 <code>"Name: value"</code>（按第一个冒号分隔名值）。
+      <code>lazy-load</code> 为 true 时只有滚动到可视区域（含 200px 预取边距）才下载；
+      <code>bindload</code> 在解码成功时触发，<code>binderror</code> 在下载/解码失败时触发。
       解码依赖 NanoVG/stb，目前不支持 webp。
     </p>
 <pre><code>&lt;image src="/images/logo.png" mode="aspectFit" class="logo"/&gt;
@@ -147,8 +149,12 @@
     <h2 id="video">video</h2>
     <p>
       支持 <code>src</code>、<code>poster</code>、<code>autoplay</code>、<code>loop</code>、
-      <code>muted</code>、<code>controls</code>、<code>http-headers</code> 与
-      <code>object-fit</code>（<code>contain</code> / <code>cover</code> / <code>fill</code>）。
+      <code>muted</code>、<code>controls</code>、<code>http-headers</code>、
+      <code>object-fit</code>（<code>contain</code> / <code>cover</code> / <code>fill</code>）、
+      <code>initial-time</code>（起播秒数）、<code>playback-rate</code>（倍速）、
+      <code>volume</code>（0-100）与 <code>subtitle</code>（外挂字幕地址，支持
+      <code>smb://会话id/路径</code>、<code>sdmc:/...</code> 与 HTTP(S)）。
+      <code>src</code> 同样支持 <code>sdmc:/...</code> 本地绝对路径。
       <code>http-headers</code> 会作为 mpv 的 <code>http-header-fields</code> 下发，
       用于需要鉴权的直链（如带 Cookie 的 m3u8 / 视频直链），格式
       <code>"Cookie: a=b; c=d"</code>。点击画面或按 A 键播放/暂停，
@@ -165,18 +171,33 @@
     </ul>
 <pre><code>&lt;video id="demoVideo" class="video" src="/videos/demo.mp4" poster="/images/logo.png"
        autoplay="{{false}}" loop="{{true}}" muted="{{true}}" controls="{{true}}"
+       initial-time="{{60}}" playback-rate="{{1.5}}" volume="{{80}}"
+       subtitle="smb://s1/movies/demo.zh.srt"
        bindplay="onVideoPlay" bindpause="onVideoPause"
        bindended="onVideoEnded" bindtimeupdate="onVideoTime"
+       bindloadedmetadata="onMeta" bindwaiting="onWaiting" bindprogress="onProgress"
+       bindseekcomplete="onSeeked" bindfullscreenchange="onFullscreen"
        binderror="onVideoError"/&gt;</code></pre>
     <p>脚本侧通过 <code>wx.createVideoContext(id)</code> 控制播放：</p>
 <pre><code>const ctx = wx.createVideoContext('demoVideo');
 ctx.play();
 ctx.pause();
 ctx.seek(30);
+ctx.setPlaybackRate(1.5);
+ctx.setVolume(80);
+ctx.addSubtitle('https://example.com/demo.zh.srt');
+ctx.requestFullScreen();   // 全屏铺满内容区，按 B 退出
 ctx.stop();</code></pre>
+    <p>
+      事件语义：<code>loadedmetadata</code> 在时长/尺寸就绪时触发一次；
+      <code>waiting</code> 与 <code>progress</code> 对应缓冲开始/恢复；
+      <code>seekcomplete</code> 在 seek 结束后触发；<code>fullscreenchange</code>
+      带有 <code>{ fullScreen }</code>。
+    </p>
     <div class="warn">
       <strong>限制：</strong>全局只有一个播放器实例，同一时间只播放一个 <code>video</code>；
-      视频直出层不参与 NanoVG 合成，被 <code>scroll-view</code> 裁剪或完全移出屏幕时暂停绘制。
+      视频直出层不参与 NanoVG 合成，被 <code>scroll-view</code> 裁剪或完全移出屏幕时暂停绘制
+      （全屏模式例外）。
     </div>
 
     <h2 id="form-container">form / label / checkbox-group / radio-group / block</h2>

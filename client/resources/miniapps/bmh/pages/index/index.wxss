@@ -1,0 +1,99 @@
+/* 首页 · 最近播放横滑卡片 */
+.recent-card {
+  width: 200rpx;
+  margin-right: 16rpx;
+  flex-direction: column;
+}
+
+.recent-cover {
+  width: 200rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  background-color: #1c2026;
+}
+
+.recent-cover-empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.recent-empty-text {
+  font-size: 20rpx;
+  color: #5d6672;
+}
+
+.recent-info {
+  margin-top: 8rpx;
+  flex-direction: column;
+}
+
+.recent-title {
+  font-size: 22rpx;
+  font-weight: bold;
+  color: #e6e9ee;
+}
+
+.recent-sub {
+  font-size: 19rpx;
+  color: #7d8693;
+  margin-top: 3rpx;
+}
+
+/* 海报卡片内联评分 */
+.rating-inline {
+  font-size: 22rpx;
+  color: #ffb800;
+  font-weight: bold;
+  margin-left: 8rpx;
+}
+
+/* 无数据源引导 */
+.empty-big {
+  padding: 80rpx 40rpx;
+  align-items: center;
+  flex-direction: column;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #e6e9ee;
+  margin-bottom: 16rpx;
+}
+
+.add-btn {
+  margin-top: 30rpx;
+  padding: 0 60rpx;
+}
+
+/* 数据源按钮 */
+.src-btn {
+  height: 62rpx;
+  padding: 0 20rpx;
+  margin-left: 14rpx;
+  font-size: 22rpx;
+}
+
+/* 分组标题 */
+.group-head {
+  margin-top: 10rpx;
+}
+
+.group-count {
+  font-size: 20rpx;
+  color: #7d8693;
+  margin-left: 12rpx;
+}
+
+/* 无海报占位 */
+.poster-empty {
+  align-items: center;
+  justify-content: center;
+  padding: 10rpx;
+}
+
+.poster-empty-text {
+  font-size: 20rpx;
+  color: #5d6672;
+  text-align: center;
+}

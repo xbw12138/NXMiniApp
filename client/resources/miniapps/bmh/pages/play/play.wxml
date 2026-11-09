@@ -1,0 +1,31 @@
+<view class="page play-page">
+  <video wx:if="{{videoSrc}}" id="player" class="player" src="{{videoSrc}}"
+         http-headers="{{headers}}"
+         controls="{{true}}" autoplay="{{true}}"
+         object-fit="contain"
+         bindplay="onPlay" bindpause="onPause" bindended="onEnded"
+         bindtimeupdate="onTime" binderror="onError"/>
+
+  <view wx:else class="player player-loading">
+    <text class="loading-text">{{statusText || '加载中…'}}</text>
+  </view>
+
+  <view class="panel">
+    <text class="pname">{{title}}</text>
+    <text wx:if="{{statusText}}" class="error">{{statusText}}</text>
+
+    <view wx:if="{{videoSrc}}" class="row info-row">
+      <text class="time-text">{{timeText}}</text>
+      <text class="hint">A 播放/暂停 · ← → 快退/快进 10 秒 · B 返回</text>
+    </view>
+
+    <view wx:if="{{videoSrc}}" class="row ctrl-row">
+      <button class="btn btn-ghost" data-delta="-10" bindtap="onSeek">« 10s</button>
+      <button class="btn" bindtap="onToggle">{{playing ? '暂停' : '播放'}}</button>
+      <button class="btn btn-ghost" data-delta="10" bindtap="onSeek">10s »</button>
+      <button class="btn btn-ghost" bindtap="onBack">返回</button>
+    </view>
+
+    <text class="hint">播放进度会自动保存，下次从详情页进入可继续观看。</text>
+  </view>
+</view>

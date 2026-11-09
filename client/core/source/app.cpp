@@ -10,6 +10,10 @@
 #include <chrono>
 #include <cstdlib>
 
+#ifdef __SWITCH__
+#include <malloc.h>
+#endif
+
 #include <borealis/views/applet_frame.hpp>
 
 #include "nxkit/config.hpp"
@@ -86,6 +90,16 @@ int runApp(const AppConfig& config) {
 
     brls::Application::createWindow(config.title);
     brls::Application::setGlobalQuit(config.globalQuit);
+
+#ifdef __SWITCH__
+    // 诊断：GL 初始化 + Mesa 编译着色器之后还剩多少堆（启动崩溃就发生在这附近）。
+    {
+        struct mallinfo mi = mallinfo();
+        brls::Logger::info("miniapp: mem after init arena={}MB used={}MB free={}MB",
+                           mi.arena / 1048576, mi.uordblks / 1048576,
+                           mi.fordblks / 1048576);
+    }
+#endif
 
     registerFrameworkTheme(config);
     registerFrameworkViews();

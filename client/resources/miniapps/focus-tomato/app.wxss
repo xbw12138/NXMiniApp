@@ -1,0 +1,237 @@
+/* 番茄专注 —— 深色极简专注主题 */
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: row;
+  background-color: #101216;
+  padding: 36rpx 44rpx;
+  color: #e9edf4;
+}
+
+.left {
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+}
+
+.mode-row {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.mode {
+  width: 160rpx;
+  height: 66rpx;
+  margin: 0 10rpx;
+  border-radius: 33rpx;
+  background-color: #191d24;
+  border: 2rpx solid #262c36;
+  color: #9aa4b4;
+  font-size: 24rpx;
+  padding: 0;
+  line-height: 62rpx;
+  text-align: center;
+}
+
+.mode-on {
+  background-color: #2a1b1a;
+  border-color: #ff6b5b;
+  color: #ffd2cc;
+  font-weight: bold;
+}
+
+.timer-card {
+  width: 620rpx;
+  padding: 46rpx 30rpx 34rpx;
+  border-radius: 28rpx;
+  background-color: #171a21;
+  border: 2rpx solid #232833;
+  align-items: center;
+}
+
+.time {
+  font-size: 132rpx;
+  font-weight: bold;
+  color: #f6f8fc;
+  line-height: 1.05;
+}
+
+.state {
+  font-size: 24rpx;
+  color: #8b95a6;
+  margin-top: 10rpx;
+}
+
+.bar {
+  width: 480rpx;
+  margin-top: 30rpx;
+}
+
+.session {
+  font-size: 22rpx;
+  color: #737d8f;
+  margin-top: 22rpx;
+}
+
+.controls {
+  flex-direction: row;
+  margin-top: 34rpx;
+}
+
+.ctrl {
+  width: 190rpx;
+  height: 86rpx;
+  margin: 0 12rpx;
+  border-radius: 16rpx;
+  background-color: #20242d;
+  border: 2rpx solid #2b3140;
+  color: #cfd7e4;
+  font-size: 26rpx;
+  padding: 0;
+  line-height: 82rpx;
+  text-align: center;
+}
+
+.ctrl-main {
+  background-color: #ff6b5b;
+  border-color: #ff6b5b;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.msg {
+  font-size: 24rpx;
+  color: #f3b26b;
+  margin-top: 24rpx;
+  text-align: center;
+}
+
+.right {
+  width: 520rpx;
+  margin-left: 44rpx;
+  flex-direction: column;
+}
+
+.right-head {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+  flex-shrink: 0;
+}
+
+.right-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #e9eef7;
+}
+
+.right-count {
+  font-size: 22rpx;
+  color: #7c8697;
+}
+
+.add-row {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 18rpx;
+}
+
+.task-input {
+  flex: 1;
+  height: 74rpx;
+  padding: 0 22rpx;
+  border-radius: 14rpx;
+  background-color: #1a1e26;
+  border: 2rpx solid #272d39;
+  color: #e9eef7;
+  font-size: 24rpx;
+}
+
+.add-btn {
+  width: 120rpx;
+  height: 74rpx;
+  margin-left: 14rpx;
+  border-radius: 14rpx;
+  background-color: #2b3240;
+  border: 2rpx solid #353d4d;
+  color: #dfe6f1;
+  font-size: 24rpx;
+  padding: 0;
+  line-height: 72rpx;
+  text-align: center;
+}
+
+.task-scroll {
+  flex: 1;
+  height: 100%;
+}
+
+.task-row {
+  flex-direction: row;
+  align-items: center;
+  padding: 18rpx 20rpx;
+  margin-bottom: 12rpx;
+  border-radius: 14rpx;
+  background-color: #171b22;
+  border: 2rpx solid #232833;
+}
+
+.task-box {
+  width: 42rpx;
+  height: 42rpx;
+  border-radius: 21rpx;
+  border: 2rpx solid #3a4353;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-box-on {
+  background-color: #2f9e74;
+  border-color: #2f9e74;
+}
+
+.task-check {
+  font-size: 22rpx;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.task-text {
+  flex: 1;
+  margin-left: 18rpx;
+  font-size: 24rpx;
+  color: #dbe2ee;
+  line-height: 1.4;
+}
+
+.task-done {
+  color: #6b7585;
+}
+
+.del {
+  width: 64rpx;
+  height: 56rpx;
+  border-radius: 12rpx;
+  background-color: #221a1c;
+  border: 2rpx solid #36272b;
+  color: #ff8f82;
+  font-size: 28rpx;
+  padding: 0;
+  line-height: 52rpx;
+  text-align: center;
+}
+
+.empty {
+  padding: 50rpx 20rpx;
+  align-items: center;
+}
+
+.empty-text {
+  font-size: 22rpx;
+  color: #616b7b;
+  text-align: center;
+  line-height: 1.7;
+}

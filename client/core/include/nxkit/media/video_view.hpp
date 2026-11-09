@@ -20,6 +20,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 #ifdef NXKIT_WITH_MPV
 #include "nxkit/media/mpv_core.hpp"
@@ -34,6 +35,12 @@ struct VideoState {
     bool ended = false;
     bool error = false;
     bool loading = false;
+    /// 文件已加载完成，元数据（时长/尺寸）可用。对应 loadedmetadata。
+    bool metadataLoaded = false;
+    /// 正在等待数据（网络缓冲或 seek 中）。对应 waiting。
+    bool waiting = false;
+    /// 每次 seek 结束自增，宿主据此派发 seekcomplete。
+    unsigned seekSerial = 0;
     double currentTime = 0.0;  // seconds
     double duration = 0.0;     // seconds
     std::string errorText;
@@ -51,7 +58,16 @@ public:
     /// Load a new media url. Passing an empty url is a no-op.
     /// `headers` is set as mpv's `http-header-fields` before loading (e.g.
     /// "Cookie: a=b; c=d"). Pass empty to clear.
-    void setUrl(const std::string& url, const std::string& headers = "");
+    /// `extra` holds per-file mpv options (e.g. "start=30" for initial-time,
+    /// "audio-file=..."). Must be option=value pairs.
+    void setUrl(const std::string& url, const std::string& headers = "",
+                const std::string& extra = "");
+
+    /// Attach an external subtitle file to the current media. Works both
+    /// before and after the file is loaded (queued until MPV_LOADED).
+    void addSubtitle(const std::string& url);
+    /// Drop all currently attached external subtitles.
+    void clearSubtitles();
     /// Resume playback (no-op if nothing loaded).
     void resume();
     /// Pause playback.
@@ -108,6 +124,7 @@ private:
 #endif
     StateCallback stateCallback;
     std::string currentUrl;
+    std::vector<std::string> pendingSubtitles;
     VideoState state;
 };
 

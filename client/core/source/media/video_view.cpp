@@ -29,24 +29,48 @@ VideoView::~VideoView() {
 #endif
 }
 
-void VideoView::setUrl(const std::string& url, const std::string& headers) {
+void VideoView::setUrl(const std::string& url, const std::string& headers,
+                       const std::string& extra) {
     currentUrl = url;
 #ifdef NXKIT_WITH_MPV
     if (url.empty()) return;
     state = VideoState{};
     state.loading = true;
+    state.waiting = true;
+    pendingSubtitles.clear();
     fireState();
     // http-header-fields 必须通过全局 set 设置，不能走 loadfile 的 per-file 选项
     // （mpv 会把选项串按 option=value 解析，破坏 Cookie 等含 =/; 的值）。
     mpv().setHttpHeaders(headers);
-    mpv().setUrl(url);
+    mpv().setUrl(url, extra, "replace");
 #else
     (void)url;
     (void)headers;
+    (void)extra;
     state = VideoState{};
     state.error = true;
     state.errorText = "当前构建未启用视频播放";
     fireState();
+#endif
+}
+
+void VideoView::addSubtitle(const std::string& url) {
+    if (url.empty()) return;
+#ifdef NXKIT_WITH_MPV
+    if (state.metadataLoaded) {
+        mpv().command_async("sub-add", url, "select");
+    } else {
+        pendingSubtitles.push_back(url);
+    }
+#else
+    (void)url;
+#endif
+}
+
+void VideoView::clearSubtitles() {
+    pendingSubtitles.clear();
+#ifdef NXKIT_WITH_MPV
+    if (registered) mpv().command_async("sub-remove", "all");
 #endif
 }
 
@@ -178,9 +202,16 @@ void VideoView::registerMpvEvent() {
             switch (event) {
                 case MpvEventEnum::MPV_LOADED:
                     state.loading = false;
+                    state.waiting = false;
+                    state.metadataLoaded = true;
                     state.error = false;
                     state.errorText.clear();
                     state.duration = static_cast<double>(mpv.duration);
+                    // 文件加载前登记的 external 字幕此时才能挂上。
+                    for (const auto& subtitle : pendingSubtitles) {
+                        mpv.command_async("sub-add", subtitle, "select");
+                    }
+                    pendingSubtitles.clear();
                     break;
                 case MpvEventEnum::MPV_RESUME:
                     state.playing = true;
@@ -197,12 +228,19 @@ void VideoView::registerMpvEvent() {
                     state.paused = false;
                     state.ended = true;
                     state.loading = false;
+                    state.waiting = false;
                     break;
                 case MpvEventEnum::LOADING_START:
                     state.loading = true;
+                    state.waiting = true;
                     break;
                 case MpvEventEnum::LOADING_END:
                     state.loading = false;
+                    state.waiting = false;
+                    break;
+                case MpvEventEnum::MPV_SEEK_END:
+                    state.waiting = false;
+                    state.seekSerial += 1;
                     break;
                 case MpvEventEnum::UPDATE_DURATION:
                     state.duration = static_cast<double>(mpv.duration);

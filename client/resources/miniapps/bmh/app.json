@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/sources/sources",
+    "pages/sources/add",
+    "pages/detail/detail",
+    "pages/play/play",
+    "pages/search/search"
+  ],
+  "window": {
+    "backgroundColor": "#0e0f12",
+    "navigationBarTitleText": "网易爆米花"
+  }
+}

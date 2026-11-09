@@ -9,8 +9,9 @@ option(PLATFORM_PSV "build for PSVita" OFF)
 option(USE_GLFW "using glfw for input and create window" ON)
 option(USE_SDL2 "using sdl2 for input and create window" OFF)
 
-# 只保留小程序容器应用
+# 只保留小程序容器应用，以及配套的更新工具
 option(NXKIT_APP_MINIAPP "build the mini program container" ON)
+option(NXKIT_APP_UPDATER "build the container updater (pull NRO / upload logs)" ON)
 
 if(USE_SDL2)
     message("SDL2")
@@ -118,4 +119,8 @@ add_subdirectory(core)
 
 if(NXKIT_APP_MINIAPP)
     add_subdirectory(apps/miniapp)
+endif()
+
+if(NXKIT_APP_UPDATER)
+    add_subdirectory(apps/updater)
 endif()

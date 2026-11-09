@@ -1,0 +1,61 @@
+<view class="page">
+  <view class="top">
+    <view class="brand">
+      <text class="title">数独</text>
+      <text class="subtitle">九宫格 · 静心推理</text>
+    </view>
+    <view class="diffs">
+      <button wx:for="{{diffs}}" wx:key="key"
+              class="diff {{difficulty === item.key ? 'diff-on' : ''}}"
+              data-key="{{item.key}}" bindtap="onDifficulty">{{item.label}}</button>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">
+    <text class="loading-text">正在生成新棋盘，请稍候…</text>
+  </view>
+
+  <view wx:else class="body">
+    <view class="board">
+      <view wx:for="{{rows}}" wx:for-item="row" wx:key="r" class="row">
+        <button wx:for="{{row.cells}}" wx:for-item="c" wx:key="i"
+                class="cell {{c.cls}}" data-i="{{c.i}}" bindtap="onCell">{{c.label}}</button>
+      </view>
+    </view>
+
+    <view class="panel">
+      <view class="stats">
+        <view class="stat">
+          <text class="stat-label">时间</text>
+          <text class="stat-value">{{timeText}}</text>
+        </view>
+        <view class="stat">
+          <text class="stat-label">错误</text>
+          <text class="stat-value">{{mistakes}}</text>
+        </view>
+        <view class="stat">
+          <text class="stat-label">提示</text>
+          <text class="stat-value">{{hintsLeft}}</text>
+        </view>
+      </view>
+
+      <text class="pad-title">选择数字填入当前格子</text>
+      <view wx:for="{{numRows}}" wx:for-item="row" wx:key="k" class="num-row">
+        <button wx:for="{{row.nums}}" wx:for-item="n" wx:key="n"
+                class="num" data-n="{{n}}" bindtap="onNumber">{{n}}</button>
+      </view>
+
+      <view class="tools">
+        <button class="tool" bindtap="onErase">擦除</button>
+        <button class="tool" bindtap="onHint">提示 {{hintsLeft}}</button>
+        <button class="tool tool-main" bindtap="onNewGame">新棋局</button>
+      </view>
+
+      <view class="hint">
+        <text>点格子选中，再点右侧数字填入</text>
+        <text>绿色数字是提示填入，红色表示冲突</text>
+        <text>切换难度会开始一盘新棋局</text>
+      </view>
+    </view>
+  </view>
+</view>

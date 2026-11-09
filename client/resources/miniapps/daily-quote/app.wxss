@@ -1,0 +1,200 @@
+/* 每日一言 —— 温暖纸感主题 */
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background-color: #f6f2e9;
+  padding: 34rpx 44rpx;
+  color: #2f2a22;
+}
+
+.top {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-shrink: 0;
+  margin-bottom: 24rpx;
+}
+
+.title {
+  font-size: 54rpx;
+  font-weight: bold;
+  color: #2b2620;
+  line-height: 1;
+}
+
+.subtitle {
+  font-size: 22rpx;
+  color: #8a7f6e;
+}
+
+.body {
+  flex-direction: row;
+  flex: 1;
+}
+
+.left {
+  flex: 1;
+  flex-direction: column;
+}
+
+.quote-card {
+  flex: 1;
+  border-radius: 26rpx;
+  background-color: #fffdf8;
+  border: 2rpx solid #e6ddcc;
+  padding: 48rpx 52rpx;
+  justify-content: center;
+}
+
+.tag {
+  align-self: flex-start;
+  height: 46rpx;
+  padding: 0 20rpx;
+  border-radius: 23rpx;
+  background-color: #efe6d3;
+  align-items: center;
+  justify-content: center;
+}
+
+.tag-text {
+  font-size: 20rpx;
+  color: #8a7250;
+  letter-spacing: 2rpx;
+}
+
+.quote {
+  font-size: 46rpx;
+  color: #332c23;
+  line-height: 1.65;
+  margin-top: 30rpx;
+  text-align: center;
+}
+
+.author {
+  font-size: 24rpx;
+  color: #8a7f6e;
+  margin-top: 28rpx;
+  text-align: right;
+}
+
+.actions {
+  flex-direction: row;
+  justify-content: center;
+  margin-top: 40rpx;
+}
+
+.act {
+  width: 190rpx;
+  height: 76rpx;
+  margin: 0 10rpx;
+  border-radius: 18rpx;
+  background-color: #f1e9da;
+  border: 2rpx solid #e0d3bc;
+  color: #6b5a41;
+  font-size: 24rpx;
+  padding: 0;
+  line-height: 72rpx;
+  text-align: center;
+}
+
+.act-main {
+  background-color: #b8763c;
+  border-color: #b8763c;
+  color: #fff8ee;
+  font-weight: bold;
+}
+
+.tip {
+  flex-shrink: 0;
+  margin-top: 16rpx;
+  align-items: center;
+}
+
+.tip-text {
+  font-size: 20rpx;
+  color: #9a8f7d;
+}
+
+.right {
+  width: 470rpx;
+  margin-left: 36rpx;
+  flex-direction: column;
+}
+
+.head {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14rpx;
+  flex-shrink: 0;
+}
+
+.head-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #3a332a;
+}
+
+.head-count {
+  font-size: 22rpx;
+  color: #8a7f6e;
+}
+
+.list {
+  flex: 1;
+  height: 100%;
+}
+
+.fav-row {
+  flex-direction: row;
+  align-items: center;
+  padding: 16rpx 18rpx;
+  margin-bottom: 10rpx;
+  border-radius: 14rpx;
+  background-color: #fffdf8;
+  border: 2rpx solid #e8dfcf;
+}
+
+.fav-main {
+  flex: 1;
+  flex-direction: column;
+}
+
+.fav-text {
+  font-size: 22rpx;
+  color: #4a4034;
+  line-height: 1.5;
+}
+
+.fav-author {
+  font-size: 18rpx;
+  color: #9a8f7d;
+  margin-top: 6rpx;
+}
+
+.fav-del {
+  width: 56rpx;
+  height: 48rpx;
+  margin-left: 10rpx;
+  border-radius: 10rpx;
+  background-color: #f7ebe8;
+  border: 2rpx solid #ecd4ce;
+  color: #b06a5a;
+  font-size: 24rpx;
+  padding: 0;
+  line-height: 44rpx;
+  text-align: center;
+}
+
+.empty {
+  padding: 60rpx 10rpx;
+  align-items: center;
+}
+
+.empty-text {
+  font-size: 22rpx;
+  color: #9a8f7d;
+  text-align: center;
+  line-height: 1.7;
+}

@@ -39,13 +39,43 @@ public:
     virtual void setNavigationBarTitle(const std::string& title) = 0;
 
     /// 异步网络请求；done 可能在工作线程被调用。
-    using HttpDone = std::function<void(bool ok, int status, const std::string& body,
+    /// transportOk=false 表示没拿到任何 HTTP 响应（DNS/连接/超时/TLS 失败）；
+    /// 只要拿到了响应（含 4xx/5xx），transportOk 都为 true，由脚本按 status 自行处理。
+    using HttpDone = std::function<void(bool transportOk, int status, const std::string& body,
                                        const std::map<std::string, std::string>& headers,
                                        const std::map<std::string, std::string>& cookies,
                                        const std::string& error)>;
     virtual void httpRequest(const std::string& method, const std::string& url,
                              const std::map<std::string, std::string>& headers,
-                             const std::string& body, HttpDone done) = 0;
+                             const std::string& body, int timeoutMs, HttpDone done) = 0;
+
+    /// SMB 数据源能力。done 可能在工作线程被调用。
+    /// result 语义：connect 成功时为会话 id，listFiles 成功时为 JSON 数组字符串。
+    using SmbDone = std::function<void(bool ok, const std::string& result,
+                                       const std::string& error)>;
+    virtual void smbConnect(const std::string& server, const std::string& share,
+                            const std::string& user, const std::string& password,
+                            const std::string& domain, SmbDone done) {}
+    virtual void smbListFiles(const std::string& id, const std::string& path,
+                              SmbDone done) {}
+    /// 一次递归扫描目录树（原生侧完成遍历），result 为文件数组 JSON。
+    /// progress 在工作线程被调用，携带 (已遍历目录数, 已收集文件数)。
+    virtual void smbScan(const std::string& id, const std::string& path, int maxDepth,
+                         int maxEntries, SmbDone done,
+                         std::function<void(int, int)> progress = {}) {}
+    /// 取消正在进行的 SMB 扫描（非阻塞）。
+    virtual void smbCancelScan() {}
+    /// 媒体库增量扫描：复用已有 SMB 会话，按目录 mtime 决定是否重列，结果落盘。
+    virtual void mediaScan(const std::string& sourceId, const std::string& smbId,
+                           const std::string& root, int maxDepth, int maxFiles, SmbDone done) {}
+    /// 读取媒体库一页（JSON 数组），instant 无网络请求。
+    virtual void mediaLibrary(const std::string& sourceId, int offset, int limit,
+                              SmbDone done) {}
+    virtual void smbDisconnect(const std::string& id) {}
+    /// 生成本地 HTTP 代理播放地址（同步，不阻塞）。
+    virtual std::string smbStreamUrl(const std::string& id, const std::string& path) {
+        return {};
+    }
 
     virtual bool navigateTo(const std::string& url) = 0;
     virtual bool navigateBack(int delta) = 0;
@@ -74,9 +104,9 @@ public:
     virtual std::string clipboardGet() { return {}; }
     virtual void clipboardSet(const std::string&) {}
 
-    /// wx.createVideoContext 背后的宿主能力。
-    virtual bool videoControl(const std::string& id, const std::string& action,
-                              double value) {
+    /// wx.createVideoContext 背后的宿主能力。text 用于 addSubtitle 之类的字符串参数。
+    virtual bool videoControl(const std::string& id, const std::string& action, double value,
+                              const std::string& text = std::string()) {
         return false;
     }
 };
@@ -150,6 +180,8 @@ private:
     int addTimer(JSValue fn, double delay, bool repeat, double now);
     void removeTimer(int id);
     void clearTimers();
+    /// 定期探测网络状态并按需派发 wx.onNetworkStatusChange 回调。
+    void pollNetworkStatus(double nowMilliseconds);
 
     JsRuntimeHost* host = nullptr;
     std::string packageDir;
@@ -169,6 +201,9 @@ private:
     std::unordered_map<std::string, JSValue> expressionCache;
     std::vector<Timer> timers;
     int nextTimerId = 1;
+    std::vector<JSValue> networkCallbacks;
+    std::string lastNetworkType;
+    double lastNetworkCheck = 0.0;
     std::shared_ptr<bool> alive = std::make_shared<bool>(true);
 };
 

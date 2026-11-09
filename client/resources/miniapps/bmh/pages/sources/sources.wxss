@@ -1,0 +1,71 @@
+/* 数据源管理页 */
+.src-card {
+  background-color: #17191e;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  margin-bottom: 14rpx;
+}
+
+.src-tag {
+  width: 120rpx;
+  height: 48rpx;
+  border-radius: 10rpx;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16rpx;
+  flex-shrink: 0;
+}
+
+.src-tag-text {
+  font-size: 20rpx;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.src-tag-emby { background-color: #52b542; }
+.src-tag-jellyfin { background-color: #aa5cc3; }
+.src-tag-webdav { background-color: #2563eb; }
+.src-tag-smb { background-color: #0e8a8a; }
+.src-tag-aliyun { background-color: #ff6a00; }
+.src-tag-baidu { background-color: #2932e1; }
+
+.src-info {
+  flex: 1;
+  flex-direction: column;
+}
+
+.src-name {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #e6e9ee;
+}
+
+.src-status {
+  font-size: 21rpx;
+  margin-top: 4rpx;
+}
+
+.src-on { color: #0fdc78; }
+.src-off { color: #7d8693; }
+
+.src-actions {
+  margin-top: 14rpx;
+}
+
+.btn-sm {
+  height: 52rpx;
+  padding: 0 20rpx;
+  font-size: 22rpx;
+  margin-right: 12rpx;
+}
+
+.btn-del {
+  color: #ff6b6b;
+}
+
+.card-title {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #9aa1ab;
+  margin-bottom: 10rpx;
+}

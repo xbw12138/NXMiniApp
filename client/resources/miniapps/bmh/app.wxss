@@ -1,0 +1,227 @@
+/* 网易爆米花 · 全局样式（深色影视库主题） */
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background-color: #0e0f12;
+  color: #eef1f5;
+  padding: 20rpx;
+}
+
+.scroll {
+  flex: 1;
+  height: 100%;
+}
+
+/* 顶部栏 */
+.topbar {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 16rpx;
+}
+
+.brand {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #f3f5f8;
+}
+
+.brand-dot {
+  color: #ff5b3a;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* 搜索框 */
+.search-box {
+  flex: 1;
+  height: 62rpx;
+  border-radius: 31rpx;
+  background-color: #1c2026;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-text {
+  font-size: 24rpx;
+  color: #aab2bd;
+}
+
+/* 分类导航 */
+.tabs {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 16rpx;
+  flex-shrink: 0;
+}
+
+.tab {
+  padding: 10rpx 26rpx;
+  border-radius: 24rpx;
+  margin-right: 14rpx;
+  background-color: #1c2026;
+}
+
+.tab-on {
+  background-color: #ff5b3a;
+}
+
+.tab-text {
+  font-size: 24rpx;
+  color: #cfd5dd;
+  font-weight: bold;
+}
+
+.tab-on .tab-text {
+  color: #ffffff;
+}
+
+/* 分区标题 */
+.section-title {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #8b94a0;
+  margin: 10rpx 6rpx 12rpx;
+  flex-shrink: 0;
+}
+
+/* 海报网格 */
+.grid {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.poster-card {
+  width: 210rpx;
+  margin: 0 10rpx 20rpx;
+  flex-direction: column;
+}
+
+.poster {
+  width: 210rpx;
+  height: 300rpx;
+  border-radius: 14rpx;
+  background-color: #1c2026;
+}
+
+.poster-empty {
+  width: 210rpx;
+  height: 300rpx;
+  border-radius: 14rpx;
+  background-color: #1c2026;
+  align-items: center;
+  justify-content: center;
+}
+
+.poster-empty-text {
+  font-size: 22rpx;
+  color: #5d6672;
+}
+
+.poster-meta {
+  margin-top: 10rpx;
+  flex-direction: column;
+}
+
+.poster-title {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #e6e9ee;
+  text-align: center;
+}
+
+.poster-sub {
+  font-size: 20rpx;
+  color: #7d8693;
+  margin-top: 4rpx;
+  text-align: center;
+}
+
+/* 评分角标 */
+.rating {
+  height: 36rpx;
+  padding: 0 10rpx;
+  border-radius: 8rpx;
+  background-color: #000000;
+  align-items: center;
+  justify-content: center;
+}
+
+.rating-text {
+  font-size: 20rpx;
+  color: #ffb800;
+  font-weight: bold;
+}
+
+/* 卡片（用于最近播放等列表） */
+.card {
+  background-color: #17191e;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  margin-bottom: 16rpx;
+}
+
+.card-title {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #e6e9ee;
+}
+
+.card-sub {
+  font-size: 22rpx;
+  color: #8b949e;
+  margin-top: 6rpx;
+}
+
+/* 按钮 */
+.btn {
+  height: 64rpx;
+  padding: 0 28rpx;
+  border-radius: 14rpx;
+  background-color: #ff5b3a;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: bold;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-ghost {
+  background-color: #2a2d33;
+  color: #e8eaee;
+}
+
+.btn-on {
+  background-color: #2563eb;
+}
+
+/* 通用 */
+.row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.hint {
+  font-size: 22rpx;
+  color: #7f8792;
+  margin-top: 10rpx;
+}
+
+.empty {
+  padding: 40rpx 0;
+  align-items: center;
+}
+
+.empty-text {
+  font-size: 24rpx;
+  color: #6b7481;
+}
+
+.error {
+  font-size: 22rpx;
+  color: #ff6b6b;
+  margin-top: 12rpx;
+}

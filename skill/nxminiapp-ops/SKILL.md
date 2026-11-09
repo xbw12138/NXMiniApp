@@ -133,6 +133,30 @@ cd client
 cmake --build build_desktop --target miniapp -j 8
 ```
 
+更新工具（独立 NRO）：
+
+```bash
+cd client
+export DEVKITPRO=${DEVKITPRO:-/opt/devkitpro}
+cmake --build build_switch --target updater.nro -j 8
+```
+
+产物：`client/build_switch/apps/updater/updater.nro`，放到 `sdmc:/switch/` 下即可在 hbmenu 里启动。
+
+## 免 USB 更新容器（Updater NRO）
+
+`updater.nro` 是独立于容器的小工具，用来摆脱每次改容器都要插线：
+
+1. 容器新版本上传到后台（`POST /api/v1/admin/releases`，见「后台接口速查」）。
+2. Switch 上从 hbmenu 启动「Switch小程序更新工具」。
+3. 选版本按 A → 下载并替换 `sdmc:/switch/miniapp.nro`（先备份成 `.old`，成功后再删除，失败自动回滚）。
+4. 回 hbmenu 重新启动容器即生效。
+5. 「上传容器日志」把 `sdmc:/switch/miniapp/miniapp.log` 传到后台，管理后台「设备日志」可查看/下载。
+
+设计约束：容器运行中无法覆盖自身的 NRO（FAT 上会报设备错误 1），所以替换必须由这个独立进程完成。Updater 与容器共用 `sdmc:/switch/nxkit/config.json` 里的 `miniapp.serverUrl` 和 `miniapp.device_id`；日志上报走 `POST /api/v1/device/logs`（`X-Device-Id` 头 + multipart `file`，上限 8MB，超出只取末尾）。
+
+首次仍需插线推一次 `updater.nro`，之后容器更新全程不需要 USB。
+
 ## 推送 NRO 到真机
 
 ### 换电脑时先拿到 swlink-cli
@@ -256,7 +280,9 @@ ssh root@ecfun.cc "grep -E '^NXKIT_ADMIN_(TOKEN|USER)=' /root/NXMiniApp/.env"
 | 导出文档 | `GET /api/v1/admin/docs/export` |
 | 概览数据 | `GET /api/v1/admin/stats` |
 
-客户端侧公开接口：`/api/v1/home`、`/api/v1/miniapps`、`/api/v1/miniapps/:id/download`、`POST /api/v1/miniapps/:id/open`（PV/UV）、`POST /api/v1/content/:id/open`（资讯曝光）、`/api/v1/container/releases`。
+客户端侧公开接口：`/api/v1/home`、`/api/v1/miniapps`、`/api/v1/miniapps/:id/download`、`POST /api/v1/miniapps/:id/open`（PV/UV）、`POST /api/v1/content/:id/open`（资讯曝光）、`/api/v1/container/releases`、`POST /api/v1/device/logs`（真机日志上报）。
+
+设备日志（管理后台「设备日志」页）：`GET /api/v1/admin/device-logs`、`GET /api/v1/admin/device-logs/content?id=<device>/<file>`、`DELETE /api/v1/admin/device-logs?id=...`。文件落在 `$DATA_DIR/device-logs/<device>/`。
 
 上传后建议本地先 `shasum -a 256` 与接口返回的 `sha256` 对照，确认传输无损。
 

@@ -15,6 +15,9 @@ using Query = std::vector<std::pair<std::string, std::string>>;
 
 struct HttpResult {
     bool ok = false;
+    /// true 表示请求根本没能拿到 HTTP 响应（DNS/连接/超时/TLS 失败）。
+    /// 非 2xx 的 HTTP 响应属于「拿到了响应」，transportError 仍为 false。
+    bool transportError = false;
     long status = 0;
     std::string body;
     std::string error;
@@ -72,6 +75,17 @@ public:
     HttpResult post(const std::string& path, const Query& query = {}, const Query& form = {}, int timeout = -1) const;
     HttpResult postJson(const std::string& path, const Query& query, const nlohmann::json& body,
                         int timeout = -1) const;
+
+    /// 任意 HTTP 方法（GET/HEAD/POST/PUT/DELETE/PATCH/OPTIONS）。
+    /// body 原样发送；contentType 非空时补 Content-Type。非 GET/HEAD 方法
+    /// 都会带请求体（小程序侧已把 query 拼进 url）。
+    HttpResult request(const std::string& method, const std::string& path,
+                       const std::string& body, const std::string& contentType,
+                       int timeout = -1) const;
+    void requestAsync(const std::string& method, const std::string& path,
+                      const std::string& body, const std::string& contentType,
+                      std::function<void(const HttpResult&)> callback,
+                      int timeout = -1) const;
 
     void getAsync(const std::string& path, const Query& query,
                   std::function<void(const HttpResult&)> callback, int timeout = -1) const;

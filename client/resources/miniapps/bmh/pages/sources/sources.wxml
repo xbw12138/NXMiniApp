@@ -1,0 +1,47 @@
+<view class="page">
+  <view class="topbar">
+    <text class="brand">数据源管理</text>
+    <view class="spacer"/>
+    <button class="btn" bindtap="onAdd">+ 添加</button>
+  </view>
+
+  <scroll-view class="scroll" scroll-y="{{true}}" style="height: 100%;">
+    <view wx:if="{{sources.length === 0}}" class="empty">
+      <text class="empty-text">还没有添加数据源</text>
+      <text class="hint">点击右上角「添加」，接入 Emby / WebDAV / 网盘等</text>
+    </view>
+
+    <view wx:for="{{sources}}" wx:key="id" class="src-card">
+      <view class="row" data-id="{{item.id}}" bindtap="onEdit">
+        <view class="src-tag src-tag-{{item.type}}">
+          <text class="src-tag-text">{{item.typeLabel}}</text>
+        </view>
+        <view class="src-info">
+          <text class="src-name">{{item.name}}</text>
+          <text class="src-status {{item.enabled ? 'src-on' : 'src-off'}}">
+            {{item.enabled ? '已启用' : '已禁用'}}
+          </text>
+        </view>
+      </view>
+      <view class="row src-actions">
+        <button class="btn btn-ghost btn-sm" data-id="{{item.id}}" bindtap="onToggle">
+          {{item.enabled ? '禁用' : '启用'}}
+        </button>
+        <button class="btn btn-ghost btn-sm" data-id="{{item.id}}" bindtap="onTest"
+                disabled="{{testing[item.id]}}">
+          {{testing[item.id] ? '测试中…' : '测试'}}
+        </button>
+        <button class="btn btn-ghost btn-sm btn-del" data-id="{{item.id}}" bindtap="onDelete">删除</button>
+      </view>
+    </view>
+
+    <view class="card">
+      <text class="card-title">支持的数据源</text>
+      <text class="hint">• Emby / Jellyfin：媒体服务器，自带刮削（海报、评分、简介）</text>
+      <text class="hint">• WebDAV：通用协议，群晖/极空间/飞牛等 NAS 均支持</text>
+      <text class="hint">• SMB：局域网共享，Windows/群晖/飞牛/极空间均支持</text>
+      <text class="hint">• 阿里云盘：需提供 refresh_token（在阿里云盘开放平台获取）</text>
+      <text class="hint">• 百度网盘：需提供 access_token（OAuth 授权后获取）</text>
+    </view>
+  </scroll-view>
+</view>

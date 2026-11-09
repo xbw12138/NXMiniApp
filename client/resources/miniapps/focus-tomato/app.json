@@ -1,0 +1,9 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "backgroundColor": "#101216",
+    "navigationBarTitleText": "番茄专注"
+  }
+}

@@ -18,7 +18,7 @@
   <main class="content">
     <h1>wx.* API 支持状态</h1>
     <p class="lead">
-      容器向页面注入全局 <code>wx</code> 对象。目前 38 个接口有真实行为，
+      容器向页面注入全局 <code>wx</code> 对象。目前 42 个接口有真实行为，
       18 个接口以空实现提供兼容。所有异步接口只支持回调风格，不返回 Promise。
     </p>
 
@@ -31,18 +31,28 @@
     <table>
       <thead><tr><th>接口</th><th>参数</th><th>回调</th></tr></thead>
       <tbody>
-        <tr><td><code>wx.request</code></td><td><code>url</code>、<code>method</code>（GET/POST/PUT/DELETE）、<code>data</code>、<code>header</code></td><td><code>success({ data, statusCode, header, cookies })</code> / <code>fail({ errMsg })</code> / <code>complete()</code></td></tr>
-        <tr><td><code>wx.getNetworkType</code></td><td>—</td><td><code>success({ networkType: "wifi" })</code></td></tr>
+        <tr><td><code>wx.request</code></td><td><code>url</code>、<code>method</code>（GET/HEAD/POST/PUT/DELETE/PATCH）、<code>data</code>、<code>header</code>、<code>timeout</code>（毫秒，默认 60000）、<code>responseType</code>（<code>text</code> / <code>arraybuffer</code>）</td><td><code>success({ data, statusCode, header, cookies })</code> / <code>fail({ errMsg, statusCode, data, header })</code> / <code>complete()</code></td></tr>
+        <tr><td><code>wx.getNetworkType</code></td><td>—</td><td><code>success({ networkType })</code>，值为 <code>wifi</code> / <code>ethernet</code> / <code>none</code></td></tr>
+        <tr><td><code>wx.onNetworkStatusChange</code></td><td><code>callback({ isConnected, networkType })</code></td><td>网络类型变化时触发（约 2 秒轮询一次）；<code>wx.offNetworkStatusChange</code> 取消</td></tr>
       </tbody>
     </table>
     <p>
-      GET / HEAD 会把 <code>data</code> 序列化为查询串，其他方法发送 JSON 请求体；
-      未显式设置时自动补 <code>Content-Type: application/json</code>。
+      GET / HEAD 会把 <code>data</code> 序列化为查询串，其他方法发送请求体；
+      未显式设置时自动补 <code>Content-Type: application/json</code>，<code>data</code>
+      为字符串时原样发送。<code>responseType: "arraybuffer"</code> 时 <code>data</code>
+      是 <code>ArrayBuffer</code>，可配合 <code>Uint8Array</code> 处理下载的二进制内容。
       <code>success</code> 回调的 <code>cookies</code> 字段汇总了整条重定向链上的
       <code>Set-Cookie</code>（键为 cookie 名），可用于登录态透传。
-      <code>fail</code> 回调的 <code>errMsg</code> 形如
-      <code>"request:fail &lt;curl 错误描述或状态码&gt;"</code>，例如
-      <code>request:fail HTTP 401</code>、<code>request:fail curl code 35</code>。
+    </p>
+    <p>
+      <strong>回调语义与微信一致：</strong>只要服务端返回了 HTTP 响应（包括
+      <code>401</code> / <code>404</code> / <code>500</code>），都会走 <code>success</code>，
+      由脚本按 <code>statusCode</code> 自行判断；<code>fail</code> 只在网络层失败时触发
+      （DNS、连接被拒、超时、TLS 等），且同样带上 <code>statusCode</code>、
+      <code>data</code>、<code>header</code>，<code>errMsg</code> 形如
+      <code>"request:fail timeout"</code>。
+    </p>
+    <p>
       <code>url</code> 以 <code>/</code> 开头时按商店服务端地址解析，便于首页这类
       “由服务端下发、内容随服务端更新”的小程序直接请求 <code>/api/v1/miniapp-home</code>。
     </p>
@@ -52,6 +62,78 @@
   data: { page: 1 },
   success(res) {
     this.setData({ items: res.data.items });
+  }
+});</code></pre>
+
+    <h2 id="smb">数据源（SMB）</h2>
+    <p>
+      容器内置 libsmb2，通过 <code>wx.smb.*</code> 访问局域网 SMB 共享
+      （Windows 共享、群晖、飞牛、极空间等）。连接与列目录为阻塞操作，在
+      工作线程执行；<code>success</code> / <code>fail</code> 回调在宿主主线程触发。
+      会话 id 随容器进程存活，不持久化到磁盘。
+    </p>
+    <table>
+      <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.smb.connect</code></td><td><code>server</code>、<code>share</code>、<code>user</code>、<code>password</code>、<code>domain</code>（可选）</td><td>连接共享，<code>success({ id })</code> 返回会话 id；<code>fail({ errMsg })</code></td></tr>
+        <tr><td><code>wx.smb.listFiles</code></td><td><code>id</code>、<code>path</code></td><td>列目录，<code>success([{ name, isDir, size }])</code>；<code>name</code> 为共享内完整路径（<code>/</code> 分隔）</td></tr>
+        <tr><td><code>wx.smb.streamUrl</code></td><td><code>id</code>、<code>path</code></td><td>返回本地 HTTP 代理播放地址（同步），可直接赋给 <code>&lt;video src&gt;</code>；代理端口全部占用时返回空串，应先判断再使用</td></tr>
+        <tr><td><code>wx.smb.scan</code></td><td><code>id</code>、<code>path</code>、<code>maxDepth</code>（可选，默认 4）、<code>maxEntries</code>（可选）、<code>progress({ dirs, files })</code>（可选）</td><td>在宿主线程递归遍历目录树，一次回调返回全部文件条目 <code>[{ name, isDir, size }]</code>，比逐目录 <code>listFiles</code> 快很多；扫描中回调进度，配合 <code>wx.smb.cancelScan()</code> 可中途取消</td></tr>
+        <tr><td><code>wx.smb.cancelScan</code></td><td>—</td><td>取消正在进行的 <code>scan</code>，已收集的文件仍会通过 <code>success</code> 返回</td></tr>
+        <tr><td><code>wx.smb.disconnect</code></td><td><code>id</code></td><td>断开会话并释放资源</td></tr>
+      </tbody>
+    </table>
+<pre><code>wx.smb.connect({
+  server: '192.168.1.100',
+  share: 'movies',
+  user: 'admin',
+  password: 'xxx',
+  success(res) {
+    var smbId = res.id;
+    // 递归扫描视频文件：path 传目录，name 为完整路径
+    wx.smb.listFiles({
+      id: smbId,
+      path: '/',
+      success(files) {
+        this.setData({ files: files.filter(function (f) { return !f.isDir; }) });
+      }
+    });
+  },
+  fail(err) {
+    console.error(err.errMsg);
+  }
+});
+
+// 播放：拿本地代理地址后交给 video（或 setData 到 src）
+var url = wx.smb.streamUrl({ id: smbId, path: '/movies/a.mp4' });</code></pre>
+    <p>
+      播放走容器本地 HTTP 代理（<code>127.0.0.1</code>），支持 <code>Range</code>
+      请求（返回 <code>206 Partial Content</code>），由 MPV 直接拉取局域网数据流，
+      无需把整段视频读入内存。单次代理读取上限 4MB，MPV 会按 Range 分块请求。
+    </p>
+
+    <h2 id="media-library">媒体库索引（wx.media）</h2>
+    <p>
+      把“遍历目录 + 索引”下沉到宿主：索引按数据源落盘，目录修改时间未变化时
+      直接复用旧结果，后续进入只读本地索引，毫秒级返回。适用于影片数量多、
+      每次进入都要重扫的场景（如 SMB 影视库）。
+    </p>
+    <table>
+      <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.media.scan</code></td><td><code>sourceId</code>、<code>id</code>（SMB 会话 id）、<code>root</code>、<code>maxDepth</code>（可选，默认 4）、<code>maxFiles</code>（可选，默认 2000）</td><td>增量扫描并写盘索引，只收录视频文件；<code>success({ total })</code> 返回索引内文件总数</td></tr>
+        <tr><td><code>wx.media.library</code></td><td><code>sourceId</code>、<code>offset</code>（可选）、<code>limit</code>（可选，0 表示全部）</td><td>读取索引，<code>success({ total, list: [{ name, size, subtitle? }] })</code>；<code>name</code> 为共享内完整路径，<code>subtitle</code> 为同目录同名外挂字幕（.srt/.ass/.ssa/.vtt）的完整路径</td></tr>
+      </tbody>
+    </table>
+<pre><code>// 先读库（有索引时立即返回），无索引或需要刷新时再触发增量扫描
+wx.media.library({
+  sourceId: source.id,
+  success(page) {
+    if (page.list.length) render(page.list);
+    else wx.media.scan({
+      sourceId: source.id, id: smbId, root: '/',
+      success(res) { console.log('indexed', res.total); }
+    });
   }
 });</code></pre>
 
@@ -74,13 +156,31 @@
     <table>
       <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
       <tbody>
-        <tr><td><code>wx.createVideoContext(id)</code></td><td><code>id</code> 对应 <code>&lt;video id="..."&gt;</code></td><td>返回控制器，支持 <code>play()</code> / <code>pause()</code> / <code>stop()</code> / <code>seek(seconds)</code>；<code>requestFullScreen</code> / <code>exitFullScreen</code> 为空实现</td></tr>
+        <tr><td><code>wx.createVideoContext(id)</code></td><td><code>id</code> 对应 <code>&lt;video id="..."&gt;</code></td><td>返回控制器：<code>play()</code> / <code>pause()</code> / <code>stop()</code> / <code>seek(seconds)</code> / <code>requestFullScreen()</code> / <code>exitFullScreen()</code> / <code>setPlaybackRate(rate)</code> / <code>setVolume(0-100)</code> / <code>addSubtitle(url)</code></td></tr>
       </tbody>
     </table>
 <pre><code>const ctx = wx.createVideoContext('demoVideo');
 ctx.play();
-ctx.pause();
-ctx.seek(30);</code></pre>
+ctx.seek(30);
+ctx.setPlaybackRate(1.5);
+ctx.setVolume(60);
+ctx.requestFullScreen();
+ctx.addSubtitle('https://example.com/movie.zh.srt');</code></pre>
+    <p>
+      <code>&lt;video&gt;</code> 支持的扩展属性：<code>initial-time</code>（起播秒数）、
+      <code>playback-rate</code>（倍速，1 为正常）、<code>volume</code>（0-100）、
+      <code>subtitle</code>（外挂字幕地址，支持 <code>smb://会话id/路径</code> 或
+      <code>sdmc:/...</code> 本地路径）、<code>http-headers</code>（鉴权直链的 Cookie）、
+      <code>autoplay</code>、<code>loop</code>、<code>muted</code>、<code>poster</code>、
+      <code>object-fit</code>。
+    </p>
+    <p>
+      事件：<code>bindplay</code>、<code>bindpause</code>、<code>bindended</code>、
+      <code>bindtimeupdate</code>、<code>binderror</code>、<code>bindloadedmetadata</code>、
+      <code>bindwaiting</code>、<code>bindprogress</code>、<code>bindseekcomplete</code>、
+      <code>bindfullscreenchange</code>。全屏时画面铺满内容区，按 <code>B</code> 退出并派发
+      <code>bindfullscreenchange</code>（<code>{ fullScreen }</code>）。
+    </p>
     <p>
       实际解码由 <code>nxkit::MPVCore</code> 完成。桌面构建默认关闭
       <code>NXKIT_WITH_MPV</code>，需要安装 libmpv 并重新配置；未启用时

@@ -27,6 +27,8 @@
 #include <functional>
 #include <iterator>
 #include <mutex>
+#include <new>
+#include <pthread.h>
 #include <sstream>
 #include <system_error>
 #include <thread>
@@ -41,7 +43,9 @@
 #include "miniapp/install/package_manager.hpp"
 #include "miniapp/js_runtime.hpp"
 #include "miniapp/layout.hpp"
+#include "miniapp/media_library.hpp"
 #include "miniapp/miniapp_activity.hpp"
+#include "miniapp/smb_manager.hpp"
 #include "miniapp/wxml_parser.hpp"
 #include "miniapp/wxss.hpp"
 #include "nxkit/config.hpp"
@@ -318,6 +322,11 @@ MiniappView::MiniappView(std::string packagePath)
     this->registerAction("确认", brls::BUTTON_A, action);
 
     this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) {
+        // 全屏视频优先退出全屏，不直接离开小程序。
+        if (!fullscreenVideoPath.empty()) {
+            exitVideoFullscreen();
+            return true;
+        }
         if (modal.active) {
             bool confirm = false;
             auto done = modal.done;
@@ -1066,6 +1075,24 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
     if (const std::string* handler = node.attr("binderror")) {
         render->bindError = trim(*handler);
     }
+    if (const std::string* handler = node.attr("bindload")) {
+        render->bindImageLoad = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("bindloadedmetadata")) {
+        render->bindLoadedMetadata = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("bindwaiting")) {
+        render->bindWaiting = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("bindprogress")) {
+        render->bindProgress = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("bindseekcomplete")) {
+        render->bindSeekComplete = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("bindfullscreenchange")) {
+        render->bindFullscreenChange = trim(*handler);
+    }
     for (const auto& entry : node.attributes) {
         if (entry.first.size() > 5 && entry.first.compare(0, 5, "data-") == 0) {
             render->dataset[entry.first.substr(5)] = interpolate(entry.second, locals);
@@ -1077,6 +1104,13 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
         render->src = attributeText(node, "src", locals);
         render->imageMode = attributeText(node, "mode", locals);
         render->imageHeaders = attributeText(node, "http-headers", locals);
+        JsonValue lazy;
+        if (evaluateAttribute(node, "lazy-load", locals, lazy)) {
+            render->imageLazyLoad = isTruthy(lazy);
+        } else if (const std::string* rawLazy = node.attr("lazy-load")) {
+            render->imageLazyLoad = trim(*rawLazy) == "true";
+        }
+        render->bindImageError = render->bindError;
         if (render->imageMode.empty()) render->imageMode = "scaleToFill";
         render->imageLabel = baseName(render->src);
         if (render->imageLabel.empty()) render->imageLabel = "image";
@@ -1204,6 +1238,16 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
         if (evaluateAttribute(node, "controls", locals, attribute)) {
             render->videoControls = isTruthy(attribute);
         }
+        if (evaluateAttribute(node, "initial-time", locals, attribute)) {
+            render->videoInitialTime = std::max(0.0f, toFloat(attribute, 0.0f));
+        }
+        if (evaluateAttribute(node, "playback-rate", locals, attribute)) {
+            render->videoPlaybackRate = toFloat(attribute, 0.0f);
+        }
+        if (evaluateAttribute(node, "volume", locals, attribute)) {
+            render->videoVolume = static_cast<int>(toFloat(attribute, -1.0f));
+        }
+        render->videoSubtitle = attributeText(node, "subtitle", locals);
         if (current) {
             auto playing = current->videoPlaying.find(path);
             if (playing != current->videoPlaying.end()) {
@@ -1315,6 +1359,29 @@ void MiniappView::draw(NVGcontext* vg, float x, float y, float width, float heig
         if (!found) focusPath = focusNodes.front()->path;
     } else if (!focusPath.empty()) {
         focusPath.clear();
+    }
+
+    // 全屏视频：铺满内容区，只画黑底 + 一行退出提示，画面由 drawVideoSurface 直出。
+    if (!fullscreenVideoPath.empty()) {
+        RenderNode* node = findNodeByPath(*page.root, fullscreenVideoPath);
+        if (!node || node->tag != "video") {
+            fullscreenVideoPath.clear();
+        } else {
+            nvgBeginPath(vg);
+            nvgRect(vg, x, y, width, height);
+            nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
+            nvgFill(vg);
+            nvgFontFaceId(vg, fontId);
+            nvgFontSize(vg, 18.0f);
+            nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, 0.75f));
+            nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
+            nvgText(vg, x + width - 16.0f, y + 12.0f, "按 B 退出全屏", nullptr);
+            if (!page.readyCalled && page.runtime) {
+                page.readyCalled = true;
+                page.runtime->callLifecycle("onReady");
+            }
+            return;
+        }
     }
 
     drawNode(vg, *page.root, 1.0f, nullptr);
@@ -1523,9 +1590,10 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
             imageTextures[key] = -1;
             return -1;
         }
-        // 远程图先返回占位，下载完成后再绘制。
+        // 远程图先返回「下载中」占位（-3），下载完成后再绘制；
+        // 与下载失败（-1）区分开，避免 binderror 在下载途中就被误触发。
         if (pendingImages.insert(key).second) requestRemoteImage(key, headers);
-        return -1;
+        return -3;
     }
 
     NVGcontext* vg = brls::Application::getNVGContext();
@@ -1590,13 +1658,51 @@ void MiniappView::requestRemoteImage(const std::string& url, const std::string& 
 
 std::string MiniappView::resolveLocalPath(const std::string& src, const std::string& pageDir) {
     if (src.empty()) return src;
+
+    // smb://<会话id>/<共享内路径>：转换成内置 HTTP 流代理地址交给 mpv。
+    if (src.rfind("smb://", 0) == 0) {
+        size_t slash = src.find('/', 6);
+        if (slash == std::string::npos) return std::string();
+        const std::string id = src.substr(6, slash - 6);
+        const std::string path = "/" + src.substr(slash + 1);
+        return smbStreamUrl(id, path);
+    }
+
+    // 平台绝对路径（sdmc:/、romfs:/、switch:/ 等）和 file:// 直接透传，
+    // 让小程序可以播放 SD 卡上的本地视频/字幕，而不是被拼进包目录。
+    if (src.rfind("file://", 0) == 0) return src.substr(7);
+    size_t colon = src.find(':');
+    size_t slash = src.find('/');
+    if (colon != std::string::npos && colon > 0 &&
+        (slash == std::string::npos || colon < slash)) {
+        return src;
+    }
+
     if (src[0] == '/' || src[0] == '\\') return packageDir + src;
     return joinPath(pageDir, src);
 }
 
 void MiniappView::drawImage(NVGcontext* vg, RenderNode& node, float alpha) {
+    // lazy-load：离屏（含 200px 预取边距）时不触发下载，等滚动进视野再说。
+    if (node.imageLazyLoad) {
+        const float viewHeight = brls::Application::contentHeight;
+        if (node.absTop + node.absHeight < -200.0f || node.absTop > viewHeight + 200.0f) {
+            return;
+        }
+    }
+
     int texture = imageTexture(node.src, current ? current->dir : packageDir,
                                node.imageHeaders);
+    if (texture > 0 && !node.imageLoadDispatched && current && current->runtime) {
+        node.imageLoadDispatched = true;
+        current->runtime->dispatchEvent(node.bindImageLoad, "load", node.dataset,
+                                        JsonValue::object());
+    } else if (texture == -1 && !node.imageErrorDispatched && current && current->runtime) {
+        node.imageErrorDispatched = true;
+        JsonValue detail = JsonValue::object();
+        detail.setMember("errMsg", JsonValue::string("图片加载失败: " + node.src));
+        current->runtime->dispatchEvent(node.bindImageError, "error", node.dataset, detail);
+    }
     if (texture <= 0) {
         if (!node.style.hasBackground) {
             nvgBeginPath(vg);
@@ -1837,7 +1943,17 @@ void MiniappView::drawVideo(NVGcontext* vg, RenderNode& node, float alpha) {
 void MiniappView::drawVideoSurface() {
     if (activeVideoPath.empty() || !current || !current->root) return;
     RenderNode* node = findNodeByPath(*current->root, activeVideoPath);
-    if (!node || !node->videoPlaying || node->videoError) return;
+    if (!node || node->videoError) return;
+    if (node->tag != "video") return;
+
+    // 全屏：忽略节点布局与裁剪，直接铺满内容区；暂停时也保留当前帧。
+    if (!fullscreenVideoPath.empty() && fullscreenVideoPath == node->path) {
+        float vw = brls::Application::contentWidth;
+        float vh = brls::Application::contentHeight;
+        nxkit::VideoView::instance().draw(brls::Rect(0.0f, 0.0f, vw, vh), 1.0f);
+        return;
+    }
+    if (!node->videoPlaying) return;
     if (node->style.displayNone || node->absWidth <= 0.0f || node->absHeight <= 0.0f) {
         return;
     }
@@ -2367,7 +2483,8 @@ void MiniappView::toggleVideo(RenderNode* node) {
     node->videoError = false;
     node->videoErrorText.clear();
     current->videoStarted[node->path] = true;
-    startVideo(node, true);
+    // false：已有加载过的源就继续播放，避免每次暂停后点播放都从头重新 begin。
+    startVideo(node, false);
 
     if (node->videoPlaying) {
         dispatchVideoEvent(node, node->bindPlay, "play");
@@ -2388,6 +2505,16 @@ void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
     const bool remote =
         node->videoSrc.rfind("http://", 0) == 0 || node->videoSrc.rfind("https://", 0) == 0;
     std::string resolved = remote ? node->videoSrc : resolveLocalPath(node->videoSrc, current->dir);
+    if (resolved.empty()) {
+        // SMB 代理端口耗尽或路径非法时 resolveLocalPath 返回空串，这里给出可读错误。
+        node->videoError = true;
+        node->videoErrorText = "视频地址不可用（SMB 代理未启动）";
+        node->videoPlaying = false;
+        current->videoPlaying[node->path] = false;
+        current->dirty = true;
+        dispatchVideoEvent(node, node->bindError, "error");
+        return;
+    }
     activeVideoPath = node->path;
 
     auto& player = nxkit::VideoView::instance();
@@ -2402,13 +2529,29 @@ void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
     }
 
     std::string& loaded = current->videoLoadedSrc[node->path];
+    // 播完后再点播放：需要重新 load 才能从 0 开始。
+    if (player.isEnded()) forceLoad = true;
     if (forceLoad || loaded != resolved) {
+        std::string extra;
+        if (node->videoInitialTime > 0.0) {
+            char buffer[48];
+            std::snprintf(buffer, sizeof(buffer), "start=%.3f", node->videoInitialTime);
+            extra = buffer;
+        }
         // 需要鉴权的直链（如夸克转码后的 m3u8）必须带上 Cookie，否则 CDN 返回 412。
-        // http-header-fields 走 mpv 全局 set（见 VideoView::setUrl）。
-        player.setUrl(resolved, node->videoHeaders);
+        // http-header-fields 走 mpv 全局 set（见 VideoView::setUrl）；start 是
+        // loadfile 的 per-file 选项，只在首帧生效，不会影响后续 seek。
+        player.setUrl(resolved, node->videoHeaders, extra);
+        if (!node->videoSubtitle.empty()) {
+            const std::string subtitle = resolveLocalPath(node->videoSubtitle, current->dir);
+            if (!subtitle.empty()) player.addSubtitle(subtitle);
+        }
         loaded = resolved;
         activeVideoSrc = resolved;
+        node->videoMetadataDispatched = false;
     }
+    if (node->videoPlaybackRate > 0.0) player.setSpeed(node->videoPlaybackRate);
+    if (node->videoVolume >= 0) player.setVolume(node->videoVolume);
     player.setLoop(node->videoLoop);
     player.setMute(node->videoMuted);
     player.resume();
@@ -2428,12 +2571,15 @@ void MiniappView::dispatchVideoEvent(RenderNode* node, const std::string& handle
     detail.setMember("duration", JsonValue::number(node->videoDuration));
     if (type == "error") {
         detail.setMember("errMsg", JsonValue::string(node->videoErrorText));
+    } else if (type == "fullscreenchange") {
+        detail.setMember("fullScreen", JsonValue::boolean(!fullscreenVideoPath.empty()));
+        detail.setMember("direction", JsonValue::string("horizontal"));
     }
     current->runtime->dispatchEvent(handler, type, node->dataset, detail);
 }
 
 bool MiniappView::videoControl(const std::string& id, const std::string& action,
-                               double value) {
+                               double value, const std::string& text) {
     if (!current || !current->root || id.empty()) return false;
     RenderNode* node = findNodeById(*current->root, id);
     if (!node || node->tag != "video") return false;
@@ -2453,8 +2599,53 @@ bool MiniappView::videoControl(const std::string& id, const std::string& action,
         if (activeVideoPath == node->path) {
             nxkit::VideoView::instance().seek(value);
         }
+    } else if (action == "requestFullScreen") {
+        enterVideoFullscreen(node->path);
+    } else if (action == "exitFullScreen") {
+        exitVideoFullscreen();
+    } else if (action == "setPlaybackRate") {
+        node->videoPlaybackRate = std::max(0.0, value);
+        if (activeVideoPath == node->path) {
+            nxkit::VideoView::instance().setSpeed(node->videoPlaybackRate > 0.0
+                                                      ? node->videoPlaybackRate
+                                                      : 1.0);
+        }
+    } else if (action == "setVolume") {
+        node->videoVolume = static_cast<int>(std::max(0.0, std::min(100.0, value)));
+        if (activeVideoPath == node->path) {
+            nxkit::VideoView::instance().setVolume(node->videoVolume);
+        }
+    } else if (action == "addSubtitle") {
+        node->videoSubtitle = text;
+        if (activeVideoPath == node->path && !text.empty()) {
+            const std::string subtitle = resolveLocalPath(text, current->dir);
+            if (!subtitle.empty()) nxkit::VideoView::instance().addSubtitle(subtitle);
+        }
     }
     return true;
+}
+
+void MiniappView::enterVideoFullscreen(const std::string& path) {
+    if (!current || !current->root || path.empty()) return;
+    fullscreenVideoPath = path;
+    current->dirty = true;
+    RenderNode* node = findNodeByPath(*current->root, path);
+    if (node) {
+        // 从未开始播放过的 video：进全屏时顺便起播，否则全屏只有黑屏。
+        if (!node->videoPlaying &&
+            current->videoStarted.find(path) == current->videoStarted.end()) {
+            toggleVideo(node);
+        }
+        dispatchVideoEvent(node, node->bindFullscreenChange, "fullscreenchange");
+    }
+}
+
+void MiniappView::exitVideoFullscreen() {
+    if (!current || !current->root || fullscreenVideoPath.empty()) return;
+    RenderNode* node = findNodeByPath(*current->root, fullscreenVideoPath);
+    fullscreenVideoPath.clear();
+    current->dirty = true;
+    if (node) dispatchVideoEvent(node, node->bindFullscreenChange, "fullscreenchange");
 }
 
 void MiniappView::triggerTap(RenderNode* node) {
@@ -2649,6 +2840,7 @@ void MiniappView::ensureVisible(RenderNode* node) {
 }
 
 void MiniappView::tick(double now) {
+    flushPendingNavigation();
     if (!current) return;
     overlayClock = now;
     if (current->runtime) current->runtime->pumpTimers(now);
@@ -2738,6 +2930,24 @@ void MiniappView::onVideoState(const nxkit::VideoState& vs) {
         dispatchVideoEvent(node, node->bindError, "error");
     }
 
+    if (vs.metadataLoaded && !node->videoMetadataDispatched) {
+        node->videoMetadataDispatched = true;
+        dispatchVideoEvent(node, node->bindLoadedMetadata, "loadedmetadata");
+    }
+
+    // waiting / progress：缓冲开始与恢复，供上层做加载指示。
+    if (vs.waiting != node->videoWaiting) {
+        node->videoWaiting = vs.waiting;
+        dispatchVideoEvent(node, vs.waiting ? node->bindWaiting : node->bindProgress,
+                           vs.waiting ? "waiting" : "progress");
+    }
+
+    // seekcomplete：由播放器在 seeking 结束时自增序号触发一次。
+    if (vs.seekSerial != node->videoSeekSerial) {
+        node->videoSeekSerial = vs.seekSerial;
+        dispatchVideoEvent(node, node->bindSeekComplete, "seekcomplete");
+    }
+
     if (vs.ended && !node->videoLoop) {
         if (node->videoPlaying) {
             node->videoPlaying = false;
@@ -2787,48 +2997,340 @@ void MiniappView::setNavigationBarTitle(const std::string& title) {
 
 void MiniappView::httpRequest(const std::string& method, const std::string& url,
                               const std::map<std::string, std::string>& headers,
-                              const std::string& body, HttpDone done) {
+                              const std::string& body, int timeoutMs, HttpDone done) {
     nxkit::HttpClient client;
-    for (const auto& entry : headers) client.setHeader(entry.first, entry.second);
-    client.setTimeout(15000);
+    std::string contentType = "application/json";
+    for (const auto& entry : headers) {
+        if (entry.first == "Content-Type" || entry.first == "content-type") {
+            contentType = entry.second;
+        }
+        client.setHeader(entry.first, entry.second);
+    }
+    client.setTimeout(timeoutMs > 0 ? timeoutMs : 15000);
 
     // 首页小程序用相对路径请求自己的服务端，这里补上商店地址。
     std::string target = url;
     if (!target.empty() && target[0] == '/' && MiniAppApi::instance().ready()) {
         target = MiniAppApi::instance().serverUrl() + target;
     }
-    if (method == "GET" || method == "HEAD") {
-        client.getAsync(target, {}, [done, target](const nxkit::HttpResult& result) {
-            if (!result.ok)
-                brls::Logger::error("miniapp httpRequest GET {} failed: status={} error={}",
-                                    target, static_cast<int>(result.status), result.error);
-            done(result.ok, static_cast<int>(result.status), result.body, result.headers,
-                 result.cookies, result.error);
-        });
-    } else {
-        nlohmann::json payload = nlohmann::json::object();
-        if (!body.empty()) {
-            try {
-                payload = nlohmann::json::parse(body);
-            } catch (...) {
-                payload = body;
-            }
+
+    // 任意方法统一走 requestAsync：方法名由脚本给出，非 2xx 也返回响应体，
+    // 由 wx.request 按微信语义决定调用 success 还是 fail。
+    client.requestAsync(method, target, body, body.empty() ? std::string() : contentType,
+                        [done, target, method](const nxkit::HttpResult& result) {
+        if (result.transportError) {
+            brls::Logger::error("miniapp httpRequest {} {} transport error: {}",
+                                method, target, result.error);
+        } else if (!result.ok) {
+            brls::Logger::warning("miniapp httpRequest {} {} status={}", method, target,
+                                  static_cast<int>(result.status));
         }
-        client.postJsonAsync(target, {}, payload, [done, target](const nxkit::HttpResult& result) {
-            if (!result.ok)
-                brls::Logger::error("miniapp httpRequest POST {} failed: status={} error={}",
-                                    target, static_cast<int>(result.status), result.error);
-            done(result.ok, static_cast<int>(result.status), result.body, result.headers,
-                 result.cookies, result.error);
-        });
-    }
+        done(!result.transportError, static_cast<int>(result.status), result.body,
+             result.headers, result.cookies, result.error);
+    });
 }
 
 bool MiniappView::navigateTo(const std::string& url) {
     return openPage(url, true);
 }
 
+namespace {
+
+// 用 pthread 直接起分离线程：std::thread 在 pthread_create/pthread_detach 失败时会
+// 抛异常，而临时对象析构时仍 joinable 就会直接 std::terminate 退出整个容器
+// （真机内存/线程资源紧张时已多次触发）。pthread API 只返回错误码，不会抛异常。
+struct SmbConnectJob {
+    JsRuntimeHost::SmbDone done;
+    std::string server;
+    std::string share;
+    std::string user;
+    std::string password;
+    std::string domain;
+};
+
+struct SmbListJob {
+    JsRuntimeHost::SmbDone done;
+    std::string id;
+    std::string path;
+};
+
+struct SmbScanJob {
+    JsRuntimeHost::SmbDone done;
+    std::function<void(int, int)> progress;
+    std::string id;
+    std::string path;
+    int maxDepth = 4;
+    int maxEntries = 200;
+};
+
+void* runSmbScanJob(void* raw) {
+    std::unique_ptr<SmbScanJob> job(static_cast<SmbScanJob*>(raw));
+    std::string error;
+    std::vector<SmbEntry> entries;
+    try {
+        entries = SmbManager::instance().scan(job->id, job->path, job->maxDepth,
+                                              job->maxEntries, error, job->progress);
+    } catch (const std::exception& e) {
+        error = e.what() ? e.what() : "SMB 扫描异常";
+    } catch (...) {
+        error = "SMB 扫描异常";
+    }
+    std::vector<JsonValue> items;
+    items.reserve(entries.size());
+    for (const auto& e : entries) {
+        JsonValue item = JsonValue::object();
+        item.setMember("name", JsonValue::string(e.name));
+        item.setMember("size", JsonValue::number(static_cast<double>(e.size)));
+        items.push_back(item);
+    }
+    job->done(error.empty(), toJsonString(JsonValue::array(items)), error);
+    return nullptr;
+}
+
+void* runSmbConnectJob(void* raw) {
+    std::unique_ptr<SmbConnectJob> job(static_cast<SmbConnectJob*>(raw));
+    std::string error;
+    std::string id;
+    try {
+        id = SmbManager::instance().connect(job->server, job->share, job->user, job->password,
+                                            job->domain, error);
+    } catch (const std::exception& e) {
+        error = e.what() ? e.what() : "SMB 连接异常";
+    } catch (...) {
+        error = "SMB 连接异常";
+    }
+    job->done(!id.empty(), id, error);
+    return nullptr;
+}
+
+void* runSmbListJob(void* raw) {
+    std::unique_ptr<SmbListJob> job(static_cast<SmbListJob*>(raw));
+    std::string error;
+    std::vector<SmbEntry> entries;
+    try {
+        entries = SmbManager::instance().listDir(job->id, job->path, error);
+    } catch (const std::exception& e) {
+        error = e.what() ? e.what() : "SMB 列目录异常";
+    } catch (...) {
+        error = "SMB 列目录异常";
+    }
+    std::vector<JsonValue> items;
+    items.reserve(entries.size());
+    for (const auto& e : entries) {
+        JsonValue item = JsonValue::object();
+        item.setMember("name", JsonValue::string(e.name));
+        item.setMember("isDir", JsonValue::boolean(e.isDir));
+        item.setMember("size", JsonValue::number(static_cast<double>(e.size)));
+        items.push_back(item);
+    }
+    job->done(error.empty(), toJsonString(JsonValue::array(items)), error);
+    return nullptr;
+}
+
+bool startDetached(void* (*entry)(void*), void* arg) {
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_t thread;
+    int rc = pthread_create(&thread, &attr, entry, arg);
+    pthread_attr_destroy(&attr);
+    if (rc != 0) {
+        brls::Logger::error("miniapp: pthread_create failed rc={}", rc);
+    }
+    return rc == 0;
+}
+
+}  // namespace
+
+
+void MiniappView::smbConnect(const std::string& server, const std::string& share,
+                             const std::string& user, const std::string& password,
+                             const std::string& domain, SmbDone done) {
+    // 连接/列目录不经过 HTTP 代理，代理只在真正要播放时才启动（见 smbStreamUrl），
+    // 避免小程序启动阶段就拉起后台网络线程。
+    SmbConnectJob* job = new (std::nothrow) SmbConnectJob{};
+    if (!job) {
+        brls::Logger::error("smbConnect: out of memory");
+        done(false, "", "内存不足，无法连接 SMB");
+        return;
+    }
+    job->done = done;
+    job->server = server;
+    job->share = share;
+    job->user = user;
+    job->password = password;
+    job->domain = domain;
+    if (!startDetached(runSmbConnectJob, job)) {
+        delete job;
+        done(false, "", "无法创建 SMB 线程");
+    }
+}
+
+void MiniappView::smbListFiles(const std::string& id, const std::string& path,
+                               SmbDone done) {
+    SmbListJob* job = new (std::nothrow) SmbListJob{};
+    if (!job) {
+        brls::Logger::error("smbListFiles: out of memory");
+        done(false, "[]", "内存不足，无法读取 SMB 目录");
+        return;
+    }
+    job->done = done;
+    job->id = id;
+    job->path = path;
+    if (!startDetached(runSmbListJob, job)) {
+        delete job;
+        done(false, "[]", "无法创建 SMB 线程");
+    }
+}
+
+void MiniappView::smbScan(const std::string& id, const std::string& path, int maxDepth,
+                          int maxEntries, SmbDone done,
+                          std::function<void(int, int)> progress) {
+    SmbScanJob* job = new (std::nothrow) SmbScanJob{};
+    if (!job) {
+        brls::Logger::error("smbScan: out of memory");
+        done(false, "[]", "内存不足，无法扫描 SMB 目录");
+        return;
+    }
+    job->done = done;
+    job->progress = std::move(progress);
+    job->id = id;
+    job->path = path;
+    job->maxDepth = maxDepth;
+    job->maxEntries = maxEntries;
+    if (!startDetached(runSmbScanJob, job)) {
+        delete job;
+        done(false, "[]", "无法创建 SMB 线程");
+    }
+}
+
+void MiniappView::smbCancelScan() { SmbManager::instance().cancelScan(); }
+
+void MiniappView::mediaScan(const std::string& sourceId, const std::string& smbId,
+                            const std::string& root, int maxDepth, int maxFiles,
+                            SmbDone done) {
+    struct MediaScanJob {
+        SmbDone done;
+        std::string sourceId;
+        std::string smbId;
+        std::string root;
+        int maxDepth = 4;
+        int maxFiles = 2000;
+    };
+    using Job = MediaScanJob;
+    Job* job = new (std::nothrow) Job{};
+    if (!job) {
+        done(false, "{\"total\":0}", "内存不足");
+        return;
+    }
+    job->done = done;
+    job->sourceId = sourceId;
+    job->smbId = smbId;
+    job->root = root;
+    job->maxDepth = maxDepth;
+    job->maxFiles = maxFiles;
+    void* rawJob = job;
+    auto entry = [](void* raw) -> void* {
+        std::unique_ptr<Job> self(static_cast<Job*>(raw));
+        std::string error;
+        int total = 0;
+        try {
+            total = MediaLibrary::instance().scanSmb(self->sourceId, self->smbId, self->root,
+                                                    self->maxDepth, self->maxFiles, error);
+        } catch (const std::exception& e) {
+            error = e.what() ? e.what() : "媒体库扫描异常";
+        } catch (...) {
+            error = "媒体库扫描异常";
+        }
+        JsonValue result = JsonValue::object();
+        result.setMember("total", JsonValue::number(total));
+        self->done(error.empty(), toJsonString(result), error);
+        return nullptr;
+    };
+    if (!startDetached(entry, rawJob)) {
+        delete job;
+        done(false, "{\"total\":0}", "无法创建媒体库线程");
+    }
+}
+
+void MiniappView::mediaLibrary(const std::string& sourceId, int offset, int limit,
+                               SmbDone done) {
+    struct LibraryJob {
+        SmbDone done;
+        std::string sourceId;
+        int offset = 0;
+        int limit = 0;
+    };
+    using Job = LibraryJob;
+    Job* job = new (std::nothrow) Job{};
+    if (!job) {
+        done(false, "{}", "内存不足");
+        return;
+    }
+    job->done = done;
+    job->sourceId = sourceId;
+    job->offset = offset;
+    job->limit = limit;
+    // 读本地索引文件放到工作线程，避免在 JS 线程里同步回调造成 QuickJS 重入。
+    auto entry = [](void* raw) -> void* {
+        std::unique_ptr<Job> self(static_cast<Job*>(raw));
+        std::string error;
+        int total = 0;
+        std::vector<MediaEntry> entries;
+        try {
+            entries = MediaLibrary::instance().page(self->sourceId, self->offset, self->limit,
+                                                   total, error);
+        } catch (const std::exception& e) {
+            error = e.what() ? e.what() : "媒体库读取异常";
+        } catch (...) {
+            error = "媒体库读取异常";
+        }
+        std::vector<JsonValue> items;
+        items.reserve(entries.size());
+        for (const auto& e : entries) {
+            JsonValue item = JsonValue::object();
+            item.setMember("name", JsonValue::string(e.path));
+            item.setMember("size", JsonValue::number(static_cast<double>(e.size)));
+            if (!e.subtitle.empty()) {
+                item.setMember("subtitle", JsonValue::string(e.subtitle));
+            }
+            items.push_back(item);
+        }
+        JsonValue payload = JsonValue::object();
+        payload.setMember("total", JsonValue::number(total));
+        payload.setMember("list", JsonValue::array(std::move(items)));
+        self->done(error.empty(), toJsonString(payload), error);
+        return nullptr;
+    };
+    if (!startDetached(entry, job)) {
+        delete job;
+        done(false, "{}", "无法创建媒体库线程");
+    }
+}
+
+void MiniappView::smbDisconnect(const std::string& id) {
+    SmbManager::instance().disconnect(id);
+}
+
+std::string MiniappView::smbStreamUrl(const std::string& id, const std::string& path) {
+    SmbManager::instance().init();
+    return SmbManager::instance().streamUrl(id, path);
+}
+
 bool MiniappView::navigateBack(int delta) {
+    if (pages.size() <= 1) return false;
+    pendingNavigation = [this, delta]() { performNavigateBack(delta); };
+    return true;
+}
+
+void MiniappView::flushPendingNavigation() {
+    if (!pendingNavigation) return;
+    auto op = std::move(pendingNavigation);
+    pendingNavigation = nullptr;
+    op();
+}
+
+bool MiniappView::performNavigateBack(int delta) {
     if (pages.size() <= 1) return false;
     int target = std::max(1, static_cast<int>(pages.size()) - std::max(1, delta));
     while (static_cast<int>(pages.size()) > target) {
@@ -2852,6 +3354,11 @@ bool MiniappView::navigateBack(int delta) {
 }
 
 bool MiniappView::redirectTo(const std::string& url) {
+    pendingNavigation = [this, url]() { performRedirectTo(url); };
+    return true;
+}
+
+bool MiniappView::performRedirectTo(const std::string& url) {
     std::string path = stripQuery(url);
     auto page = std::make_unique<PageState>();
     loadPageFiles(*page, path, true);
@@ -2885,6 +3392,11 @@ bool MiniappView::redirectTo(const std::string& url) {
 }
 
 bool MiniappView::reLaunch(const std::string& url) {
+    pendingNavigation = [this, url]() { performReLaunch(url); };
+    return true;
+}
+
+bool MiniappView::performReLaunch(const std::string& url) {
     while (!pages.empty()) {
         PageState& page = *pages.back();
         if (page.runtime) {
@@ -3038,6 +3550,18 @@ JsonValue MiniappView::systemInfo() {
     info.setMember("statusBarHeight", JsonValue::number(0.0));
     info.setMember("language", JsonValue::string("zh_CN"));
     info.setMember("version", JsonValue::string("1.1.2"));
+#ifdef __SWITCH__
+    auto* platform = brls::Application::getPlatform();
+    if (platform && platform->hasEthernetConnection()) {
+        info.setMember("networkType", JsonValue::string("ethernet"));
+    } else if (platform && platform->hasWirelessConnection()) {
+        info.setMember("networkType", JsonValue::string("wifi"));
+    } else {
+        info.setMember("networkType", JsonValue::string("none"));
+    }
+#else
+    info.setMember("networkType", JsonValue::string("wifi"));
+#endif
     return info;
 }
 

@@ -6,6 +6,7 @@
 
 #include <quickjs.h>
 
+#include <borealis/core/application.hpp>
 #include <borealis/core/logger.hpp>
 #include <borealis/core/thread.hpp>
 
@@ -131,6 +132,19 @@ JSValue makeStringMap(JSContext* ctx, const std::map<std::string, std::string>& 
                           JS_NewString(ctx, entry.second.c_str()));
     }
     return object;
+}
+
+/// 微信网络类型：wifi / ethernet / none。Switch 上以太网优先于 Wi-Fi。
+std::string detectNetworkType() {
+#ifdef __SWITCH__
+    auto* platform = brls::Application::getPlatform();
+    if (!platform) return "wifi";
+    if (platform->hasEthernetConnection()) return "ethernet";
+    if (platform->hasWirelessConnection()) return "wifi";
+    return "none";
+#else
+    return "wifi";
+#endif
 }
 
 }  // namespace
@@ -372,13 +386,45 @@ struct RuntimeBridge {
         if (!runtime || argc <= 0 || !JS_IsObject(argv[0])) return JS_UNDEFINED;
         JSValue success = JS_GetPropertyStr(ctx, argv[0], "success");
         JSValue complete = JS_GetPropertyStr(ctx, argv[0], "complete");
+        const std::string type = detectNetworkType();
+        runtime->lastNetworkType = type;
         JSValue result = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, result, "networkType", JS_NewString(ctx, "wifi"));
+        JS_SetPropertyStr(ctx, result, "networkType", JS_NewString(ctx, type.c_str()));
         invoke(runtime, success, runtime->page, 1, &result);
         invoke(runtime, complete, runtime->page, 1, &result);
         JS_FreeValue(ctx, result);
         JS_FreeValue(ctx, success);
         JS_FreeValue(ctx, complete);
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxOnNetworkStatusChange(JSContext* ctx, JSValueConst, int argc,
+                                           JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || argc <= 0 || !JS_IsFunction(ctx, argv[0])) return JS_UNDEFINED;
+        runtime->networkCallbacks.push_back(JS_DupValue(ctx, argv[0]));
+        // 记录基线，只有之后的状态变化才会派发（与微信一致）。
+        if (runtime->lastNetworkType.empty()) runtime->lastNetworkType = detectNetworkType();
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxOffNetworkStatusChange(JSContext* ctx, JSValueConst, int argc,
+                                            JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime) return JS_UNDEFINED;
+        if (argc <= 0 || !JS_IsFunction(ctx, argv[0])) {
+            for (JSValue fn : runtime->networkCallbacks) JS_FreeValue(ctx, fn);
+            runtime->networkCallbacks.clear();
+            return JS_UNDEFINED;
+        }
+        for (auto it = runtime->networkCallbacks.begin();
+             it != runtime->networkCallbacks.end(); ++it) {
+            if (JS_VALUE_GET_PTR(*it) == JS_VALUE_GET_PTR(argv[0])) {
+                JS_FreeValue(ctx, *it);
+                runtime->networkCallbacks.erase(it);
+                break;
+            }
+        }
         return JS_UNDEFINED;
     }
 
@@ -676,14 +722,15 @@ struct RuntimeBridge {
 
     static JSValue wxVideoControlData(JSContext* ctx, JSValueConst, int argc,
                                       JSValueConst* argv, int magic, JSValue* data) {
-        static const char* actions[] = {"play", "pause", "stop", "seek"};
         JsRuntime* runtime = self(ctx);
-        if (!runtime || !runtime->host || magic < 0 || magic > 3) {
-            return JS_UNDEFINED;
-        }
-        std::string id = toStd(ctx, data[0]);
+        if (!runtime || !runtime->host) return JS_UNDEFINED;
+        const std::string id = toStd(ctx, data[0]);
+        const std::string action = toStd(ctx, data[1]);
         double value = (argc > 0) ? numberArg(ctx, argv[0], 0.0) : 0.0;
-        runtime->host->videoControl(id, actions[magic], value);
+        std::string text;
+        if (argc > 0 && JS_IsString(argv[0])) text = toStd(ctx, argv[0]);
+        runtime->host->videoControl(id, action, value, text);
+        (void)magic;
         return JS_UNDEFINED;
     }
 
@@ -693,11 +740,27 @@ struct RuntimeBridge {
         JSValue id = JS_NewString(ctx, argc > 0 ? toStd(ctx, argv[0]).c_str() : "");
         JS_SetPropertyStr(ctx, context, "id", JS_DupValue(ctx, id));
 
-        static const char* names[] = {"play", "pause", "stop", "seek"};
-        for (int i = 0; i < 4; ++i) {
-            int length = i == 3 ? 1 : 0;
-            JSValue fn = JS_NewCFunctionData(ctx, wxVideoControlData, length, i, 1, &id);
-            JS_SetPropertyStr(ctx, context, names[i], fn);
+        struct Entry {
+            const char* name;
+            const char* action;
+            int length;
+        };
+        static const Entry entries[] = {
+            {"play", "play", 0},
+            {"pause", "pause", 0},
+            {"stop", "stop", 0},
+            {"seek", "seek", 1},
+            {"requestFullScreen", "requestFullScreen", 0},
+            {"exitFullScreen", "exitFullScreen", 0},
+            {"setPlaybackRate", "setPlaybackRate", 1},
+            {"setVolume", "setVolume", 1},
+            {"addSubtitle", "addSubtitle", 1},
+        };
+        for (const auto& entry : entries) {
+            JSValue data[2] = {id, JS_NewString(ctx, entry.action)};
+            JSValue fn = JS_NewCFunctionData(ctx, wxVideoControlData, entry.length, 0, 2, data);
+            JS_FreeValue(ctx, data[1]);
+            JS_SetPropertyStr(ctx, context, entry.name, fn);
         }
         JS_FreeValue(ctx, id);
         return context;
@@ -718,6 +781,8 @@ struct RuntimeBridge {
         JSValue success = JS_GetPropertyStr(ctx, argv[0], "success");
         JSValue fail = JS_GetPropertyStr(ctx, argv[0], "fail");
         JSValue complete = JS_GetPropertyStr(ctx, argv[0], "complete");
+        JSValue timeoutValue = JS_GetPropertyStr(ctx, argv[0], "timeout");
+        JSValue responseTypeValue = JS_GetPropertyStr(ctx, argv[0], "responseType");
 
         std::string method =
             (JS_IsUndefined(methodValue) || JS_IsNull(methodValue)) ? std::string() : toStd(ctx, methodValue);
@@ -726,20 +791,27 @@ struct RuntimeBridge {
         std::string url = toStd(ctx, urlValue);
         std::string body;
         std::map<std::string, std::string> headers;
+        // 微信默认 60s；0/未设置走宿主的默认值。
+        int timeoutMs = static_cast<int>(numberArg(ctx, timeoutValue, 60000.0));
+        std::string responseType = toStd(ctx, responseTypeValue);
 
         bool ok = false;
         if (!JS_IsUndefined(dataValue) && !JS_IsNull(dataValue)) {
-            std::string text = runtime->serializeJs(dataValue, &ok);
-            if (ok) {
-                if (method == "GET" || method == "HEAD") {
+            if (method == "GET" || method == "HEAD") {
+                std::string text = runtime->serializeJs(dataValue, &ok);
+                if (ok) {
                     JsonValue dataJson = parseJson(text);
                     std::string query = makeQuery(dataJson);
                     if (!query.empty()) {
                         url += (url.find('?') == std::string::npos ? "?" : "&") + query;
                     }
-                } else {
-                    body = text;
                 }
+            } else if (JS_IsString(dataValue)) {
+                // data 直接给字符串时原样发送，不做 JSON 引号包裹。
+                body = toStd(ctx, dataValue);
+            } else {
+                std::string text = runtime->serializeJs(dataValue, &ok);
+                if (ok) body = text;
             }
         }
 
@@ -765,30 +837,37 @@ struct RuntimeBridge {
         std::weak_ptr<bool> weak = runtime->alive;
 
         runtime->host->httpRequest(
-            method, url, headers, body,
-            [runtime, weak, successDup, failDup, completeDup](
-                bool requestOk, int status, const std::string& responseBody,
+            method, url, headers, body, timeoutMs,
+            [runtime, weak, successDup, failDup, completeDup, responseType](
+                bool transportOk, int status, const std::string& responseBody,
                 const std::map<std::string, std::string>& responseHeaders,
                 const std::map<std::string, std::string>& responseCookies,
                 const std::string& responseError) {
-                brls::sync([runtime, weak, successDup, failDup, completeDup, requestOk,
+                brls::sync([runtime, weak, successDup, failDup, completeDup, transportOk,
                             status, responseBody, responseHeaders, responseCookies,
-                            responseError]() {
+                            responseError, responseType]() {
                     auto token = weak.lock();
                     if (!token || !*token || !runtime->context) return;
                     JSContext* ctx = runtime->context;
                     JSValue result = JS_NewObject(ctx);
                     JS_SetPropertyStr(ctx, result, "statusCode", JS_NewInt32(ctx, status));
-                    JSValue responseData = JS_NewString(ctx, responseBody.c_str());
-                    if (!responseBody.empty()) {
-                        JSValue parsed = JS_ParseJSON(ctx, responseBody.c_str(),
-                                                      responseBody.size(), "<response>");
-                        if (JS_IsException(parsed)) {
-                            JSValue exception = JS_GetException(ctx);
-                            JS_FreeValue(ctx, exception);
-                        } else {
-                            JS_FreeValue(ctx, responseData);
-                            responseData = parsed;
+                    JSValue responseData = JS_UNDEFINED;
+                    if (responseType == "arraybuffer") {
+                        responseData = JS_NewArrayBufferCopy(
+                            ctx, reinterpret_cast<const uint8_t*>(responseBody.data()),
+                            responseBody.size());
+                    } else {
+                        responseData = JS_NewString(ctx, responseBody.c_str());
+                        if (!responseBody.empty()) {
+                            JSValue parsed = JS_ParseJSON(ctx, responseBody.c_str(),
+                                                          responseBody.size(), "<response>");
+                            if (JS_IsException(parsed)) {
+                                JSValue exception = JS_GetException(ctx);
+                                JS_FreeValue(ctx, exception);
+                            } else {
+                                JS_FreeValue(ctx, responseData);
+                                responseData = parsed;
+                            }
                         }
                     }
                     JS_SetPropertyStr(ctx, result, "data", responseData);
@@ -796,14 +875,22 @@ struct RuntimeBridge {
                                       makeStringMap(ctx, responseHeaders));
                     JS_SetPropertyStr(ctx, result, "cookies",
                                       makeStringMap(ctx, responseCookies));
-                    if (requestOk) {
+                    // 微信语义：只要拿到了 HTTP 响应（含 4xx/5xx）就走 success，
+                    // 脚本按 statusCode 自行判断；fail 只在网络层失败时触发。
+                    if (transportOk) {
                         invoke(runtime, successDup, runtime->page, 1, &result);
                     } else {
                         std::string errMsg = "request:fail";
                         if (!responseError.empty()) errMsg += " " + responseError;
                         JSValue failed = JS_NewObject(ctx);
+                        // fail 也带上 statusCode/data/header，便于脚本做兜底提示。
+                        JSValue failData = JS_GetPropertyStr(ctx, result, "data");
+                        JSValue failHeader = JS_GetPropertyStr(ctx, result, "header");
                         JS_SetPropertyStr(ctx, failed, "errMsg",
                                           JS_NewString(ctx, errMsg.c_str()));
+                        JS_SetPropertyStr(ctx, failed, "statusCode", JS_NewInt32(ctx, status));
+                        JS_SetPropertyStr(ctx, failed, "data", failData);
+                        JS_SetPropertyStr(ctx, failed, "header", failHeader);
                         invoke(runtime, failDup, runtime->page, 1, &failed);
                         JS_FreeValue(ctx, failed);
                     }
@@ -822,6 +909,8 @@ struct RuntimeBridge {
         JS_FreeValue(ctx, success);
         JS_FreeValue(ctx, fail);
         JS_FreeValue(ctx, complete);
+        JS_FreeValue(ctx, timeoutValue);
+        JS_FreeValue(ctx, responseTypeValue);
         return JS_UNDEFINED;
     }
 
@@ -917,6 +1006,363 @@ struct RuntimeBridge {
         if (!runtime || !runtime->host) return JS_NewString(ctx, "");
         return JS_NewString(ctx, runtime->host->deviceId().c_str());
     }
+
+    // ---- SMB 数据源 ----
+
+    // 原生调用里任何 C++ 异常都不能穿过 QuickJS 的 C 栈帧：一旦逃逸到 C 边界，
+    // libstdc++ 会走 __terminate 直接 abort 整个容器（真机上表现为播放时整机退出）。
+    // 统一用这个守卫包一层，把异常转成 JS 异常交还给小程序。
+    template <JSValue (*Impl)(JSContext*, JSValueConst, int, JSValueConst*)>
+    static JSValue guardNative(JSContext* ctx, JSValueConst thisVal, int argc,
+                               JSValueConst* argv) {
+        try {
+            return Impl(ctx, thisVal, argc, argv);
+        } catch (const std::exception& error) {
+            return JS_ThrowInternalError(ctx, "native exception: %s", error.what());
+        } catch (...) {
+            return JS_ThrowInternalError(ctx, "native exception");
+        }
+    }
+
+    static JSValue wxSmbConnect(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || argc <= 0 || !JS_IsObject(argv[0])) return JS_UNDEFINED;
+
+        JSValue serverV = JS_GetPropertyStr(ctx, argv[0], "server");
+        JSValue shareV = JS_GetPropertyStr(ctx, argv[0], "share");
+        JSValue userV = JS_GetPropertyStr(ctx, argv[0], "user");
+        JSValue passwordV = JS_GetPropertyStr(ctx, argv[0], "password");
+        JSValue domainV = JS_GetPropertyStr(ctx, argv[0], "domain");
+        JSValue success = JS_GetPropertyStr(ctx, argv[0], "success");
+        JSValue fail = JS_GetPropertyStr(ctx, argv[0], "fail");
+
+        std::string server = toStd(ctx, serverV);
+        std::string share = toStd(ctx, shareV);
+        std::string user = toStd(ctx, userV);
+        std::string password = toStd(ctx, passwordV);
+        std::string domain = toStd(ctx, domainV);
+
+        JSValue successDup = JS_IsFunction(ctx, success) ? JS_DupValue(ctx, success)
+                                                         : JS_UNDEFINED;
+        JSValue failDup = JS_IsFunction(ctx, fail) ? JS_DupValue(ctx, fail) : JS_UNDEFINED;
+        std::weak_ptr<bool> weak = runtime->alive;
+
+        runtime->host->smbConnect(server, share, user, password, domain,
+            [runtime, weak, successDup, failDup](bool ok, const std::string& result,
+                                                 const std::string& error) {
+                brls::sync([runtime, weak, successDup, failDup, ok, result, error]() {
+                    auto token = weak.lock();
+                    if (!token || !*token || !runtime->context) return;
+                    JSContext* ctx = runtime->context;
+                    if (ok) {
+                        JSValue res = JS_NewObject(ctx);
+                        JS_SetPropertyStr(ctx, res, "id", JS_NewString(ctx, result.c_str()));
+                        invoke(runtime, successDup, runtime->page, 1, &res);
+                        JS_FreeValue(ctx, res);
+                    } else {
+                        JSValue failed = JS_NewObject(ctx);
+                        JS_SetPropertyStr(ctx, failed, "errMsg",
+                                          JS_NewString(ctx, ("smb.connect:fail " + error).c_str()));
+                        invoke(runtime, failDup, runtime->page, 1, &failed);
+                        JS_FreeValue(ctx, failed);
+                    }
+                    JS_FreeValue(ctx, successDup);
+                    JS_FreeValue(ctx, failDup);
+                });
+            });
+
+        JS_FreeValue(ctx, serverV);
+        JS_FreeValue(ctx, shareV);
+        JS_FreeValue(ctx, userV);
+        JS_FreeValue(ctx, passwordV);
+        JS_FreeValue(ctx, domainV);
+        JS_FreeValue(ctx, success);
+        JS_FreeValue(ctx, fail);
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxSmbListFiles(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || argc <= 0 || !JS_IsObject(argv[0])) return JS_UNDEFINED;
+
+        JSValue idV = JS_GetPropertyStr(ctx, argv[0], "id");
+        JSValue pathV = JS_GetPropertyStr(ctx, argv[0], "path");
+        JSValue success = JS_GetPropertyStr(ctx, argv[0], "success");
+        JSValue fail = JS_GetPropertyStr(ctx, argv[0], "fail");
+
+        std::string id = toStd(ctx, idV);
+        std::string path = toStd(ctx, pathV);
+
+        JSValue successDup = JS_IsFunction(ctx, success) ? JS_DupValue(ctx, success)
+                                                         : JS_UNDEFINED;
+        JSValue failDup = JS_IsFunction(ctx, fail) ? JS_DupValue(ctx, fail) : JS_UNDEFINED;
+        std::weak_ptr<bool> weak = runtime->alive;
+
+        runtime->host->smbListFiles(id, path,
+            [runtime, weak, successDup, failDup](bool ok, const std::string& result,
+                                                 const std::string& error) {
+                brls::sync([runtime, weak, successDup, failDup, ok, result, error]() {
+                    auto token = weak.lock();
+                    if (!token || !*token || !runtime->context) return;
+                    JSContext* ctx = runtime->context;
+                    if (ok) {
+                        JSValue parsed = JS_ParseJSON(ctx, result.c_str(), result.size(),
+                                                     "<smb-list>");
+                        if (JS_IsException(parsed)) {
+                            JSValue exc = JS_GetException(ctx);
+                            JS_FreeValue(ctx, exc);
+                            parsed = JS_NewArray(ctx);
+                        }
+                        invoke(runtime, successDup, runtime->page, 1, &parsed);
+                        JS_FreeValue(ctx, parsed);
+                    } else {
+                        JSValue failed = JS_NewObject(ctx);
+                        JS_SetPropertyStr(ctx, failed, "errMsg",
+                                          JS_NewString(ctx, ("smb.listFiles:fail " + error).c_str()));
+                        invoke(runtime, failDup, runtime->page, 1, &failed);
+                        JS_FreeValue(ctx, failed);
+                    }
+                    JS_FreeValue(ctx, successDup);
+                    JS_FreeValue(ctx, failDup);
+                });
+            });
+
+        JS_FreeValue(ctx, idV);
+        JS_FreeValue(ctx, pathV);
+        JS_FreeValue(ctx, success);
+        JS_FreeValue(ctx, fail);
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxSmbScan(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || argc <= 0 || !JS_IsObject(argv[0])) return JS_UNDEFINED;
+
+        JSValue idV = JS_GetPropertyStr(ctx, argv[0], "id");
+        JSValue pathV = JS_GetPropertyStr(ctx, argv[0], "path");
+        JSValue depthV = JS_GetPropertyStr(ctx, argv[0], "maxDepth");
+        JSValue entriesV = JS_GetPropertyStr(ctx, argv[0], "maxEntries");
+        JSValue success = JS_GetPropertyStr(ctx, argv[0], "success");
+        JSValue fail = JS_GetPropertyStr(ctx, argv[0], "fail");
+        JSValue progress = JS_GetPropertyStr(ctx, argv[0], "progress");
+
+        std::string id = toStd(ctx, idV);
+        std::string path = toStd(ctx, pathV);
+        int32_t maxDepth = 4;
+        int32_t maxEntries = 200;
+        JS_ToInt32(ctx, &maxDepth, depthV);
+        JS_ToInt32(ctx, &maxEntries, entriesV);
+
+        JSValue successDup = JS_IsFunction(ctx, success) ? JS_DupValue(ctx, success)
+                                                         : JS_UNDEFINED;
+        JSValue failDup = JS_IsFunction(ctx, fail) ? JS_DupValue(ctx, fail) : JS_UNDEFINED;
+        JSValue progressDup = JS_IsFunction(ctx, progress) ? JS_DupValue(ctx, progress)
+                                                           : JS_UNDEFINED;
+        std::weak_ptr<bool> weak = runtime->alive;
+
+        runtime->host->smbScan(id, path, maxDepth, maxEntries,
+            [runtime, weak, successDup, failDup, progressDup](bool ok, const std::string& result,
+                                                             const std::string& error) {
+                brls::sync([runtime, weak, successDup, failDup, progressDup, ok, result,
+                            error]() {
+                    auto token = weak.lock();
+                    if (!token || !*token || !runtime->context) return;
+                    JSContext* ctx = runtime->context;
+                    if (ok) {
+                        JSValue parsed = JS_ParseJSON(ctx, result.c_str(), result.size(),
+                                                     "<smb-scan>");
+                        if (JS_IsException(parsed)) {
+                            JSValue exc = JS_GetException(ctx);
+                            JS_FreeValue(ctx, exc);
+                            parsed = JS_NewArray(ctx);
+                        }
+                        invoke(runtime, successDup, runtime->page, 1, &parsed);
+                        JS_FreeValue(ctx, parsed);
+                    } else {
+                        JSValue failed = JS_NewObject(ctx);
+                        JS_SetPropertyStr(ctx, failed, "errMsg",
+                                          JS_NewString(ctx, ("smb.scan:fail " + error).c_str()));
+                        invoke(runtime, failDup, runtime->page, 1, &failed);
+                        JS_FreeValue(ctx, failed);
+                    }
+                    JS_FreeValue(ctx, successDup);
+                    JS_FreeValue(ctx, failDup);
+                    JS_FreeValue(ctx, progressDup);
+                });
+            },
+            [runtime, weak, progressDup](int dirs, int files) {
+                brls::sync([runtime, weak, progressDup, dirs, files]() {
+                    auto token = weak.lock();
+                    if (!token || !*token || !runtime->context) return;
+                    JSContext* ctx = runtime->context;
+                    JSValue detail = JS_NewObject(ctx);
+                    JS_SetPropertyStr(ctx, detail, "dirs", JS_NewInt32(ctx, dirs));
+                    JS_SetPropertyStr(ctx, detail, "files", JS_NewInt32(ctx, files));
+                    invoke(runtime, progressDup, runtime->page, 1, &detail);
+                    JS_FreeValue(ctx, detail);
+                });
+            });
+
+        JS_FreeValue(ctx, idV);
+        JS_FreeValue(ctx, pathV);
+        JS_FreeValue(ctx, depthV);
+        JS_FreeValue(ctx, entriesV);
+        JS_FreeValue(ctx, success);
+        JS_FreeValue(ctx, fail);
+        JS_FreeValue(ctx, progress);
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxSmbCancelScan(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (runtime && runtime->host) runtime->host->smbCancelScan();
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxMediaScan(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || argc <= 0 || !JS_IsObject(argv[0])) return JS_UNDEFINED;
+
+        JSValue sourceIdV = JS_GetPropertyStr(ctx, argv[0], "sourceId");
+        JSValue smbIdV = JS_GetPropertyStr(ctx, argv[0], "id");
+        JSValue rootV = JS_GetPropertyStr(ctx, argv[0], "root");
+        JSValue depthV = JS_GetPropertyStr(ctx, argv[0], "maxDepth");
+        JSValue filesV = JS_GetPropertyStr(ctx, argv[0], "maxFiles");
+        JSValue success = JS_GetPropertyStr(ctx, argv[0], "success");
+        JSValue fail = JS_GetPropertyStr(ctx, argv[0], "fail");
+
+        std::string sourceId = toStd(ctx, sourceIdV);
+        std::string smbId = toStd(ctx, smbIdV);
+        std::string root = toStd(ctx, rootV);
+        int32_t maxDepth = 4;
+        int32_t maxFiles = 2000;
+        JS_ToInt32(ctx, &maxDepth, depthV);
+        JS_ToInt32(ctx, &maxFiles, filesV);
+
+        JSValue successDup = JS_IsFunction(ctx, success) ? JS_DupValue(ctx, success)
+                                                         : JS_UNDEFINED;
+        JSValue failDup = JS_IsFunction(ctx, fail) ? JS_DupValue(ctx, fail) : JS_UNDEFINED;
+        std::weak_ptr<bool> weak = runtime->alive;
+
+        runtime->host->mediaScan(sourceId, smbId, root, maxDepth, maxFiles,
+            [runtime, weak, successDup, failDup](bool ok, const std::string& result,
+                                                 const std::string& error) {
+                brls::sync([runtime, weak, successDup, failDup, ok, result, error]() {
+                    auto token = weak.lock();
+                    if (!token || !*token || !runtime->context) return;
+                    JSContext* ctx = runtime->context;
+                    if (ok) {
+                        JSValue parsed = JS_ParseJSON(ctx, result.c_str(), result.size(),
+                                                     "<media-scan>");
+                        if (JS_IsException(parsed)) {
+                            JSValue exc = JS_GetException(ctx);
+                            JS_FreeValue(ctx, exc);
+                            parsed = JS_NewObject(ctx);
+                        }
+                        invoke(runtime, successDup, runtime->page, 1, &parsed);
+                        JS_FreeValue(ctx, parsed);
+                    } else {
+                        JSValue failed = JS_NewObject(ctx);
+                        JS_SetPropertyStr(ctx, failed, "errMsg",
+                                          JS_NewString(ctx, ("media.scan:fail " + error).c_str()));
+                        invoke(runtime, failDup, runtime->page, 1, &failed);
+                        JS_FreeValue(ctx, failed);
+                    }
+                    JS_FreeValue(ctx, successDup);
+                    JS_FreeValue(ctx, failDup);
+                });
+            });
+
+        JS_FreeValue(ctx, sourceIdV);
+        JS_FreeValue(ctx, smbIdV);
+        JS_FreeValue(ctx, rootV);
+        JS_FreeValue(ctx, depthV);
+        JS_FreeValue(ctx, filesV);
+        JS_FreeValue(ctx, success);
+        JS_FreeValue(ctx, fail);
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxMediaLibrary(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || argc <= 0 || !JS_IsObject(argv[0])) return JS_UNDEFINED;
+
+        JSValue sourceIdV = JS_GetPropertyStr(ctx, argv[0], "sourceId");
+        JSValue offsetV = JS_GetPropertyStr(ctx, argv[0], "offset");
+        JSValue limitV = JS_GetPropertyStr(ctx, argv[0], "limit");
+        JSValue success = JS_GetPropertyStr(ctx, argv[0], "success");
+        JSValue fail = JS_GetPropertyStr(ctx, argv[0], "fail");
+
+        std::string sourceId = toStd(ctx, sourceIdV);
+        int32_t offset = 0;
+        int32_t limit = 0;
+        JS_ToInt32(ctx, &offset, offsetV);
+        JS_ToInt32(ctx, &limit, limitV);
+
+        JSValue successDup = JS_IsFunction(ctx, success) ? JS_DupValue(ctx, success)
+                                                         : JS_UNDEFINED;
+        JSValue failDup = JS_IsFunction(ctx, fail) ? JS_DupValue(ctx, fail) : JS_UNDEFINED;
+        std::weak_ptr<bool> weak = runtime->alive;
+
+        runtime->host->mediaLibrary(sourceId, offset, limit,
+            [runtime, weak, successDup, failDup](bool ok, const std::string& result,
+                                                 const std::string& error) {
+                brls::sync([runtime, weak, successDup, failDup, ok, result, error]() {
+                    auto token = weak.lock();
+                    if (!token || !*token || !runtime->context) return;
+                    JSContext* ctx = runtime->context;
+                    if (ok) {
+                        JSValue parsed = JS_ParseJSON(ctx, result.c_str(), result.size(),
+                                                     "<media-library>");
+                        if (JS_IsException(parsed)) {
+                            JSValue exc = JS_GetException(ctx);
+                            JS_FreeValue(ctx, exc);
+                            parsed = JS_NewObject(ctx);
+                        }
+                        invoke(runtime, successDup, runtime->page, 1, &parsed);
+                        JS_FreeValue(ctx, parsed);
+                    } else {
+                        JSValue failed = JS_NewObject(ctx);
+                        JS_SetPropertyStr(ctx, failed, "errMsg",
+                                          JS_NewString(ctx, ("media.library:fail " + error).c_str()));
+                        invoke(runtime, failDup, runtime->page, 1, &failed);
+                        JS_FreeValue(ctx, failed);
+                    }
+                    JS_FreeValue(ctx, successDup);
+                    JS_FreeValue(ctx, failDup);
+                });
+            });
+
+        JS_FreeValue(ctx, sourceIdV);
+        JS_FreeValue(ctx, offsetV);
+        JS_FreeValue(ctx, limitV);
+        JS_FreeValue(ctx, success);
+        JS_FreeValue(ctx, fail);
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxSmbDisconnect(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || argc <= 0 || !JS_IsObject(argv[0])) return JS_UNDEFINED;
+        JSValue idV = JS_GetPropertyStr(ctx, argv[0], "id");
+        std::string id = toStd(ctx, idV);
+        JS_FreeValue(ctx, idV);
+        if (!id.empty()) runtime->host->smbDisconnect(id);
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxSmbStreamUrl(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || argc <= 0 || !JS_IsObject(argv[0])) return JS_NewString(ctx, "");
+        JSValue idV = JS_GetPropertyStr(ctx, argv[0], "id");
+        JSValue pathV = JS_GetPropertyStr(ctx, argv[0], "path");
+        std::string id = toStd(ctx, idV);
+        std::string path = toStd(ctx, pathV);
+        JS_FreeValue(ctx, idV);
+        JS_FreeValue(ctx, pathV);
+        std::string url = runtime->host->smbStreamUrl(id, path);
+        return JS_NewString(ctx, url.c_str());
+    }
 };
 
 JsRuntime::JsRuntime(JsRuntimeHost* host, std::string packageDir, std::string pagePath,
@@ -930,6 +1376,8 @@ JsRuntime::~JsRuntime() {
     if (alive) *alive = false;
     if (context) {
         clearTimers();
+        for (JSValue fn : networkCallbacks) JS_FreeValue(context, fn);
+        networkCallbacks.clear();
         for (auto& entry : expressionCache) {
             JS_FreeValue(context, entry.second);
         }
@@ -1230,6 +1678,8 @@ void JsRuntime::installWx() {
     set("getSystemInfoSync", RuntimeBridge::wxGetSystemInfoSync, 0);
     set("getSystemInfo", RuntimeBridge::wxGetSystemInfo, 1);
     set("getNetworkType", RuntimeBridge::wxGetNetworkType, 1);
+    set("onNetworkStatusChange", RuntimeBridge::wxOnNetworkStatusChange, 1);
+    set("offNetworkStatusChange", RuntimeBridge::wxOffNetworkStatusChange, 1);
     set("vibrateShort", RuntimeBridge::wxVibrateShort, 1);
     set("canIUse", RuntimeBridge::wxCanIUse, 1);
     set("nextTick", RuntimeBridge::wxNextTick, 1);
@@ -1250,9 +1700,8 @@ void JsRuntime::installWx() {
     for (const char* name : {"setNavigationBarColor", "showNavigationBarLoading",
                              "hideNavigationBarLoading", "setKeepScreenOn",
                              "setPreferredFramesPerSecond", "reportAnalytics",
-                             "reportEvent", "onNetworkStatusChange", "onAppShow",
-                             "onAppHide", "onError", "onUnhandledRejection",
-                             "offNetworkStatusChange", "offAppShow", "offAppHide",
+                             "reportEvent", "onAppShow", "onAppHide", "onError",
+                             "onUnhandledRejection", "offAppShow", "offAppHide",
                              "offError", "offUnhandledRejection", "pageScrollTo"}) {
         set(name, RuntimeBridge::wxNoop, 1);
     }
@@ -1282,6 +1731,38 @@ void JsRuntime::installWx() {
     JS_SetPropertyStr(context, miniappNamespace, "deviceId",
                       JS_NewCFunction(context, RuntimeBridge::wxMiniAppDeviceId, "deviceId", 0));
     JS_SetPropertyStr(context, wx, "miniapp", miniappNamespace);
+
+    // wx.smb：SMB 数据源能力。
+    JSValue smbNamespace = JS_NewObject(context);
+    JS_SetPropertyStr(context, smbNamespace, "connect",
+                      JS_NewCFunction(context, RuntimeBridge::guardNative<RuntimeBridge::wxSmbConnect>,
+                                      "connect", 1));
+    JS_SetPropertyStr(context, smbNamespace, "listFiles",
+                      JS_NewCFunction(context, RuntimeBridge::guardNative<RuntimeBridge::wxSmbListFiles>,
+                                      "listFiles", 1));
+    JS_SetPropertyStr(context, smbNamespace, "scan",
+                      JS_NewCFunction(context, RuntimeBridge::guardNative<RuntimeBridge::wxSmbScan>,
+                                      "scan", 1));
+    JS_SetPropertyStr(context, smbNamespace, "cancelScan",
+                      JS_NewCFunction(context, RuntimeBridge::guardNative<RuntimeBridge::wxSmbCancelScan>,
+                                      "cancelScan", 0));
+    JS_SetPropertyStr(context, smbNamespace, "disconnect",
+                      JS_NewCFunction(context, RuntimeBridge::guardNative<RuntimeBridge::wxSmbDisconnect>,
+                                      "disconnect", 1));
+    JS_SetPropertyStr(context, smbNamespace, "streamUrl",
+                      JS_NewCFunction(context, RuntimeBridge::guardNative<RuntimeBridge::wxSmbStreamUrl>,
+                                      "streamUrl", 1));
+    JS_SetPropertyStr(context, wx, "smb", smbNamespace);
+
+    // wx.media：原生媒体库（增量扫描 + 本地索引）。
+    JSValue mediaNamespace = JS_NewObject(context);
+    JS_SetPropertyStr(context, mediaNamespace, "scan",
+                      JS_NewCFunction(context, RuntimeBridge::guardNative<RuntimeBridge::wxMediaScan>,
+                                      "scan", 1));
+    JS_SetPropertyStr(context, mediaNamespace, "library",
+                      JS_NewCFunction(context, RuntimeBridge::guardNative<RuntimeBridge::wxMediaLibrary>,
+                                      "library", 1));
+    JS_SetPropertyStr(context, wx, "media", mediaNamespace);
 
     JS_SetPropertyStr(context, global, "wx", wx);
     JS_FreeValue(context, global);
@@ -1367,8 +1848,31 @@ void JsRuntime::clearTimers() {
     timers.clear();
 }
 
+void JsRuntime::pollNetworkStatus(double nowMillisecondsValue) {
+    if (!context || networkCallbacks.empty()) return;
+    if (lastNetworkCheck != 0.0 && nowMillisecondsValue - lastNetworkCheck < 2000.0) return;
+    lastNetworkCheck = nowMillisecondsValue;
+
+    const std::string type = detectNetworkType();
+    if (type == lastNetworkType) return;
+    const bool hadBaseline = !lastNetworkType.empty();
+    lastNetworkType = type;
+    if (!hadBaseline) return;
+
+    JSValue detail = JS_NewObject(context);
+    JS_SetPropertyStr(context, detail, "isConnected",
+                      JS_NewBool(context, type != "none"));
+    JS_SetPropertyStr(context, detail, "networkType", JS_NewString(context, type.c_str()));
+    for (const JSValue fn : networkCallbacks) {
+        callJsFunction(fn, page, 1, &detail, "onNetworkStatusChange");
+    }
+    JS_FreeValue(context, detail);
+}
+
 void JsRuntime::pumpTimers(double nowMillisecondsValue) {
-    if (!context || timers.empty()) return;
+    if (!context) return;
+    pollNetworkStatus(nowMillisecondsValue);
+    if (timers.empty()) return;
 
     struct Pending {
         JSValue fn = JS_UNDEFINED;

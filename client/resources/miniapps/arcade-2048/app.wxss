@@ -1,0 +1,236 @@
+/* 2048 · 掌上合成 —— 深色掌机主题 */
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background-color: #0f1117;
+  padding: 34rpx 40rpx;
+  color: #e9edf6;
+}
+
+.top {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  margin-bottom: 28rpx;
+}
+
+.title {
+  font-size: 68rpx;
+  font-weight: bold;
+  color: #f5f7fb;
+  line-height: 1;
+}
+
+.subtitle {
+  font-size: 22rpx;
+  color: #7d8698;
+  margin-top: 8rpx;
+  letter-spacing: 4rpx;
+}
+
+.scores {
+  flex-direction: row;
+  align-items: center;
+}
+
+.score-card {
+  width: 174rpx;
+  height: 96rpx;
+  border-radius: 18rpx;
+  background-color: #181c26;
+  border: 2rpx solid #252b38;
+  align-items: center;
+  justify-content: center;
+  margin-left: 16rpx;
+}
+
+.score-label {
+  font-size: 20rpx;
+  color: #7d8698;
+}
+
+.score-value {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #f5b642;
+  line-height: 1.2;
+}
+
+.body {
+  flex-direction: row;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.board {
+  width: 620rpx;
+  height: 620rpx;
+  flex-direction: column;
+  padding: 10rpx;
+  border-radius: 22rpx;
+  background-color: #151924;
+  border: 2rpx solid #222836;
+}
+
+.board-row {
+  flex-direction: row;
+  height: 150rpx;
+  flex-shrink: 0;
+}
+
+.tile {
+  width: 138rpx;
+  height: 138rpx;
+  margin: 6rpx;
+  border-radius: 14rpx;
+  line-height: 138rpx;
+  text-align: center;
+  font-size: 44rpx;
+  font-weight: bold;
+  padding: 0;
+  background-color: #1b2029;
+  color: #c8d0de;
+  border-width: 0;
+  flex-shrink: 0;
+}
+
+.v2 { background-color: #2a3242; color: #cfd8e6; font-size: 44rpx; }
+.v4 { background-color: #36415a; color: #dfe8f5; font-size: 44rpx; }
+.v8 { background-color: #f2b179; color: #40260f; }
+.v16 { background-color: #f59563; color: #ffffff; }
+.v32 { background-color: #f67c5f; color: #ffffff; }
+.v64 { background-color: #f65e3b; color: #ffffff; }
+.v128 { background-color: #edcf72; color: #3b2c07; font-size: 40rpx; }
+.v256 { background-color: #edcc61; color: #3b2c07; font-size: 40rpx; }
+.v512 { background-color: #edc850; color: #3b2c07; font-size: 40rpx; }
+.v1024 { background-color: #edc53f; color: #3b2c07; font-size: 34rpx; }
+.v2048 { background-color: #edc22e; color: #3b2c07; font-size: 34rpx; }
+.vbig { background-color: #3c3a32; color: #f7f2e4; font-size: 30rpx; }
+
+.panel {
+  flex: 1;
+  margin-left: 44rpx;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pad {
+  flex-direction: column;
+  align-items: center;
+  margin-top: 6rpx;
+}
+
+.pad-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.pad-gap {
+  width: 118rpx;
+  height: 108rpx;
+}
+
+.dir {
+  width: 118rpx;
+  height: 108rpx;
+  margin: 8rpx;
+  border-radius: 18rpx;
+  background-color: #1c2230;
+  border: 2rpx solid #2b3446;
+  color: #eaf0fb;
+  font-size: 42rpx;
+  font-weight: bold;
+  padding: 0;
+  line-height: 108rpx;
+  text-align: center;
+}
+
+.actions {
+  flex-direction: row;
+  margin-top: 26rpx;
+}
+
+.act {
+  width: 220rpx;
+  height: 84rpx;
+  border-radius: 16rpx;
+  background-color: #202634;
+  border: 2rpx solid #2c3546;
+  color: #cfd8e6;
+  font-size: 26rpx;
+  padding: 0;
+  margin: 0 8rpx;
+  line-height: 80rpx;
+  text-align: center;
+}
+
+.act-main {
+  background-color: #f5b642;
+  border-color: #f5b642;
+  color: #241a05;
+  font-weight: bold;
+}
+
+.hint {
+  flex-direction: column;
+  align-items: center;
+  margin-top: 24rpx;
+}
+
+.hint-line {
+  font-size: 22rpx;
+  color: #6f7787;
+  line-height: 1.7;
+}
+
+.won-badge {
+  margin-top: 22rpx;
+  padding: 12rpx 28rpx;
+  border-radius: 26rpx;
+  background-color: #2a2410;
+  border: 2rpx solid #6b5520;
+}
+
+.won-text {
+  font-size: 24rpx;
+  color: #f5d06a;
+  font-weight: bold;
+}
+
+.over-box {
+  width: 100%;
+  margin-top: 20rpx;
+  padding: 26rpx 20rpx;
+  border-radius: 18rpx;
+  background-color: #241820;
+  border: 2rpx solid #4a2b36;
+  align-items: center;
+}
+
+.over-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #ff9a8a;
+}
+
+.over-sub {
+  font-size: 22rpx;
+  color: #b08d95;
+  margin-top: 8rpx;
+}
+
+.over-btn {
+  width: 260rpx;
+  height: 78rpx;
+  margin-top: 18rpx;
+  border-radius: 14rpx;
+  background-color: #ff5b3a;
+  color: #ffffff;
+  font-size: 26rpx;
+  font-weight: bold;
+  line-height: 76rpx;
+  padding: 0;
+}

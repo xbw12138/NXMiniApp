@@ -35,6 +35,12 @@ struct RenderNode {
     std::string imageMode; // image
     // 远程图需要的附加请求头，如 "Cookie: a=b"（鉴权直链预览用）。
     std::string imageHeaders;
+    // lazy-load：只有滚动到可见区域后才发起下载。
+    bool imageLazyLoad = false;
+    bool imageLoadDispatched = false;
+    bool imageErrorDispatched = false;
+    std::string bindImageLoad;
+    std::string bindImageError;
     std::string value;     // input / slider
     std::string placeholder;
     std::string navUrl;    // navigator
@@ -68,11 +74,25 @@ struct RenderNode {
     std::string videoErrorText;
     double videoTime = 0.0;
     double videoDuration = 0.0;
+    // initial-time：起播位置（秒）；playback-rate：倍速；volume：0..100。
+    double videoInitialTime = 0.0;
+    double videoPlaybackRate = 0.0;  // 0 = 使用 mpv 默认（1.0）
+    int videoVolume = -1;            // -1 = 不覆盖
+    std::string videoSubtitle;       // 外挂字幕地址（可为 SMB 路径）
+    // 事件去重游标：避免每帧重复派发 loadedmetadata / seekcomplete。
+    bool videoMetadataDispatched = false;
+    bool videoWaiting = false;
+    unsigned videoSeekSerial = 0;
     std::string bindPlay;
     std::string bindPause;
     std::string bindEnded;
     std::string bindTimeUpdate;
     std::string bindError;
+    std::string bindLoadedMetadata;
+    std::string bindWaiting;
+    std::string bindProgress;
+    std::string bindSeekComplete;
+    std::string bindFullscreenChange;
     bool catchTap = false;
 
     // scroll-view / swiper

@@ -1,0 +1,75 @@
+<view class="page">
+  <view class="top">
+    <view class="brand">
+      <text class="title">今天吃什么</text>
+      <text class="subtitle">把选择交给运气</text>
+    </view>
+    <view class="modes">
+      <button wx:for="{{modes}}" wx:key="key"
+              class="mode {{mode === item.key ? 'mode-on' : ''}}"
+              data-key="{{item.key}}" bindtap="onMode">{{item.label}}</button>
+    </view>
+  </view>
+
+  <view class="body">
+    <view class="left">
+      <view class="result-card">
+        <text class="result-tag">{{tag}}</text>
+        <text class="result-main">{{resultText}}</text>
+        <text class="result-sub">{{resultSub}}</text>
+        <button class="spin" bindtap="onSpin">{{spinLabel}}</button>
+      </view>
+
+      <view wx:if="{{history.length > 0}}" class="history">
+        <text class="history-title">最近</text>
+        <view class="chips">
+          <text wx:for="{{history}}" wx:key="id" class="chip">{{item.text}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="right">
+      <block wx:if="{{mode === 'food'}}">
+        <view class="head">
+          <text class="head-title">候选菜单</text>
+          <text class="head-count">{{options.length}} 个选择</text>
+        </view>
+
+        <view class="add-row">
+          <input class="add-input" placeholder="想吃的都可以加进来" value="{{newOption}}"
+                 bindinput="onInput" bindconfirm="onAdd"/>
+          <button class="add-btn" bindtap="onAdd">添加</button>
+        </view>
+
+        <scroll-view class="list" scroll-y="{{true}}" style="height: 100%;">
+          <view wx:for="{{options}}" wx:key="id"
+                class="opt-row {{index === activeIndex && spinning ? 'opt-on' : ''}}">
+            <text class="opt-idx">{{item.idx}}</text>
+            <text class="opt-name">{{item.name}}</text>
+            <button class="opt-del" data-id="{{item.id}}" bindtap="onDel">×</button>
+          </view>
+
+          <view wx:if="{{options.length === 0}}" class="empty">
+            <text class="empty-text">菜单还是空的</text>
+            <text class="empty-text">先添加几个想吃的，或者点下方快捷添加</text>
+          </view>
+        </scroll-view>
+
+        <view class="presets">
+          <text class="presets-title">快捷添加</text>
+          <view wx:for="{{presetRows}}" wx:for-item="row" wx:key="k" class="preset-row">
+            <button wx:for="{{row.names}}" wx:for-item="name" wx:key="name"
+                    class="preset" data-name="{{name}}" bindtap="onPreset">+ {{name}}</button>
+          </view>
+        </view>
+      </block>
+
+      <block wx:else>
+        <view class="info-card">
+          <text class="info-title">{{infoTitle}}</text>
+          <text class="info-text">{{infoText}}</text>
+        </view>
+      </block>
+    </view>
+  </view>
+</view>

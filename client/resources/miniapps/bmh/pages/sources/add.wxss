@@ -1,0 +1,58 @@
+/* 添加数据源页 */
+.type-grid {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: 20rpx;
+}
+
+.type-btn {
+  padding: 14rpx 24rpx;
+  border-radius: 14rpx;
+  background-color: #1c2026;
+  margin-right: 14rpx;
+  margin-bottom: 14rpx;
+}
+
+.type-on {
+  background-color: #ff5b3a;
+}
+
+.type-text {
+  font-size: 24rpx;
+  color: #cfd5dd;
+  font-weight: bold;
+}
+
+.type-on .type-text {
+  color: #ffffff;
+}
+
+.section-title {
+  font-size: 25rpx;
+  font-weight: bold;
+  color: #8b94a0;
+  margin: 14rpx 0 8rpx;
+}
+
+.input {
+  height: 72rpx;
+  background-color: #1c2026;
+  border-radius: 12rpx;
+  padding: 0 18rpx;
+  color: #eef0f3;
+  font-size: 24rpx;
+}
+
+.action-row {
+  margin-top: 30rpx;
+}
+
+.action-row .btn {
+  flex: 1;
+  margin-right: 14rpx;
+}
+
+.test-ok {
+  color: #0fdc78;
+  font-weight: bold;
+}

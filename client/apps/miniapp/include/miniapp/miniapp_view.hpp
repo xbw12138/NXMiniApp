@@ -47,7 +47,21 @@ public:
     void setNavigationBarTitle(const std::string& title) override;
     void httpRequest(const std::string& method, const std::string& url,
                      const std::map<std::string, std::string>& headers,
-                     const std::string& body, HttpDone done) override;
+                     const std::string& body, int timeoutMs, HttpDone done) override;
+    void smbConnect(const std::string& server, const std::string& share,
+                    const std::string& user, const std::string& password,
+                    const std::string& domain, SmbDone done) override;
+    void smbListFiles(const std::string& id, const std::string& path,
+                      SmbDone done) override;
+    void smbScan(const std::string& id, const std::string& path, int maxDepth, int maxEntries,
+                 SmbDone done, std::function<void(int, int)> progress = {}) override;
+    void smbCancelScan() override;
+    void mediaScan(const std::string& sourceId, const std::string& smbId, const std::string& root,
+                   int maxDepth, int maxFiles, SmbDone done) override;
+    void mediaLibrary(const std::string& sourceId, int offset, int limit,
+                      SmbDone done) override;
+    void smbDisconnect(const std::string& id) override;
+    std::string smbStreamUrl(const std::string& id, const std::string& path) override;
     bool navigateTo(const std::string& url) override;
     bool navigateBack(int delta) override;
     bool redirectTo(const std::string& url) override;
@@ -65,7 +79,7 @@ public:
     std::string clipboardGet() override;
     void clipboardSet(const std::string& text) override;
     bool videoControl(const std::string& id, const std::string& action,
-                      double value) override;
+                      double value, const std::string& text = std::string()) override;
 
 private:
     struct LocalValue {
@@ -201,11 +215,23 @@ private:
     void setLocalValue(RenderNode* node, const std::string& value);
 
     void tick(double now);
+    // 会销毁页面（进而销毁该页 JsRuntime）的导航不能同步执行：wx.navigateBack 等
+    // 通常由定时器或点击回调触发，此时 QuickJS 还在这套 context 上执行，直接释放
+    // 会让引擎继续读写已释放的内存，真机表现为点保存后崩溃。统一延迟到下一帧。
+    void flushPendingNavigation();
+    bool performNavigateBack(int delta);
+    bool performRedirectTo(const std::string& url);
+    bool performReLaunch(const std::string& url);
     void pumpSwiper(PageState& page, RenderNode& node, double now);
     void pumpVideo(PageState& page, RenderNode& node, double now);
     void toggleVideo(RenderNode* node);
     void startVideo(RenderNode* node, bool forceLoad);
     void stopVideo();
+    // 全屏播放：由 createVideoContext.requestFullScreen/exitFullScreen 驱动，
+    // 全屏时按内容区全矩形直出视频，B/返回键退出。
+    void enterVideoFullscreen(const std::string& path);
+    void exitVideoFullscreen();
+    bool isVideoFullscreen() const { return !fullscreenVideoPath.empty(); }
     void dispatchVideoEvent(RenderNode* node, const std::string& handler,
                             const std::string& type);
     void saveStorage();
@@ -226,6 +252,7 @@ private:
 
     std::vector<std::unique_ptr<PageState>> pages;
     PageState* current = nullptr;
+    std::function<void()> pendingNavigation;
 
     std::vector<RenderNode*> focusNodes;
     std::string focusPath;
@@ -259,6 +286,8 @@ private:
     // wiliwili 风格的播放器，不再直接调用 mpv。
     std::string activeVideoPath;
     std::string activeVideoSrc;
+    // 非空表示当前处于视频全屏，值为对应 video 节点的 path。
+    std::string fullscreenVideoPath;
     brls::VoidEvent::Subscription postDrawToken;
 
     void onVideoState(const nxkit::VideoState& vs);

@@ -1,0 +1,55 @@
+<view class="page">
+  <view class="left">
+    <view class="mode-row">
+      <button wx:for="{{modes}}" wx:key="key"
+              class="mode {{modeKey === item.key ? 'mode-on' : ''}}"
+              data-key="{{item.key}}" bindtap="onMode">{{item.label}}</button>
+    </view>
+
+    <view class="timer-card">
+      <text class="time">{{timeText}}</text>
+      <text class="state">{{stateText}}</text>
+      <view class="bar">
+        <progress percent="{{percent}}" activeColor="{{accent}}" backgroundColor="#262b36"/>
+      </view>
+      <text class="session">今日 {{todayCount}} 个番茄 · 专注 {{todayMinutes}} 分钟</text>
+    </view>
+
+    <view class="controls">
+      <button class="ctrl ctrl-main" bindtap="onToggle">{{running ? '暂停' : '开始'}}</button>
+      <button class="ctrl" bindtap="onReset">重置</button>
+      <button class="ctrl" bindtap="onNext">下一个</button>
+    </view>
+
+    <text wx:if="{{msg}}" class="msg">{{msg}}</text>
+  </view>
+
+  <view class="right">
+    <view class="right-head">
+      <text class="right-title">今日任务</text>
+      <text class="right-count">{{doneCount}} / {{tasks.length}}</text>
+    </view>
+
+    <view class="add-row">
+      <input class="task-input" placeholder="写下一件要专注完成的事"
+             value="{{newTask}}" bindinput="onInput" bindconfirm="onAdd"/>
+      <button class="add-btn" bindtap="onAdd">添加</button>
+    </view>
+
+    <scroll-view class="task-scroll" scroll-y="{{true}}" style="height: 100%;">
+      <view wx:for="{{tasks}}" wx:key="id" class="task-row">
+        <button class="task-box {{item.done ? 'task-box-on' : ''}}"
+                data-id="{{item.id}}" bindtap="onToggleTask">
+          <text wx:if="{{item.done}}" class="task-check">✓</text>
+        </button>
+        <text class="task-text {{item.done ? 'task-done' : ''}}">{{item.text}}</text>
+        <button class="del" data-id="{{item.id}}" bindtap="onDel">×</button>
+      </view>
+
+      <view wx:if="{{tasks.length === 0}}" class="empty">
+        <text class="empty-text">还没有任务</text>
+        <text class="empty-text">先写下今天最重要的一件事</text>
+      </view>
+    </scroll-view>
+  </view>
+</view>

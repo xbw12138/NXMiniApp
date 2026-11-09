@@ -1,0 +1,9 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "backgroundColor": "#0f1117",
+    "navigationBarTitleText": "2048 · 掌上合成"
+  }
+}

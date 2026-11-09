@@ -1,0 +1,48 @@
+<view class="page">
+  <view class="top">
+    <text class="title">每日一言</text>
+    <text class="subtitle">{{dateText}}</text>
+  </view>
+
+  <view class="body">
+    <view class="left">
+      <view class="quote-card">
+        <view class="tag">
+          <text class="tag-text">{{quote.tag}}</text>
+        </view>
+        <text class="quote">{{quote.t}}</text>
+        <text class="author">{{authorText}}</text>
+        <view class="actions">
+          <button class="act" bindtap="onFav">{{isFav ? '取消收藏' : '收藏'}}</button>
+          <button class="act" bindtap="onCopy">复制</button>
+          <button class="act act-main" bindtap="onNext">换一句</button>
+        </view>
+      </view>
+      <view class="tip">
+        <text class="tip-text">每天自动换一句 · 收藏保存在本地</text>
+      </view>
+    </view>
+
+    <view class="right">
+      <view class="head">
+        <text class="head-title">我的收藏</text>
+        <text class="head-count">{{favorites.length}} 条</text>
+      </view>
+
+      <scroll-view class="list" scroll-y="{{true}}" style="height: 100%;">
+        <view wx:for="{{favorites}}" wx:key="t" class="fav-row">
+          <view class="fav-main">
+            <text class="fav-text">{{item.short}}</text>
+            <text class="fav-author">— {{item.a}}</text>
+          </view>
+          <button class="fav-del" data-i="{{index}}" bindtap="onDelFav">×</button>
+        </view>
+
+        <view wx:if="{{favorites.length === 0}}" class="empty">
+          <text class="empty-text">还没有收藏</text>
+          <text class="empty-text">遇到喜欢的句子，点一下收藏</text>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

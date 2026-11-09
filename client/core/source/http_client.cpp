@@ -32,6 +32,7 @@ HttpResult fromResponse(const cpr::Response& response) {
     }
 
     if (response.error) {
+        result.transportError = true;
         result.error = response.error.message;
         // curl 的错误缓冲区在某些失败路径（如 multi 接口中断）不会写入文本，
         // 只留错误码，这里兜底把码补上，否则日志/界面上看不到失败原因。
@@ -189,6 +190,84 @@ HttpResult HttpClient::postJson(const std::string& path, const Query& query,
         cpr::Post(cpr::Url{urlFor(path)}, toParameters(query), header, cpr::Body{body.dump()},
                   redirect(), sslOptions(), cpr::Timeout{timeoutFor(timeout)});
     return fromResponse(response);
+}
+
+namespace {
+
+std::string upperText(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return value;
+}
+
+}  // namespace
+
+HttpResult HttpClient::request(const std::string& method, const std::string& path,
+                               const std::string& body, const std::string& contentType,
+                               int timeout) const {
+    const std::string verb = upperText(method);
+    cpr::Session session;
+    session.SetUrl(cpr::Url{urlFor(path)});
+    cpr::Header header = headers();
+    if (!contentType.empty()) header["Content-Type"] = contentType;
+    session.SetHeader(header);
+    session.SetRedirect(redirect());
+    session.SetSslOptions(sslOptions());
+    session.SetTimeout(cpr::Timeout{timeoutFor(timeout)});
+    if (!body.empty() && verb != "GET" && verb != "HEAD") session.SetBody(cpr::Body{body});
+
+    cpr::Response response;
+    if (verb == "POST") {
+        response = session.Post();
+    } else if (verb == "PUT") {
+        response = session.Put();
+    } else if (verb == "DELETE") {
+        response = session.Delete();
+    } else if (verb == "PATCH") {
+        response = session.Patch();
+    } else if (verb == "HEAD") {
+        response = session.Head();
+    } else if (verb == "OPTIONS") {
+        response = session.Options();
+    } else {
+        response = session.Get();
+    }
+    return fromResponse(response);
+}
+
+void HttpClient::requestAsync(const std::string& method, const std::string& path,
+                              const std::string& body, const std::string& contentType,
+                              std::function<void(const HttpResult&)> callback,
+                              int timeout) const {
+    const std::string verb = upperText(method);
+    auto session = std::make_shared<cpr::Session>();
+    session->SetUrl(cpr::Url{urlFor(path)});
+    cpr::Header header = headers();
+    if (!contentType.empty()) header["Content-Type"] = contentType;
+    session->SetHeader(header);
+    session->SetRedirect(redirect());
+    session->SetSslOptions(sslOptions());
+    session->SetTimeout(cpr::Timeout{timeoutFor(timeout)});
+    if (!body.empty() && verb != "GET" && verb != "HEAD") session->SetBody(cpr::Body{body});
+
+    auto then = [callback](const cpr::Response& response) {
+        callback(fromResponse(response));
+    };
+    if (verb == "POST") {
+        session->PostCallback(then);
+    } else if (verb == "PUT") {
+        session->PutCallback(then);
+    } else if (verb == "DELETE") {
+        session->DeleteCallback(then);
+    } else if (verb == "PATCH") {
+        session->PatchCallback(then);
+    } else if (verb == "HEAD") {
+        session->HeadCallback(then);
+    } else if (verb == "OPTIONS") {
+        session->OptionsCallback(then);
+    } else {
+        session->GetCallback(then);
+    }
 }
 
 void HttpClient::getAsync(const std::string& path, const Query& query,

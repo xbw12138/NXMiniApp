@@ -671,10 +671,16 @@ void MPVCore::eventMainLoop() {
                         if (data) video_stopped = *(int*)data;
                         break;
                     case 14:
-                        if (data) video_seeking = *(int*)data;
-                        if (video_seeking) {
-                            brls::Logger::info("========> VIDEO SEEKING");
-                            mpvCoreEvent.fire(MpvEventEnum::LOADING_START);
+                        if (data) {
+                            bool seeking = *(int*)data != 0;
+                            if (seeking && !video_seeking) {
+                                brls::Logger::info("========> VIDEO SEEKING");
+                                mpvCoreEvent.fire(MpvEventEnum::LOADING_START);
+                            } else if (!seeking && video_seeking) {
+                                brls::Logger::info("========> VIDEO SEEK END");
+                                mpvCoreEvent.fire(MpvEventEnum::MPV_SEEK_END);
+                            }
+                            video_seeking = seeking;
                         }
                         break;
                     case 16:
