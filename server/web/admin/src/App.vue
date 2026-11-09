@@ -21,6 +21,7 @@
     </nav>
     <main>
       <OverviewTab v-if="tab === 'overview'" />
+      <AppsTab v-else-if="tab === 'store'" />
       <MiniAppsTab v-else-if="tab === 'miniapps'" />
       <HomeTab v-else-if="tab === 'home'" />
       <ReleasesTab v-else-if="tab === 'releases'" />
@@ -35,6 +36,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, getToken, setToken } from './api'
 import LoginView from './components/LoginView.vue'
 import OverviewTab from './components/OverviewTab.vue'
+import AppsTab from './components/AppsTab.vue'
 import MiniAppsTab from './components/MiniAppsTab.vue'
 import HomeTab from './components/HomeTab.vue'
 import ReleasesTab from './components/ReleasesTab.vue'
@@ -43,6 +45,7 @@ import DocsTab from './components/DocsTab.vue'
 
 const tabs = [
   { key: 'overview', label: '概览' },
+  { key: 'store', label: '应用商店' },
   { key: 'miniapps', label: '小程序' },
   { key: 'home', label: '首页内容' },
   { key: 'releases', label: '容器版本' },
