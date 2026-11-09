@@ -54,6 +54,8 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 	v1.POST("/submissions", e.SubmitMiniApp)
 	v1.GET("/container/releases", e.ListContainerReleases)
 	v1.GET("/container/releases/:id/download", e.DownloadContainerRelease)
+	// 真机 Updater 上传容器日志（按 X-Device-Id 分目录存放）。
+	v1.POST("/device/logs", e.UploadDeviceLog)
 
 	r.Static("/media/icons", cfg.IconsDir())
 	r.Static("/media/screenshots", cfg.ScreenshotsDir())

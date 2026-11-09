@@ -24,6 +24,7 @@
       <MiniAppsTab v-else-if="tab === 'miniapps'" />
       <HomeTab v-else-if="tab === 'home'" />
       <ReleasesTab v-else-if="tab === 'releases'" />
+      <LogsTab v-else-if="tab === 'logs'" />
       <DocsTab v-else />
     </main>
   </div>
@@ -37,6 +38,7 @@ import OverviewTab from './components/OverviewTab.vue'
 import MiniAppsTab from './components/MiniAppsTab.vue'
 import HomeTab from './components/HomeTab.vue'
 import ReleasesTab from './components/ReleasesTab.vue'
+import LogsTab from './components/LogsTab.vue'
 import DocsTab from './components/DocsTab.vue'
 
 const tabs = [
@@ -44,6 +46,7 @@ const tabs = [
   { key: 'miniapps', label: '小程序' },
   { key: 'home', label: '首页内容' },
   { key: 'releases', label: '容器版本' },
+  { key: 'logs', label: '设备日志' },
   { key: 'docs', label: '文档' }
 ]
 

@@ -57,6 +57,10 @@ func Register(r *gin.Engine, e *api.Env) {
 	auth.POST("/releases", uploadRelease(e))
 	auth.PATCH("/releases/:id/flags", patchReleaseFlags(e))
 	auth.DELETE("/releases/:id", deleteRelease(e))
+	// 真机 Updater 上传的容器日志。
+	auth.GET("/device-logs", listDeviceLogs(e))
+	auth.GET("/device-logs/content", getDeviceLog(e))
+	auth.DELETE("/device-logs", deleteDeviceLog(e))
 	auth.GET("/content", listContent(e))
 	auth.POST("/content", createContent(e))
 	auth.PUT("/content/:id", updateContent(e))
