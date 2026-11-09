@@ -36,4 +36,41 @@ bool installRelease(const ReleaseInfo& release,
 /// 上传 /switch/miniapp/miniapp.log 到后台设备日志。
 bool uploadLog(std::string& error);
 
+/// 商店里的 NRO 应用（来自后台 /api/v1/apps）。
+struct StoreAppInfo {
+    std::string id;
+    std::string title;
+    std::string summary;
+    std::string description;
+    std::string category;
+    std::string developer;
+    std::string iconUrl;
+    std::string version;
+    std::string iconPath;  // 本地缓存路径，由 fetchIcon 填充
+    long long size = 0;
+    long long downloads = 0;
+    bool featured = false;
+};
+
+/// 拉取商店应用列表（已上架）。
+bool fetchStoreApps(std::vector<StoreAppInfo>& out, std::string& error);
+
+/// 已安装到 SD 卡的 NRO 路径；不存在返回空串。
+std::string installedNroPath(const std::string& id);
+
+/// 已安装版本号；未安装返回空串，安装记录缺失返回 "-"。
+std::string installedNroVersion(const std::string& id);
+
+/// 下载并安装（覆盖）NRO 到 /switch/<id>.nro。
+bool installStoreApp(const StoreAppInfo& app,
+                     const std::function<void(long long, long long)>& progress,
+                     std::string& error);
+
+/// 删除 /switch/<id>.nro。
+bool removeStoreApp(const std::string& id, std::string& error);
+
+/// 下载应用图标到本地缓存，返回本地路径（失败返回空串）。
+std::string fetchIcon(const std::string& id, const std::string& iconUrl);
+
+
 }  // namespace updater

@@ -35,9 +35,10 @@ void setupFileLog() {}
 
 int main(int, char**) {
     setupFileLog();
+    brls::Logger::info("updater: starting");
 
     nxkit::AppConfig config;
-    config.title = "Switch小程序更新工具";
+    config.title = "Switch应用商店";
     config.lightAccent = nvgRGB(15, 220, 120);
     config.darkAccent = nvgRGB(15, 220, 120);
     config.createActivity = [] {
