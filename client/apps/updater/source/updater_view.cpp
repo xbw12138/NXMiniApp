@@ -447,16 +447,21 @@ UpdaterView::UpdaterView() : brls::Box(brls::Axis::COLUMN) {
     this->addView(this->footerLabel);
     brls::Logger::info("updater: view created, server={}", serverUrl());
 
-    // 按 B 直接退出：更新工具没有返回栈，避免用户被困住。
-    // 后台任务还在跑时先拒绝退出，否则线程会在 Application 销毁后回调，
-    // 退出后再进就会崩。
+    // 按 B 退出前先确认；后台任务还在跑时拒绝退出，否则线程会在
+    // Application 销毁后回调，退出后再进就会崩。
     this->registerAction("退出", brls::BUTTON_B, [this](brls::View*) {
         if (this->busy) {
             this->setStatus("还有任务在执行，请等它结束再退出");
             return true;
         }
-        *this->alive = false;
-        brls::Application::quit();
+        auto* dialog = new brls::Dialog("确定要退出 Switch应用商店 吗？");
+        dialog->addButton("取消", [] {});
+        dialog->addButton("退出", [this] {
+            *this->alive = false;
+            brls::Application::quit();
+        });
+        dialog->setCancelable(true);
+        dialog->open();
         return true;
     });
 
@@ -612,16 +617,13 @@ void UpdaterView::rebuildCards() {
             this->gridBox->addView(row);
         }
         const StoreAppInfo& app = *filtered[i];
-        const std::string installed = installedNroVersion(app.id);
         std::string badge;
         NVGcolor badgeColor = kAccent;
-        if (!installed.empty()) {
-            if (installed == app.version) {
-                badge = "已安装";
-            } else {
-                badge = "可更新";
-                badgeColor = kBlue;
-            }
+        if (this->appOutdated(app)) {
+            badge = "可更新";
+            badgeColor = kBlue;
+        } else if (this->appInstalled(app)) {
+            badge = "已安装";
         } else if (app.featured) {
             badge = "精选";
             badgeColor = kGold;
@@ -654,6 +656,16 @@ void UpdaterView::rebuildCards() {
                        this->apps.size(), this->category);
 }
 
+bool UpdaterView::appInstalled(const StoreAppInfo& app) const {
+    return !installedNroPath(app.id).empty();
+}
+
+bool UpdaterView::appOutdated(const StoreAppInfo& app) const {
+    if (app.size <= 0) return false;
+    const long long local = installedNroSize(app.id);
+    return local > 0 && local != app.size;
+}
+
 void UpdaterView::showDetail(const StoreAppInfo& app) {
     if (!this->detailPanel) return;
     this->selectedId = app.id;
@@ -675,21 +687,28 @@ void UpdaterView::showDetail(const StoreAppInfo& app) {
     if (app.downloads > 0) info += "   ·   " + std::to_string(app.downloads) + " 次下载";
     this->detailInfo->setText(info);
 
-    const std::string installed = installedNroVersion(app.id);
-    if (installed.empty()) {
+    const bool installed = this->appInstalled(app);
+    const std::string installedVersion = installedNroVersion(app.id);
+    if (!installed) {
         this->detailBadge->setText(app.featured ? "★ 精选推荐" : "未安装");
         this->detailBadge->setTextColor(app.featured ? kGold : kTextDim);
         this->actionButton->setText("安装");
         this->removeButton->setVisibility(brls::Visibility::GONE);
-    } else if (installed == app.version) {
-        this->detailBadge->setText("已安装到 /switch");
-        this->detailBadge->setTextColor(kAccent);
-        this->actionButton->setText("重新安装");
-        this->removeButton->setVisibility(brls::Visibility::VISIBLE);
-    } else {
-        this->detailBadge->setText("可更新：" + installed + " → " + app.version);
+    } else if (this->appOutdated(app)) {
+        std::string from = installedVersion.empty() || installedVersion == "-"
+                               ? formatSize(installedNroSize(app.id))
+                               : "v" + installedVersion;
+        this->detailBadge->setText("可更新：" + from + " → " +
+                                   (app.version.empty() ? "最新" : "v" + app.version));
         this->detailBadge->setTextColor(kBlue);
         this->actionButton->setText("更新");
+        this->removeButton->setVisibility(brls::Visibility::VISIBLE);
+    } else {
+        this->detailBadge->setText(installedVersion.empty() || installedVersion == "-"
+                                       ? "已安装到 /switch"
+                                       : "已安装 v" + installedVersion + "（已是最新）");
+        this->detailBadge->setTextColor(kAccent);
+        this->actionButton->setText("重新安装");
         this->removeButton->setVisibility(brls::Visibility::VISIBLE);
     }
 
@@ -700,15 +719,14 @@ void UpdaterView::showDetail(const StoreAppInfo& app) {
 
 void UpdaterView::openStoreActions(const StoreAppInfo& app) {
     if (this->busy) return;
-    const std::string installed = installedNroVersion(app.id);
     auto* dialog = new brls::Dialog(app.title.empty() ? app.id : app.title);
-    if (installed.empty()) {
+    if (!this->appInstalled(app)) {
         dialog->addButton("安装", [this, app] { this->installApp(app); });
-    } else if (installed == app.version) {
-        dialog->addButton("重新安装", [this, app] { this->installApp(app); });
+    } else if (this->appOutdated(app)) {
+        dialog->addButton("更新", [this, app] { this->installApp(app); });
         dialog->addButton("卸载", [this, app] { this->removeApp(app); });
     } else {
-        dialog->addButton("更新", [this, app] { this->installApp(app); });
+        dialog->addButton("重新安装", [this, app] { this->installApp(app); });
         dialog->addButton("卸载", [this, app] { this->removeApp(app); });
     }
     dialog->addButton("取消", [] {});

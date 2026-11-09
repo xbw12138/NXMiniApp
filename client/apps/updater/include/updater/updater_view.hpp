@@ -27,6 +27,10 @@ private:
     void rebuildCategories();
     void rebuildReleases();
     void showDetail(const StoreAppInfo& app);
+    /// 是否已安装到 /switch。
+    bool appInstalled(const StoreAppInfo& app) const;
+    /// 已安装文件与商店最新版本体积不一致时视为可更新。
+    bool appOutdated(const StoreAppInfo& app) const;
     void openStoreActions(const StoreAppInfo& app);
     void installApp(const StoreAppInfo& app);
     void removeApp(const StoreAppInfo& app);

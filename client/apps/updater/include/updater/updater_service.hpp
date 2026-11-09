@@ -61,6 +61,9 @@ std::string installedNroPath(const std::string& id);
 /// 已安装版本号；未安装返回空串，安装记录缺失返回 "-"。
 std::string installedNroVersion(const std::string& id);
 
+/// 已安装 NRO 的字节数；未安装返回 -1。用于和商店里的最新体积比对是否可更新。
+long long installedNroSize(const std::string& id);
+
 /// 下载并安装（覆盖）NRO 到 /switch/<id>.nro。
 bool installStoreApp(const StoreAppInfo& app,
                      const std::function<void(long long, long long)>& progress,

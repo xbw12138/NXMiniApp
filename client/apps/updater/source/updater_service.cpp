@@ -464,6 +464,11 @@ bool installRelease(const ReleaseInfo& release,
         return false;
     }
     std::remove(kOldNroPath);
+    // 记录版本，商店里才能准确判断是否可更新。
+    std::ofstream versionFile("sdmc:/switch/miniapp.nro.version",
+                              std::ios::binary | std::ios::trunc);
+    versionFile << release.version;
+    versionFile.close();
     brls::Logger::info("updater: installed version {} ({} bytes)", release.version, downloaded);
     return true;
 }
@@ -600,6 +605,12 @@ std::string installedNroVersion(const std::string& id) {
     std::string current;
     if (!versionFile || !std::getline(versionFile, current)) return "-";
     return current;
+}
+
+long long installedNroSize(const std::string& id) {
+    long long size = 0;
+    if (!fileSize(nroPath(id), size)) return -1;
+    return size;
 }
 
 bool fetchStoreApps(std::vector<StoreAppInfo>& out, std::string& error) {
