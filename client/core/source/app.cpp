@@ -92,6 +92,14 @@ int runApp(const AppConfig& config) {
     brls::Application::setGlobalQuit(config.globalQuit);
 
 #ifdef __SWITCH__
+    // 退出时直接回系统桌面，而不是回 hbmenu。
+    // hbmenu（applet 模式）会在同一进程里复用它自己的 GL 环境，重新启动容器时
+    // nouveau 分配失败会崩一次；回桌面后再启动则是全新 applet，不会复现。
+    // 与 wiliwili 的做法一致。
+    brls::Application::getPlatform()->exitToHomeMode(true);
+#endif
+
+#ifdef __SWITCH__
     // 诊断：GL 初始化 + Mesa 编译着色器之后还剩多少堆（启动崩溃就发生在这附近）。
     {
         struct mallinfo mi = mallinfo();

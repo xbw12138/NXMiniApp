@@ -32,6 +32,7 @@
 #include "miniapp/api/miniapp_api.hpp"
 #include "miniapp/miniapp_activity.hpp"
 #include "miniapp/pages/launcher_activity.hpp"
+#include "miniapp/smb_manager.hpp"
 #include "nxkit/app.hpp"
 #include "nxkit/config.hpp"
 
@@ -166,6 +167,10 @@ int main(int, char**) {
         brls::Logger::info("miniapp: mem total={}MB used={}MB arena={}MB free={}MB sbrkAvail={}MB",
                            total / 1048576, used / 1048576, mi.arena / 1048576,
                            mi.fordblks / 1048576, probeHeapMB());
+        // 3=Application（桌面图标/NSP 启动，内存充裕）；5=LibraryApplet（hbmenu 启动，
+        // 内存受限，退出后只能回到 hbmenu）。
+        brls::Logger::info("miniapp: appletType={}",
+                           static_cast<int>(appletGetAppletType()));
     }
 #endif
     nxkit::AppConfig config;
@@ -190,5 +195,11 @@ int main(int, char**) {
         miniapp::MiniAppApi::instance().configure(serverUrl());
         return new miniapp::LauncherActivity();
     };
-    return nxkit::runApp(config);
+    const int code = nxkit::runApp(config);
+#ifdef __SWITCH__
+    // 退出前显式断开 SMB 会话、停掉代理线程：否则后台线程会在设备卸载后继续
+    // 访问 devoptab，污染 applet 状态，导致下次从 hbmenu 启动时 GL 分配失败。
+    miniapp::SmbManager::instance().shutdown();
+#endif
+    return code;
 }

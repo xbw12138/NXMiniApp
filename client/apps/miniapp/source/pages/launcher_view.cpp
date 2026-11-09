@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <borealis/core/application.hpp>
 #include <borealis/core/thread.hpp>
 #include <borealis/views/dialog.hpp>
 
@@ -102,6 +103,17 @@ LauncherView::LauncherView() {
     title->setText("Switch小程序");
     title->setFontSize(26);
     header->addView(title);
+
+#ifdef NXMINIAPP_VERSION
+    // 容器版本号，便于确认真机上跑的是哪一版。
+    brls::Label* version = new brls::Label();
+    version->setText("v" NXMINIAPP_VERSION);
+    version->setFontSize(15);
+    version->setMarginLeft(10);
+    version->setMarginTop(8);
+    version->setTextColor(brls::Application::getTheme()["brls/text_disabled"]);
+    header->addView(version);
+#endif
 
     brls::Box* spacer = new brls::Box();
     spacer->setGrow(1);
