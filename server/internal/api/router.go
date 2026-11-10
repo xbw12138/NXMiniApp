@@ -45,6 +45,8 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 	v1.POST("/check-updates", e.CheckUpdates)
 	v1.GET("/miniapps", e.ListMiniApps)
 	v1.GET("/miniapp-home", e.MiniAppHome)
+	// 有线电视小程序的直播源（服务端抓取 + 缓存，客户端后台静默刷新）。
+	v1.GET("/tv/channels", e.TVChannels)
 	v1.GET("/content/:id", e.ContentDetail)
 	v1.POST("/content/:id/open", e.OpenContent)
 	v1.GET("/miniapps/:id", e.MiniAppDetail)
