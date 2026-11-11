@@ -1074,6 +1074,14 @@ App({
     return source.config || {};
   },
 
+  // SMB 扫描根目录：用户手动选的子目录，留空/“/”表示共享根。
+  // 只扫这个目录及其子目录，不再遍历整个共享。
+  smbRootPath(source) {
+    var p = ((source.config && source.config.rootPath) || '/').trim();
+    if (p.charAt(0) !== '/') p = '/' + p;
+    return p.replace(/\/+$/, '') || '/';
+  },
+
   // 建立连接并缓存会话 id（不持久化，会话随容器进程存活）。
   smbEnsureId(source) {
     var self = this;
@@ -1177,7 +1185,7 @@ App({
       return new Promise(function (resolve) {
         var started = Date.now();
         wx.media.scan({
-          sourceId: source.id, id: smbId, root: '/',
+          sourceId: source.id, id: smbId, root: self.smbRootPath(source),
           maxDepth: maxDepth || 4, maxFiles: maxFiles || 2000,
           success: function (res) {
             console.log('media scan source=' + source.id + ' total=' +
@@ -1273,10 +1281,11 @@ App({
     }
     console.log('wx.media 不可用，回退 wx.smb.scan');
     return self.smbEnsureId(source).then(function (smbId) {
+      var root = self.smbRootPath(source);
       if (typeof wx.smb.scan === 'function') {
-        return self.smbScanNative(smbId, '/', 4, 300);
+        return self.smbScanNative(smbId, root, 4, 300);
       }
-      return self.smbScanDir(smbId, '/', 0);
+      return self.smbScanDir(smbId, root, 0);
     }).then(function (files) {
       return self.smbMapMovies(source, files);
     });

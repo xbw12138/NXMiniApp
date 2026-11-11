@@ -3149,6 +3149,24 @@ void MiniappView::ensureVisible(RenderNode* node) {
     // 焦点回到第一行时卡片不会滚出来（右列最近使用没有外层容器，所以不受影响）。
     for (RenderNode* parent = node->parent; parent; parent = parent->parent) {
         if (!parent->isScrollView()) continue;
+        // 横向列表（继续观看、数据源筛选等）按 X 轴滚动，否则焦点移出右侧后
+        // 列表永远停在原位，用户就没法看到后面的卡片。
+        if (parent->horizontal) {
+            float contentLeft = node->absLeft - parent->absLeft + parent->scrollOffset;
+            float contentRight = contentLeft + node->absWidth;
+            float hOffset = parent->scrollOffset;
+            float visibleRight = hOffset + parent->absWidth;
+            if (contentLeft < hOffset) {
+                hOffset = contentLeft - 12.0f;
+            } else if (contentRight > visibleRight) {
+                hOffset = contentRight - parent->absWidth + 12.0f;
+            }
+            float maxHOffset = std::max(0.0f, parent->contentWidth - parent->absWidth);
+            hOffset = std::max(0.0f, std::min(hOffset, maxHOffset));
+            parent->scrollOffset = hOffset;
+            current->scrollOffsets[parent->path] = hOffset;
+            continue;
+        }
         float contentTop = node->absTop - parent->absTop + parent->scrollOffset;
         float contentBottom = contentTop + node->absHeight;
         float offset = parent->scrollOffset;

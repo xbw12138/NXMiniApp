@@ -290,25 +290,40 @@ void updateGeometry(RenderNode& node, float originX, float originY) {
     node.absWidth = box.width;
     node.absHeight = box.height;
 
-    // scroll-view 的内容尺寸按子节点在 Yoga 中的原始位置统计。
-    if (node.isScrollView()) {
-        float contentBottom = 0.0f;
-        for (const auto& child : node.children) {
-            if (!child->yoga) continue;
-            contentBottom = std::max(contentBottom,
-                                    YGNodeLayoutGetTop(child->yoga) +
-                                        YGNodeLayoutGetHeight(child->yoga));
-        }
-        node.contentHeight = contentBottom;
-    }
-
-    const float childOriginY =
-        node.isScrollView() ? node.absTop - node.scrollOffset : node.absTop;
-    const float childOriginX =
-        node.isScrollView() && node.horizontal ? node.absLeft - node.scrollOffset
-                                               : node.absLeft;
+    // 滚动偏移只能作用于滚动方向：横向列表若也减到 Y 轴，整行卡片会被
+    // 上移出可视区域，看起来就像「列表空了」。
+    const float childOriginY = node.isScrollView() && !node.horizontal
+                                   ? node.absTop - node.scrollOffset
+                                   : node.absTop;
+    const float childOriginX = node.isScrollView() && node.horizontal
+                                   ? node.absLeft - node.scrollOffset
+                                   : node.absLeft;
     for (auto& child : node.children) {
         updateGeometry(*child, childOriginX, childOriginY);
+    }
+
+    // 内容尺寸必须按「最外层包裹节点」的整体内容统计：横向列表的直接子节点
+    // 是被 Yoga 拉伸到视口宽度的行容器，卡片实际溢出在更深的层级，
+    // 只看直接子节点会得到等于视口宽度的假内容宽度，永远滚不动。
+    if (node.isScrollView()) {
+        float contentBottom = 0.0f;
+        float contentRight = 0.0f;
+        const float contentOriginY = node.absTop - node.scrollOffset;
+        const float contentOriginX =
+            (node.horizontal ? node.absLeft - node.scrollOffset : node.absLeft);
+        std::vector<RenderNode*> stack;
+        for (auto& child : node.children) stack.push_back(child.get());
+        while (!stack.empty()) {
+            RenderNode* d = stack.back();
+            stack.pop_back();
+            contentBottom = std::max(contentBottom, d->absTop + d->absHeight - contentOriginY);
+            contentRight = std::max(contentRight, d->absLeft + d->absWidth - contentOriginX);
+            // 嵌套 scroll-view 的内容由它自己负责，避免把内部滚动偏移混进来。
+            if (d->isScrollView()) continue;
+            for (auto& c : d->children) stack.push_back(c.get());
+        }
+        node.contentHeight = contentBottom;
+        node.contentWidth = contentRight;
     }
 }
 

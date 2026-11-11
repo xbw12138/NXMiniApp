@@ -92,6 +92,50 @@
                data-field="share" bindinput="onInput"/>
       </view>
       <view class="field">
+        <text class="field-label">根目录</text>
+        <input class="field-input" placeholder="默认 /（共享根目录）" value="{{smbRoot}}"
+               data-field="smbRoot" bindinput="onInput"/>
+      </view>
+      <view class="browse-row">
+        <view class="browse-btn" bindtap="onBrowseDirs">
+          <text class="browse-btn-text">{{dirOpen ? '重新读取目录' : '浏览目录…'}}</text>
+        </view>
+        <text class="hint hint-inline">只扫这个目录，不遍历整个共享</text>
+      </view>
+
+      <!-- 目录选择：逐级进入，选中后作为扫描根目录 -->
+      <view wx:if="{{dirOpen}}" class="dir-panel">
+        <view class="dir-head">
+          <text class="dir-path">{{dirPath}}</text>
+          <view class="dir-close" bindtap="onCloseDirs">
+            <text class="dir-close-text">收起</text>
+          </view>
+        </view>
+        <view wx:if="{{dirLoading}}" class="dir-empty">
+          <text class="dir-empty-text">正在读取目录…</text>
+        </view>
+        <view wx:elif="{{dirError}}" class="dir-empty">
+          <text class="dir-empty-text">{{dirError}}</text>
+        </view>
+        <block wx:else>
+          <view wx:if="{{dirPath !== '/'}}" class="dir-row" bindtap="onParentDir">
+            <text class="dir-name">返回上一级</text>
+            <text class="dir-enter">上一级</text>
+          </view>
+          <view wx:for="{{dirs}}" wx:key="path" class="dir-row"
+                data-path="{{item.path}}" bindtap="onEnterDir">
+            <text class="dir-name">{{item.label}}</text>
+            <text class="dir-enter">进入 ›</text>
+          </view>
+          <view wx:if="{{dirs.length === 0}}" class="dir-empty">
+            <text class="dir-empty-text">没有子目录，可直接使用当前目录</text>
+          </view>
+          <view class="dir-use" bindtap="onUseDir">
+            <text class="dir-use-text">使用当前目录</text>
+          </view>
+        </block>
+      </view>
+      <view class="field">
         <text class="field-label">用户名</text>
         <input class="field-input" placeholder="SMB 账号" value="{{username}}"
                data-field="username" bindinput="onInput"/>

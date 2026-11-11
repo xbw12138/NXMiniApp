@@ -35,6 +35,13 @@ Page({
     server: '',
     share: '',
     domain: '',
+    // SMB 扫描根目录：可手填，也可用「浏览目录」逐级选择
+    smbRoot: '/',
+    dirOpen: false,
+    dirPath: '/',
+    dirs: [],
+    dirLoading: false,
+    dirError: '',
     // aliyun
     refreshToken: '',
     // baidu
@@ -62,6 +69,8 @@ Page({
           server: cfg.server || cfg.url || '',
           share: cfg.share || '',
           domain: cfg.domain || '',
+          smbRoot: cfg.rootPath || '/',
+          dirPath: cfg.rootPath || '/',
           refreshToken: cfg.refreshToken || '',
           accessToken: cfg.accessToken || ''
         });
@@ -92,6 +101,131 @@ Page({
     if (!v) return '';
     if (!/^https?:\/\//i.test(v)) v = 'http://' + v;
     return v.replace(/\/+$/, '');
+  },
+
+  // SMB 路径统一成 /a/b 形式，空值回落到共享根。
+  normalizeSmbRoot(value) {
+    var p = (value || '/').trim();
+    if (p.charAt(0) !== '/') p = '/' + p;
+    p = p.replace(/\/+$/, '');
+    return p || '/';
+  },
+
+  // 把「地址」里可能混着的共享名拆出来，与保存时的规则保持一致。
+  smbParts() {
+    var d = this.data;
+    var addr = (d.server || '').trim().replace(/^smb:\/\//i, '').replace(/^\\\\?/, '');
+    var share = (d.share || '').trim();
+    var cut = addr.search(/[\/\\]/);
+    if (cut >= 0) {
+      if (!share) share = addr.slice(cut + 1);
+      addr = addr.slice(0, cut);
+    }
+    return {
+      server: addr.replace(/[\/\\]+$/, ''),
+      share: share.replace(/[\/\\]+$/, ''),
+      user: (d.username || '').trim(),
+      password: d.password || '',
+      domain: (d.domain || '').trim()
+    };
+  },
+
+  // 浏览目录时按当前表单凭证连接；地址/共享/账号变了就重连。
+  connectForBrowse() {
+    var self = this;
+    var p = this.smbParts();
+    var key = [p.server, p.share, p.user, p.password, p.domain].join('|');
+    if (this._browseKey === key && this._browseId) return Promise.resolve(this._browseId);
+    return new Promise(function (resolve, reject) {
+      wx.smb.connect({
+        server: p.server, share: p.share, user: p.user,
+        password: p.password, domain: p.domain,
+        success: function (res) {
+          self._browseId = res.id;
+          self._browseKey = key;
+          resolve(res.id);
+        },
+        fail: function (err) {
+          reject(new Error((err && err.errMsg) || 'SMB 连接失败'));
+        }
+      });
+    });
+  },
+
+  loadDirs(path) {
+    var self = this;
+    path = this.normalizeSmbRoot(path);
+    this.setData({ dirLoading: true, dirPath: path, dirError: '' });
+    return new Promise(function (resolve) {
+      wx.smb.listFiles({
+        id: self._browseId,
+        path: path,
+        success: function (list) {
+          var dirs = [];
+          (list || []).forEach(function (e) {
+            if (!e.isDir) return;
+            if (/\/(\$RECYCLE|System Volume Information)/i.test(e.name || '')) return;
+            var label = (e.name || '').split('/').pop() || e.name;
+            dirs.push({ path: e.name, label: label });
+          });
+          dirs.sort(function (a, b) { return a.label < b.label ? -1 : (a.label > b.label ? 1 : 0); });
+          self.setData({ dirs: dirs, dirLoading: false });
+          resolve();
+        },
+        fail: function (err) {
+          self.setData({
+            dirs: [],
+            dirLoading: false,
+            dirError: (err && err.errMsg) || '读取目录失败，请检查凭证'
+          });
+          resolve();
+        }
+      });
+    });
+  },
+
+  onBrowseDirs() {
+    var d = this.data;
+    if (!(d.server || '').trim()) {
+      this.setData({ errText: '请先填写 NAS 地址' });
+      return;
+    }
+    if (!(d.share || '').trim()) {
+      this.setData({ errText: '请先填写共享名（例如 movies），再浏览目录' });
+      return;
+    }
+    var self = this;
+    this.setData({ dirOpen: true, dirLoading: true, dirError: '', errText: '' });
+    this.connectForBrowse().then(function () {
+      return self.loadDirs(self.data.smbRoot || '/');
+    }).catch(function (e) {
+      self.setData({
+        dirLoading: false,
+        dirs: [],
+        dirError: (e && (e.errMsg || e.message)) || '无法读取目录'
+      });
+    });
+  },
+
+  onEnterDir(e) {
+    var path = e.currentTarget.dataset.path;
+    if (!path) return;
+    this.loadDirs(path);
+  },
+
+  onParentDir() {
+    var p = this.normalizeSmbRoot(this.data.dirPath);
+    if (p === '/') return;
+    var i = p.lastIndexOf('/');
+    this.loadDirs(i <= 0 ? '/' : p.slice(0, i));
+  },
+
+  onUseDir() {
+    this.setData({ smbRoot: this.data.dirPath, dirOpen: false });
+  },
+
+  onCloseDirs() {
+    this.setData({ dirOpen: false });
   },
 
   validate() {
@@ -140,6 +274,8 @@ Page({
       cfg.user = (d.username || '').trim();
       cfg.password = d.password || '';
       cfg.domain = (d.domain || '').trim();
+      // 只扫用户指定的根目录，避免整盘递归。
+      cfg.rootPath = this.normalizeSmbRoot(d.smbRoot);
     } else if (d.type === 'aliyun') {
       cfg.refreshToken = (d.refreshToken || '').trim();
     } else if (d.type === 'baidu') {
@@ -199,10 +335,18 @@ Page({
     }
     var app = getApp();
     var editing = !!this.data.editId;
+    var source = this.buildSource();
     if (editing) {
-      app.updateSource(this.data.editId, this.buildSource());
+      var old = app.getSource(this.data.editId);
+      app.updateSource(this.data.editId, source);
+      // SMB 根目录换了：旧索引和列表缓存都属于上一个目录，清掉让下次进首页重新扫。
+      if (old && old.type === 'smb' && app.smbRootPath(old) !== app.smbRootPath(source)) {
+        try { wx.removeStorageSync(app.moviesCacheKey(old.id)); } catch (e) {}
+        try { wx.removeStorageSync(app.moviesCountKey(old.id)); } catch (e) {}
+        try { wx.removeStorageSync('bmh_scan_' + old.id); } catch (e) {}
+      }
     } else {
-      app.addSource(this.buildSource());
+      app.addSource(source);
     }
     wx.showToast({ title: editing ? '已保存' : '已添加' });
     setTimeout(function () { wx.navigateBack({ delta: 1 }); }, 500);

@@ -103,6 +103,8 @@ struct RenderNode {
     // scroll-view / swiper
     float scrollOffset = 0.0f;
     float contentHeight = 0.0f;
+    // 横向 scroll-view 的内容宽度，用于焦点移出视口时自动滚动。
+    float contentWidth = 0.0f;
     bool horizontal = false;
     int swiperIndex = 0;
     int swiperCount = 0;

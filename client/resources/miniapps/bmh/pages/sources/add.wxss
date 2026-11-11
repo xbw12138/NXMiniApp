@@ -157,3 +157,109 @@
   color: #ff7a72;
   margin-bottom: 10rpx;
 }
+
+/* SMB 根目录浏览 */
+.browse-row {
+  flex-direction: row;
+  align-items: center;
+  margin: -4rpx 0 14rpx 220rpx;
+}
+
+.browse-btn {
+  height: 52rpx;
+  padding: 0 22rpx;
+  border-radius: 26rpx;
+  background-color: #262a31;
+  border: 1rpx solid #343940;
+  align-items: center;
+  justify-content: center;
+}
+
+.browse-btn-text {
+  font-size: 22rpx;
+  color: #eef1f5;
+}
+
+.hint-inline {
+  margin: 0 0 0 14rpx;
+}
+
+.dir-panel {
+  flex-direction: column;
+  margin: 0 0 16rpx 220rpx;
+  padding: 12rpx;
+  border-radius: 14rpx;
+  background-color: #14171c;
+  border: 1rpx solid #22262d;
+}
+
+.dir-head {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.dir-path {
+  flex: 1;
+  font-size: 21rpx;
+  color: #8b949e;
+}
+
+.dir-close {
+  height: 44rpx;
+  padding: 0 16rpx;
+  border-radius: 10rpx;
+  background-color: #1c2027;
+  align-items: center;
+  justify-content: center;
+}
+
+.dir-close-text {
+  font-size: 20rpx;
+  color: #c3cad4;
+}
+
+.dir-row {
+  flex-direction: row;
+  align-items: center;
+  height: 60rpx;
+  padding: 0 14rpx;
+  margin-bottom: 6rpx;
+  border-radius: 10rpx;
+  background-color: #191c22;
+}
+
+.dir-name {
+  flex: 1;
+  font-size: 22rpx;
+  color: #eef1f5;
+}
+
+.dir-enter {
+  font-size: 20rpx;
+  color: #7d8693;
+}
+
+.dir-empty {
+  padding: 14rpx 10rpx;
+}
+
+.dir-empty-text {
+  font-size: 21rpx;
+  color: #6f7883;
+}
+
+.dir-use {
+  height: 56rpx;
+  margin-top: 8rpx;
+  border-radius: 28rpx;
+  background-color: #ff3b30;
+  align-items: center;
+  justify-content: center;
+}
+
+.dir-use-text {
+  font-size: 22rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
