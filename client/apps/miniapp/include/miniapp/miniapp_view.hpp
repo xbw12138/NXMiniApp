@@ -275,6 +275,8 @@ private:
 
     std::vector<RenderNode*> focusNodes;
     std::string focusPath;
+    // 上一次生效的 autofocus 节点路径，用于弹窗出现时只抢一次焦点。
+    std::string lastAutoFocusPath;
 
     ModalState modal;
     std::string toastText;

@@ -97,6 +97,9 @@ struct RenderNode {
     // data-overlay：全屏视频时该子树绘制在视频上层（普通模式下无特殊行为）。
     bool overlay = false;
 
+    // autofocus：节点出现时把摇杆焦点交给它（弹窗里的默认按钮）。
+    bool autoFocus = false;
+
     // scroll-view / swiper
     float scrollOffset = 0.0f;
     float contentHeight = 0.0f;

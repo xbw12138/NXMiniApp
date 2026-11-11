@@ -65,7 +65,7 @@
         <view class="modal-btn" bindtap="onCloseModal">
           <text class="modal-btn-text">取消</text>
         </view>
-        <view class="modal-btn modal-btn-primary" bindtap="onConfirmLaunch">
+        <view class="modal-btn modal-btn-primary" autofocus="{{true}}" bindtap="onConfirmLaunch">
           <text class="modal-btn-text modal-btn-text-on">进入小程序</text>
         </view>
       </view>

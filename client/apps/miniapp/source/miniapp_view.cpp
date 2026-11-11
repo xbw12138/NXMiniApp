@@ -642,6 +642,7 @@ bool MiniappView::openPage(const std::string& url, bool push) {
     focusPath.clear();
     focusInitialized = false;
     focusNodes.clear();
+    lastAutoFocusPath.clear();
     return true;
 }
 
@@ -807,6 +808,26 @@ void MiniappView::rebuildLayout(PageState& page, float width, float height) {
         }
     }
     focusNodes = std::move(collect);
+
+    // autofocus：弹窗刚出现时把焦点交给它，避免摇杆还停在背后的列表上。
+    // 只在 autofocus 节点发生变化时抢一次，用户随后在弹窗内移动焦点不会被拉回。
+    RenderNode* autoFocus = nullptr;
+    for (RenderNode* node : focusNodes) {
+        if (node->autoFocus) {
+            autoFocus = node;
+            break;
+        }
+    }
+    if (autoFocus) {
+        if (autoFocus->path != lastAutoFocusPath) {
+            lastAutoFocusPath = autoFocus->path;
+            focusPath = autoFocus->path;
+            focusInitialized = true;
+            return;
+        }
+    } else {
+        lastAutoFocusPath.clear();
+    }
 
     if (!focusPath.empty()) {
         for (RenderNode* node : focusNodes) {
@@ -1198,6 +1219,10 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
     if (const std::string* rawOverlay = node.attr("data-overlay")) {
         const std::string text = trim(interpolate(*rawOverlay, locals));
         render->overlay = !text.empty() && text != "false" && text != "0";
+    }
+    if (const std::string* rawAutoFocus = node.attr("autofocus")) {
+        const std::string text = trim(interpolate(*rawAutoFocus, locals));
+        render->autoFocus = !text.empty() && text != "false" && text != "0";
     }
 
     // 组件属性。

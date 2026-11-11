@@ -59,6 +59,17 @@
   &lt;view class="card"&gt;...&lt;/view&gt;
 &lt;/scroll-view&gt;</code></pre>
 
+    <p id="autofocus">
+      任何可交互节点都可以加 <code>autofocus="{{true}}"</code>（或 <code>autofocus="true"</code>）：
+      该节点在树里新出现时，容器的摇杆焦点会自动移到它身上，常用于自定义弹窗的默认按钮。
+      只在节点路径变化时抢一次焦点，用户随后在弹窗内移动焦点不会被拉回；
+      节点消失（关闭弹窗）后恢复常规的「焦点失效则回到第一个可交互节点」逻辑。
+    </p>
+<pre><code>&lt;view wx:if="{{modal}}" class="modal"&gt;
+  &lt;view class="btn" bindtap="onCancel"&gt;取消&lt;/view&gt;
+  &lt;view class="btn primary" autofocus="{{true}}" bindtap="onConfirm"&gt;进入&lt;/view&gt;
+&lt;/view&gt;</code></pre>
+
     <h2 id="text">text / rich-text</h2>
     <p>
       <code>text</code> 支持 <code>{{}}</code> 插值与嵌套换行；默认继承父级颜色。

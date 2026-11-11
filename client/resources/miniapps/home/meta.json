@@ -4,6 +4,6 @@
   "description": "服务端下发的默认首页小程序，内容全部来自 /api/v1/miniapp-home。",
   "category": "首页",
   "developer": "xbw12138",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "published": true
 }
