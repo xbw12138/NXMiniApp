@@ -41,7 +41,7 @@ nxkit_add_app(miniapp
         )
 
 # 容器版本号：显示在启动页标题旁，和后台上传时填的 version 保持一致。
-set(NXMINIAPP_VERSION "1.6.3")
+set(NXMINIAPP_VERSION "1.6.4")
 target_compile_definitions(miniapp PRIVATE NXMINIAPP_VERSION="${NXMINIAPP_VERSION}")
 
 if(PLATFORM_SWITCH AND BUILTIN_NSP)

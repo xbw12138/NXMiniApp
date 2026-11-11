@@ -199,11 +199,27 @@ App({
     }
   },
 
+  // 列表缓存只保留卡片要用的字段，体积能少一半以上，读盘/解析也更快。
+  slimMovie(m) {
+    return {
+      id: m.id,
+      sourceId: m.sourceId,
+      sourceName: m.sourceName,
+      sourceType: m.sourceType,
+      itemId: m.itemId,
+      title: m.title,
+      year: m.year,
+      genre: m.genre,
+      rating: m.rating,
+      poster: m.poster
+    };
+  },
+
   saveMoviesCache(id, list) {
     if (!list || !list.length) return;
-    var kept = list.length > this.MOVIE_CACHE_LIMIT
-      ? list.slice(0, this.MOVIE_CACHE_LIMIT)
-      : list;
+    var count = Math.min(list.length, this.MOVIE_CACHE_LIMIT);
+    var kept = [];
+    for (var i = 0; i < count; i++) kept.push(this.slimMovie(list[i]));
     try {
       wx.setStorageSync(this.moviesCacheKey(id), { time: Date.now(), list: kept });
     } catch (e) {}
@@ -1134,7 +1150,9 @@ App({
     }).catch(function () { return 0; });
   },
 
-  // 扫描节流：10 分钟内不重复扫盘；同一数据源不会并发扫描。
+  // 扫描节流：30 分钟内不重复扫盘；同一数据源不会并发扫描。
+  // 扫盘要走 SMB 网络遍历，在硬件羸弱的 Switch 上很吃 CPU/网络，
+  // 而片库变化很慢，没必要每次进首页都扫一遍。
   smbScheduleScan(source, delay) {
     var self = this;
     var now = Date.now();
@@ -1145,7 +1163,7 @@ App({
       if (stored > last) last = stored;
     } catch (e) {}
     if (self.globalData.smbScanning[source.id]) return;
-    if (now - last < 10 * 60000) return;
+    if (now - last < 30 * 60000) return;
     self.globalData.smbScanAt[source.id] = now;
     try { wx.setStorageSync('bmh_scan_' + source.id, now); } catch (e) {}
     self.globalData.smbScanning[source.id] = true;
@@ -1163,14 +1181,20 @@ App({
 
   // 原生媒体库路径：只读索引，不在首屏等待扫描。
   // 有索引立刻返回并延后增量刷新；无索引立刻返回空列表，后台扫描完成由页面轮询刷新。
+  // 只取首页要用的前 MOVIE_CACHE_LIMIT 条：索引里可能上万条，全量取回来
+  // 要在 QuickJS 里逐条建影片对象，Switch 上会卡好几秒（缓存本身也只留这么多）。
   smbLibraryMovies(source) {
     var self = this;
-    console.log('media library read source=' + source.id);
-    return self.withTimeout(self.smbLibraryPage(source, 0, 0), 3000, { total: 0, list: [] })
+    var limit = self.MOVIE_CACHE_LIMIT;
+    console.log('media library read source=' + source.id + ' limit=' + limit);
+    // 本地索引读盘在 Switch 上可能超过 3 秒，超时会导致列表永远为空、
+    // 每次进首页都重新读一遍，所以给足 20 秒。
+    return self.withTimeout(self.smbLibraryPage(source, 0, limit), 20000, { total: 0, list: [] })
       .then(function (res) {
         var files = res.list || [];
         if (files.length) {
-          console.log('media library hit source=' + source.id + ' total=' + files.length);
+          console.log('media library hit source=' + source.id + ' total=' + res.total +
+                      ' loaded=' + files.length);
           // 先让首屏渲染完，再启动扫描，避免和布局/图片抢 CPU。
           self.smbScheduleScan(source, 3000);
           return self.smbMapMovies(source, files);

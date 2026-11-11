@@ -248,8 +248,8 @@ private:
     bool isVideoFullscreen() const { return !fullscreenVideoPath.empty(); }
     void dispatchVideoEvent(RenderNode* node, const std::string& handler,
                             const std::string& type);
-    void saveStorage();
     void loadStorage();
+    void saveStorageKey(const std::string& key, const std::string& value);
     int imageTexture(const std::string& src, const std::string& pageDir,
                      const std::string& headers = std::string());
     void requestRemoteImage(const std::string& url, const std::string& headers);
@@ -293,6 +293,7 @@ private:
     std::map<std::string, int> imageTextures;
     std::set<std::string> pendingImages;
     std::map<std::string, std::string> storageValues;
+    std::string storageDir;
     std::string storageFile;
     std::string clipboardText;
 

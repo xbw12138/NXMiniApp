@@ -125,6 +125,47 @@ bool readTextFile(const std::string& path, std::string& out) {
     return true;
 }
 
+// 存储 key 可能包含 / 等文件系统敏感字符，落盘时做百分号转义。
+std::string storageKeyFile(const std::string& key) {
+    std::string out;
+    out.reserve(key.size() + 5);
+    for (unsigned char c : key) {
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.') {
+            out.push_back(static_cast<char>(c));
+        } else {
+            char buffer[4];
+            std::snprintf(buffer, sizeof(buffer), "%%%02X", c);
+            out += buffer;
+        }
+    }
+    out += ".json";
+    return out;
+}
+
+std::string storageKeyFromFile(const std::string& name) {
+    std::string out;
+    out.reserve(name.size());
+    for (std::size_t i = 0; i < name.size(); ++i) {
+        if (name[i] == '%' && i + 2 < name.size()) {
+            const auto hex = [](char c) -> int {
+                if (c >= '0' && c <= '9') return c - '0';
+                if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+                if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+                return -1;
+            };
+            const int high = hex(name[i + 1]);
+            const int low = hex(name[i + 2]);
+            if (high >= 0 && low >= 0) {
+                out.push_back(static_cast<char>(high * 16 + low));
+                i += 2;
+                continue;
+            }
+        }
+        out.push_back(name[i]);
+    }
+    return out;
+}
+
 bool isFullyWrappedExpression(const std::string& raw) {
     std::string value = trim(raw);
     return value.size() >= 4 && value.compare(0, 2, "{{") == 0 &&
@@ -589,10 +630,10 @@ void MiniappView::loadPackage() {
     }
 
     const std::size_t hash = std::hash<std::string>{}(packageDir);
-    storageFile = nxkit::dataPath("miniapp/storage/" +
-                                  std::to_string(static_cast<unsigned long long>(hash)) +
-                                  ".json");
-    nxkit::ensureDirectory(nxkit::dataPath("miniapp/storage"));
+    const std::string hashText = std::to_string(static_cast<unsigned long long>(hash));
+    storageDir = nxkit::dataPath("miniapp/storage/" + hashText);
+    storageFile = nxkit::dataPath("miniapp/storage/" + hashText + ".json");
+    nxkit::ensureDirectory(storageDir);
     loadStorage();
 
     if (!openPage(firstPage, false)) {
@@ -3881,30 +3922,60 @@ void MiniappView::vibrateShort() {
 
 bool MiniappView::storageGet(const std::string& key, std::string& value) {
     auto it = storageValues.find(key);
-    if (it == storageValues.end()) return false;
-    value = it->second;
+    if (it != storageValues.end()) {
+        value = it->second;
+        return true;
+    }
+    // 按需从磁盘读单个 key，避免页面启动时把全部缓存都解析一遍。
+    if (storageDir.empty()) return false;
+    std::string text;
+    if (!readTextFile(joinPath(storageDir, storageKeyFile(key)), text)) return false;
+    storageValues[key] = text;
+    value = text;
     return true;
 }
 
 void MiniappView::storageSet(const std::string& key, const std::string& value) {
     storageValues[key] = value;
-    saveStorage();
+    saveStorageKey(key, value);
 }
 
 void MiniappView::storageRemove(const std::string& key) {
     storageValues.erase(key);
-    saveStorage();
+    if (storageDir.empty()) return;
+    std::error_code error;
+    std::filesystem::remove(joinPath(storageDir, storageKeyFile(key)), error);
 }
 
 void MiniappView::storageClear() {
     storageValues.clear();
-    saveStorage();
+    if (storageDir.empty()) return;
+    std::error_code error;
+    std::filesystem::remove_all(storageDir, error);
+    nxkit::ensureDirectory(storageDir);
 }
 
 std::vector<std::string> MiniappView::storageKeys() {
     std::vector<std::string> keys;
-    keys.reserve(storageValues.size());
-    for (const auto& entry : storageValues) keys.push_back(entry.first);
+    if (!storageDir.empty()) {
+        std::error_code error;
+        for (const auto& entry : std::filesystem::directory_iterator(storageDir, error)) {
+            if (!entry.is_regular_file()) continue;
+            const std::string name = entry.path().filename().string();
+            if (name.size() < 6 || name.compare(name.size() - 5, 5, ".json") != 0) continue;
+            keys.push_back(storageKeyFromFile(name.substr(0, name.size() - 5)));
+        }
+    }
+    for (const auto& entry : storageValues) {
+        bool seen = false;
+        for (const auto& key : keys) {
+            if (key == entry.first) {
+                seen = true;
+                break;
+            }
+        }
+        if (!seen) keys.push_back(entry.first);
+    }
     return keys;
 }
 
@@ -3917,24 +3988,30 @@ void MiniappView::clipboardSet(const std::string& text) {
 }
 
 void MiniappView::loadStorage() {
+    if (storageDir.empty()) return;
+    // 旧版本把全部 key 塞进一个 JSON 文件，每次页面启动都要整包解析、每次写入都要
+    // 全量重写（几千条影片缓存时非常慢）。这里把旧文件拆成「一个 key 一个文件」，
+    // 之后启动只按需读用到的 key，写缓存也只写一个文件。
+    if (storageFile.empty()) return;
     std::string text;
     if (!readTextFile(storageFile, text)) return;
     JsonValue parsed = parseJson(text);
-    if (!parsed.isObject()) return;
-    for (const auto& entry : parsed.asObject()) {
-        storageValues[entry.first] = toJsonString(entry.second);
+    if (parsed.isObject()) {
+        for (const auto& entry : parsed.asObject()) {
+            const std::string value = toJsonString(entry.second);
+            saveStorageKey(entry.first, value);
+        }
     }
+    storageValues.clear();
+    std::error_code error;
+    std::filesystem::remove(storageFile, error);
 }
 
-void MiniappView::saveStorage() {
-    JsonValue root = JsonValue::object();
-    for (const auto& entry : storageValues) {
-        JsonValue value = parseJson(entry.second);
-        root.setMember(entry.first, value);
-    }
-    std::ofstream file(storageFile, std::ios::trunc);
-    if (!file) return;
-    file << toJsonString(root);
+void MiniappView::saveStorageKey(const std::string& key, const std::string& value) {
+    if (storageDir.empty()) return;
+    std::ofstream file(joinPath(storageDir, storageKeyFile(key)),
+                       std::ios::trunc | std::ios::binary);
+    if (file) file << value;
 }
 
 }  // namespace miniapp
