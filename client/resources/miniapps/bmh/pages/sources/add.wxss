@@ -263,3 +263,127 @@
   font-weight: bold;
   color: #ffffff;
 }
+
+/* 阿里云盘 / 百度网盘 扫码登录 */
+.login-box {
+  flex-direction: column;
+  margin-bottom: 16rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 14rpx;
+  background-color: #14171c;
+  border: 1rpx solid #22262d;
+}
+
+.login-meta {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.login-title {
+  flex: 1;
+  font-size: 23rpx;
+  color: #eef1f5;
+}
+
+.login-ok {
+  font-size: 21rpx;
+  color: #4cd964;
+}
+
+.login-tip {
+  font-size: 21rpx;
+  color: #8b949e;
+}
+
+.login-actions {
+  flex-direction: row;
+  align-items: center;
+}
+
+.qr-panel {
+  flex-direction: column;
+  margin-bottom: 16rpx;
+  padding: 14rpx;
+  border-radius: 14rpx;
+  background-color: #101318;
+  border: 1rpx solid #22262d;
+}
+
+.qr-head {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.qr-title {
+  flex: 1;
+  font-size: 22rpx;
+  color: #c3cad4;
+}
+
+.qr-area {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: 8rpx 0 12rpx 0;
+}
+
+.qr-box {
+  align-items: center;
+  justify-content: center;
+  padding: 10rpx;
+  border-radius: 10rpx;
+  background-color: #ffffff;
+}
+
+.qr-row {
+  flex-direction: row;
+}
+
+.qr-black {
+  background-color: #111111;
+}
+
+.qr-placeholder {
+  width: 300rpx;
+  height: 300rpx;
+  flex-direction: column;
+  background-color: #191c22;
+}
+
+.qr-tip {
+  font-size: 22rpx;
+  color: #c3cad4;
+  text-align: center;
+}
+
+.qr-tip-err {
+  color: #ff7a72;
+  margin-bottom: 12rpx;
+}
+
+.qr-tip-ok {
+  color: #4cd964;
+}
+
+.qr-refresh {
+  height: 52rpx;
+  padding: 0 24rpx;
+  border-radius: 26rpx;
+  background-color: #262a31;
+  border: 1rpx solid #343940;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-refresh-text {
+  font-size: 22rpx;
+  color: #eef1f5;
+}
+
+.qr-status {
+  font-size: 21rpx;
+  color: #8b949e;
+  margin: 4rpx 0 6rpx 0;
+}

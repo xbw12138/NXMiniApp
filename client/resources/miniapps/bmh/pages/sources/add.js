@@ -13,8 +13,8 @@ var TYPES = [
   { key: 'jellyfin', label: 'Jellyfin', badge: 'J', desc: '媒体服务器' },
   { key: 'webdav', label: 'WebDAV', badge: 'W', desc: 'NAS / 网盘' },
   { key: 'smb', label: 'SMB', badge: 'S', desc: '局域网共享' },
-  { key: 'aliyun', label: '阿里云盘', badge: '阿', desc: '填写 token' },
-  { key: 'baidu', label: '百度网盘', badge: '百', desc: '填写 token' }
+  { key: 'aliyun', label: '阿里云盘', badge: '阿', desc: '扫码登录' },
+  { key: 'baidu', label: '百度网盘', badge: '百', desc: '扫码登录' }
 ];
 
 Page({
@@ -42,9 +42,18 @@ Page({
     dirs: [],
     dirLoading: false,
     dirError: '',
-    // aliyun
+    // aliyun / baidu 扫码登录
+    loginToken: '',       // 阿里云盘 refresh_token
+    loginCookie: '',      // 百度网盘 Cookie（BDUSS / STOKEN）
+    loginName: '',        // 登录到的账号昵称（仅展示）
+    qrOpen: false,
+    qrState: 'idle',      // idle | loading | ready | scaned | confirmed | expired | error
+    qrStatus: '',
+    qrRows: [],
+    qrMod: 6,
+    qrSize: 0,
     refreshToken: '',
-    // baidu
+    // baidu 旧版 access_token（只用于兼容已有数据源）
     accessToken: '',
     testing: false,
     testState: 'idle',
@@ -71,6 +80,8 @@ Page({
           domain: cfg.domain || '',
           smbRoot: cfg.rootPath || '/',
           dirPath: cfg.rootPath || '/',
+          loginToken: cfg.refreshToken || '',
+          loginCookie: cfg.cookie || '',
           refreshToken: cfg.refreshToken || '',
           accessToken: cfg.accessToken || ''
         });
@@ -84,7 +95,21 @@ Page({
   onType(e) {
     var key = e.currentTarget.dataset.key;
     if (!key || key === this.data.type) return;
-    this.setData({ type: key, errText: '', testState: 'idle', testText: '' });
+    this.stopQr();
+    this.setData({
+      type: key,
+      errText: '',
+      testState: 'idle',
+      testText: '',
+      qrOpen: false,
+      qrState: 'idle',
+      qrStatus: '',
+      qrRows: []
+    });
+  },
+
+  onUnload() {
+    this.stopQr();
   },
 
   onInput(e) {
@@ -228,6 +253,183 @@ Page({
     this.setData({ dirOpen: false });
   },
 
+  // ---------- 阿里云盘 / 百度网盘 扫码登录 ----------
+  loggedIn() {
+    if (this.data.type === 'aliyun') return !!(this.data.loginToken || '').trim();
+    if (this.data.type === 'baidu') {
+      return !!(this.data.loginCookie || this.data.accessToken || '').trim();
+    }
+    return false;
+  },
+
+  onQrLogin() {
+    var type = this.data.type;
+    if (type !== 'aliyun' && type !== 'baidu') return;
+    this.setData({ qrOpen: true, loginName: '', errText: '' });
+    if (type === 'aliyun') this.startAliyunQr();
+    else this.startBaiduQr();
+  },
+
+  onCloseQr() {
+    this.stopQr();
+    this.setData({ qrOpen: false, qrState: 'idle', qrStatus: '', qrRows: [] });
+  },
+
+  onRefreshQr() {
+    this.stopQr();
+    this.setData({ qrRows: [] });
+    if (this.data.type === 'aliyun') this.startAliyunQr();
+    else if (this.data.type === 'baidu') this.startBaiduQr();
+  },
+
+  stopQr() {
+    if (this._qrTimer) {
+      clearTimeout(this._qrTimer);
+      this._qrTimer = null;
+    }
+    this._qrSession = null;
+    this._qrDone = false;
+    this._qrBusy = false;
+  },
+
+  // 二维码矩阵按行压成黑块区间，WXML 只渲染黑块，减少节点数。
+  qrRowsOf(text) {
+    var m = getApp().qrMatrix(text);
+    var mod = Math.max(2, Math.floor(280 / m.size));
+    var rows = [];
+    for (var r = 0; r < m.size; r++) {
+      var runs = [];
+      var pos = 0;
+      var c = 0;
+      while (c < m.size) {
+        if (m.modules[r][c]) {
+          var start = c;
+          while (c < m.size && m.modules[r][c]) c++;
+          runs.push({ g: (start - pos) * mod, w: (c - start) * mod });
+          pos = c;
+        } else {
+          c++;
+        }
+      }
+      rows.push(runs);
+    }
+    return { rows: rows, mod: mod, size: mod * m.size };
+  },
+
+  startAliyunQr() {
+    var self = this;
+    self.stopQr();
+    self.setData({ qrState: 'loading', qrStatus: '正在获取二维码…', qrRows: [] });
+    getApp().aliyunQrCreate().then(function (session) {
+      if (!self.data.qrOpen) return;
+      self._qrSession = session;
+      var qr;
+      try {
+        qr = self.qrRowsOf(session.content);
+      } catch (e) {
+        self.setData({ qrState: 'error', qrStatus: '二维码生成失败，请重试' });
+        return;
+      }
+      self.setData({
+        qrState: 'ready',
+        qrStatus: '打开阿里云盘 App 扫码',
+        qrRows: qr.rows,
+        qrMod: qr.mod,
+        qrSize: qr.size
+      });
+      self.pollAliyunQr();
+    }).catch(function (err) {
+      self.setData({ qrState: 'error', qrStatus: (err && err.message) || '获取二维码失败' });
+    });
+  },
+
+  pollAliyunQr() {
+    var self = this;
+    var session = self._qrSession;
+    if (!session || self._qrDone) return;
+    self._qrTimer = setTimeout(function () {
+      if (!self.data.qrOpen || self._qrDone || !self._qrSession) return;
+      getApp().aliyunQrPoll(session).then(function (r) {
+        if (!self.data.qrOpen || self._qrDone) return;
+        if (r.status === 'EXPIRED') {
+          self.setData({ qrState: 'expired', qrStatus: '二维码已过期，请刷新' });
+          return;
+        }
+        if (r.status === 'CONFIRMED') {
+          self._qrDone = true;
+          self.setData({
+            qrState: 'confirmed',
+            qrStatus: '登录成功，点「保存」后生效',
+            loginToken: r.refreshToken,
+            loginName: r.nickname || ''
+          });
+          return;
+        }
+        self.setData({ qrStatus: r.status === 'SCANED' ? '已扫码，请在手机上确认' : '打开阿里云盘 App 扫码' });
+        self.pollAliyunQr();
+      }).catch(function () {
+        // 网络抖动，下一拍继续
+        self.pollAliyunQr();
+      });
+    }, 2000);
+  },
+
+  startBaiduQr() {
+    var self = this;
+    self.stopQr();
+    self.setData({ qrState: 'loading', qrStatus: '正在获取二维码…', qrRows: [] });
+    getApp().baiduQrCreate().then(function (session) {
+      if (!self.data.qrOpen) return;
+      self._qrSession = session;
+      var qr;
+      try {
+        qr = self.qrRowsOf(session.content);
+      } catch (e) {
+        self.setData({ qrState: 'error', qrStatus: '二维码生成失败，请重试' });
+        return;
+      }
+      self.setData({
+        qrState: 'ready',
+        qrStatus: '打开百度网盘 App 扫码',
+        qrRows: qr.rows,
+        qrMod: qr.mod,
+        qrSize: qr.size
+      });
+      self.pollBaiduQr();
+    }).catch(function (err) {
+      self.setData({ qrState: 'error', qrStatus: (err && err.message) || '获取二维码失败' });
+    });
+  },
+
+  pollBaiduQr() {
+    var self = this;
+    var session = self._qrSession;
+    if (!session || self._qrDone) return;
+    self._qrTimer = setTimeout(function () {
+      if (!self.data.qrOpen || self._qrDone || !self._qrSession) return;
+      getApp().baiduQrPoll(session).then(function (r) {
+        if (!self.data.qrOpen || self._qrDone) return;
+        if (r.status === 'EXPIRED') {
+          self.setData({ qrState: 'expired', qrStatus: '二维码已过期，请刷新' });
+          return;
+        }
+        if (r.status === 'CONFIRMED') {
+          self._qrDone = true;
+          self.setData({
+            qrState: 'confirmed',
+            qrStatus: '登录成功，点「保存」后生效',
+            loginCookie: r.cookie
+          });
+          return;
+        }
+        self.setData({ qrStatus: r.status === 'SCANED' ? '已扫码，请在手机上确认' : '打开百度网盘 App 扫码' });
+        self.pollBaiduQr();
+      }).catch(function () {
+        self.pollBaiduQr();
+      });
+    }, 2000);
+  },
+
   validate() {
     var d = this.data;
     if (d.type === 'emby' || d.type === 'jellyfin') {
@@ -240,9 +442,9 @@ Page({
     } else if (d.type === 'smb') {
       if (!(d.server || '').trim()) return '请填写 NAS 地址或主机名';
     } else if (d.type === 'aliyun') {
-      if (!(d.refreshToken || '').trim()) return '请填写 refresh_token';
+      if (!(d.loginToken || d.refreshToken || '').trim()) return '请先扫码登录阿里云盘';
     } else if (d.type === 'baidu') {
-      if (!(d.accessToken || '').trim()) return '请填写 access_token';
+      if (!(d.loginCookie || d.accessToken || '').trim()) return '请先扫码登录百度网盘';
     }
     return '';
   },
@@ -277,9 +479,11 @@ Page({
       // 只扫用户指定的根目录，避免整盘递归。
       cfg.rootPath = this.normalizeSmbRoot(d.smbRoot);
     } else if (d.type === 'aliyun') {
-      cfg.refreshToken = (d.refreshToken || '').trim();
+      cfg.refreshToken = (d.loginToken || d.refreshToken || '').trim();
     } else if (d.type === 'baidu') {
-      cfg.accessToken = (d.accessToken || '').trim();
+      var cookie = (d.loginCookie || '').trim();
+      if (cookie) cfg.cookie = cookie;
+      else cfg.accessToken = (d.accessToken || '').trim();
     }
     return cfg;
   },

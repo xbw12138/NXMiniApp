@@ -155,22 +155,99 @@
 
     <!-- 阿里云盘 -->
     <block wx:if="{{type === 'aliyun'}}">
-      <view class="field">
-        <text class="field-label">refresh_token<text class="req">*</text></text>
-        <input class="field-input" placeholder="粘贴阿里云盘 refresh_token" value="{{refreshToken}}"
-               data-field="refreshToken" bindinput="onInput"/>
+      <view wx:if="{{!qrOpen}}" class="login-box">
+        <view class="login-meta">
+          <text class="login-title">阿里云盘账号</text>
+          <text wx:if="{{loginToken || refreshToken}}" class="login-ok">已登录{{loginName ? '：' + loginName : ''}}</text>
+          <text wx:else class="login-tip">未登录</text>
+        </view>
+        <view class="login-actions">
+          <view class="browse-btn" bindtap="onQrLogin">
+            <text class="browse-btn-text">{{loginToken || refreshToken ? '重新扫码登录' : '扫码登录'}}</text>
+          </view>
+          <text class="hint hint-inline">手机扫一扫即可，无需手动填 token</text>
+        </view>
       </view>
-      <text class="hint">网页版登录后按 F12 → Application → Local Storage → token，复制 refresh_token。</text>
+
+      <view wx:if="{{qrOpen}}" class="qr-panel">
+        <view class="qr-head">
+          <text class="qr-title">阿里云盘扫码登录</text>
+          <view class="dir-close" bindtap="onCloseQr">
+            <text class="dir-close-text">收起</text>
+          </view>
+        </view>
+        <text wx:if="{{qrState === 'ready'}}" class="qr-status">{{qrStatus}}，约 2 分钟内有效</text>
+        <view class="qr-area">
+          <view wx:if="{{qrState === 'ready'}}" class="qr-box">
+            <view style="width: {{qrSize}}rpx; height: {{qrSize}}rpx;">
+              <view class="qr-row" wx:for="{{qrRows}}" wx:key="index" style="height: {{qrMod}}rpx;">
+                <view class="qr-black" wx:for="{{item}}" wx:for-item="run" wx:key="index" style="margin-left: {{run.g}}rpx; width: {{run.w}}rpx; height: {{qrMod}}rpx;"></view>
+              </view>
+            </view>
+          </view>
+          <view wx:elif="{{qrState === 'confirmed'}}" class="qr-box qr-placeholder">
+            <text class="qr-tip qr-tip-ok">{{qrStatus}}</text>
+          </view>
+          <view wx:elif="{{qrState === 'loading'}}" class="qr-box qr-placeholder">
+            <text class="qr-tip">{{qrStatus}}</text>
+          </view>
+          <view wx:else class="qr-box qr-placeholder">
+            <text class="qr-tip qr-tip-err">{{qrStatus}}</text>
+            <view class="qr-refresh" bindtap="onRefreshQr">
+              <text class="qr-refresh-text">刷新二维码</text>
+            </view>
+          </view>
+        </view>
+      </view>
     </block>
 
     <!-- 百度网盘 -->
     <block wx:if="{{type === 'baidu'}}">
-      <view class="field">
-        <text class="field-label">access_token<text class="req">*</text></text>
-        <input class="field-input" placeholder="粘贴百度网盘 access_token" value="{{accessToken}}"
-               data-field="accessToken" bindinput="onInput"/>
+      <view wx:if="{{!qrOpen}}" class="login-box">
+        <view class="login-meta">
+          <text class="login-title">百度网盘账号</text>
+          <text wx:if="{{loginCookie}}" class="login-ok">已登录</text>
+          <text wx:elif="{{accessToken}}" class="login-tip">旧版 token 登录，建议重新扫码</text>
+          <text wx:else class="login-tip">未登录</text>
+        </view>
+        <view class="login-actions">
+          <view class="browse-btn" bindtap="onQrLogin">
+            <text class="browse-btn-text">{{loginCookie ? '重新扫码登录' : '扫码登录'}}</text>
+          </view>
+          <text class="hint hint-inline">扫码登录网页版，播放会自动带上凭证</text>
+        </view>
       </view>
-      <text class="hint">通过百度网盘开放平台 OAuth 授权获取，有效期约 30 天。</text>
+
+      <view wx:if="{{qrOpen}}" class="qr-panel">
+        <view class="qr-head">
+          <text class="qr-title">百度网盘扫码登录</text>
+          <view class="dir-close" bindtap="onCloseQr">
+            <text class="dir-close-text">收起</text>
+          </view>
+        </view>
+        <text wx:if="{{qrState === 'ready'}}" class="qr-status">{{qrStatus}}，约 2 分钟内有效</text>
+        <view class="qr-area">
+          <view wx:if="{{qrState === 'ready'}}" class="qr-box">
+            <view style="width: {{qrSize}}rpx; height: {{qrSize}}rpx;">
+              <view class="qr-row" wx:for="{{qrRows}}" wx:key="index" style="height: {{qrMod}}rpx;">
+                <view class="qr-black" wx:for="{{item}}" wx:for-item="run" wx:key="index" style="margin-left: {{run.g}}rpx; width: {{run.w}}rpx; height: {{qrMod}}rpx;"></view>
+              </view>
+            </view>
+          </view>
+          <view wx:elif="{{qrState === 'confirmed'}}" class="qr-box qr-placeholder">
+            <text class="qr-tip qr-tip-ok">{{qrStatus}}</text>
+          </view>
+          <view wx:elif="{{qrState === 'loading'}}" class="qr-box qr-placeholder">
+            <text class="qr-tip">{{qrStatus}}</text>
+          </view>
+          <view wx:else class="qr-box qr-placeholder">
+            <text class="qr-tip qr-tip-err">{{qrStatus}}</text>
+            <view class="qr-refresh" bindtap="onRefreshQr">
+              <text class="qr-refresh-text">刷新二维码</text>
+            </view>
+          </view>
+        </view>
+      </view>
     </block>
 
     <view wx:if="{{testState !== 'idle'}}" class="test-box test-{{testState}}">

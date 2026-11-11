@@ -99,6 +99,320 @@ App({
     return out;
   },
 
+  // Base64 解码（阿里云扫码返回的 bizExt 是 base64 JSON）
+  atob(str) {
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    var s = String(str || '').replace(/[\s=]/g, '').replace(/-/g, '+').replace(/_/g, '/');
+    var out = '', i = 0;
+    while (i < s.length) {
+      var c1 = chars.indexOf(s.charAt(i++));
+      var c2 = chars.indexOf(s.charAt(i++));
+      var c3 = chars.indexOf(s.charAt(i++));
+      var c4 = chars.indexOf(s.charAt(i++));
+      if (c1 < 0 || c2 < 0) break;
+      out += String.fromCharCode((c1 << 2) | (c2 >> 4));
+      if (c3 >= 0) out += String.fromCharCode(((c2 & 15) << 4) | (c3 >> 2));
+      if (c4 >= 0) out += String.fromCharCode(((c3 & 3) << 6) | c4);
+    }
+    return out;
+  },
+
+  // ---------- 纯 JS 二维码编码器（byte 模式 / 纠错 L / 版本 1-10，参考 qrcode-generator） ----------
+  qrMatrix(text) {
+    var RS_BLOCKS_L = [
+      [1, 26, 19], [1, 44, 34], [1, 70, 55], [1, 100, 80], [1, 134, 108],
+      [2, 86, 68], [2, 98, 78], [2, 121, 97], [2, 146, 116], [2, 86, 68, 2, 87, 69]
+    ];
+    var ALIGN_POS = [
+      [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34],
+      [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50]
+    ];
+    var G15 = 0x0537, G18 = 0x1f25, G15_MASK = 0x5412;
+
+    var EXP = [], LOG = [];
+    (function () {
+      var x = 1;
+      for (var i = 0; i < 255; i++) {
+        EXP[i] = x;
+        LOG[x] = i;
+        x <<= 1;
+        if (x & 0x100) x ^= 0x11d;
+      }
+    })();
+    function gexp(n) { return EXP[n % 255]; }
+    function gmul(a, b) { return (a === 0 || b === 0) ? 0 : EXP[(LOG[a] + LOG[b]) % 255]; }
+
+    function rsGenPoly(deg) {
+      var poly = [1];
+      for (var i = 0; i < deg; i++) {
+        var factor = [1, gexp(i)];
+        var next = [];
+        for (var k = 0; k < poly.length + 1; k++) next[k] = 0;
+        for (var a = 0; a < poly.length; a++) {
+          for (var b = 0; b < 2; b++) next[a + b] ^= gmul(poly[a], factor[b]);
+        }
+        poly = next;
+      }
+      return poly;
+    }
+
+    function rsEncode(data, ecLen) {
+      var gen = rsGenPoly(ecLen);
+      var res = data.slice(0);
+      for (var i = 0; i < ecLen; i++) res.push(0);
+      for (var d = 0; d < data.length; d++) {
+        var coef = res[d];
+        if (coef !== 0) {
+          for (var j = 1; j < gen.length; j++) res[d + j] ^= gmul(gen[j], coef);
+        }
+      }
+      return res.slice(data.length);
+    }
+
+    function BitBuf() { this.buf = []; this.len = 0; }
+    BitBuf.prototype.put = function (num, length) {
+      for (var i = 0; i < length; i++) this.putBit(((num >>> (length - i - 1)) & 1) === 1);
+    };
+    BitBuf.prototype.putBit = function (bit) {
+      if (this.len % 8 === 0) this.buf.push(0);
+      if (bit) this.buf[Math.floor(this.len / 8)] |= (0x80 >>> (this.len % 8));
+      this.len++;
+    };
+
+    function totalDataCount(version) {
+      var rs = RS_BLOCKS_L[version - 1], total = 0;
+      for (var i = 0; i < rs.length; i += 3) total += rs[i] * rs[i + 2];
+      return total;
+    }
+
+    function makeData(version, text) {
+      var totalData = totalDataCount(version);
+      var buffer = new BitBuf();
+      buffer.put(4, 4); // byte 模式
+      buffer.put(text.length, version < 10 ? 8 : 16);
+      for (var i = 0; i < text.length; i++) buffer.put(text.charCodeAt(i) & 0xff, 8);
+      if (buffer.len + 4 <= totalData * 8) buffer.put(0, 4);
+      while (buffer.len % 8 !== 0) buffer.putBit(false);
+      while (buffer.buf.length < totalData) {
+        buffer.put(0xec, 8);
+        if (buffer.buf.length < totalData) buffer.put(0x11, 8);
+      }
+      var rs = RS_BLOCKS_L[version - 1];
+      var dcdata = [], ecdata = [], offset = 0, maxDc = 0, maxEc = 0;
+      for (i = 0; i < rs.length; i += 3) {
+        for (var b = 0; b < rs[i]; b++) {
+          var dcCount = rs[i + 2], ecCount = rs[i + 1] - rs[i + 2];
+          var dc = buffer.buf.slice(offset, offset + dcCount);
+          offset += dcCount;
+          dcdata.push(dc);
+          var ec = rsEncode(dc, ecCount);
+          ecdata.push(ec);
+          if (dcCount > maxDc) maxDc = dcCount;
+          if (ec.length > maxEc) maxEc = ec.length;
+        }
+      }
+      var data = [];
+      for (i = 0; i < maxDc; i++) {
+        for (var r = 0; r < dcdata.length; r++) if (i < dcdata[r].length) data.push(dcdata[r][i]);
+      }
+      for (i = 0; i < maxEc; i++) {
+        for (r = 0; r < ecdata.length; r++) if (i < ecdata[r].length) data.push(ecdata[r][i]);
+      }
+      return data;
+    }
+
+    function bchDigit(data) {
+      var digit = 0, d = data >>> 0;
+      while (d !== 0) { digit++; d >>>= 1; }
+      return digit;
+    }
+    function bchTypeInfo(data) {
+      var d = data << 10;
+      while (bchDigit(d) - bchDigit(G15) >= 0) d ^= (G15 << (bchDigit(d) - bchDigit(G15)));
+      return ((data << 10) | d) ^ G15_MASK;
+    }
+    function bchTypeNumber(data) {
+      var d = data << 12;
+      while (bchDigit(d) - bchDigit(G18) >= 0) d ^= (G18 << (bchDigit(d) - bchDigit(G18)));
+      return (data << 12) | d;
+    }
+
+    function maskBit(mask, row, col) {
+      switch (mask) {
+        case 0: return (row + col) % 2 === 0;
+        case 1: return row % 2 === 0;
+        case 2: return col % 3 === 0;
+        case 3: return (row + col) % 3 === 0;
+        case 4: return (Math.floor(row / 2) + Math.floor(col / 3)) % 2 === 0;
+        case 5: return (row * col) % 2 + (row * col) % 3 === 0;
+        case 6: return ((row * col) % 2 + (row * col) % 3) % 2 === 0;
+        default: return ((row + col) % 2 + (row * col) % 3) % 2 === 0;
+      }
+    }
+
+    function buildMatrix(version, data, test, mask) {
+      var n = version * 4 + 17;
+      var modules = [];
+      var r, c, i, j;
+      for (r = 0; r < n; r++) {
+        var rowArr = [];
+        for (c = 0; c < n; c++) rowArr.push(null);
+        modules.push(rowArr);
+      }
+      function probe(r0, c0) {
+        for (var rr = -1; rr <= 7; rr++) {
+          for (var cc = -1; cc <= 7; cc++) {
+            if (r0 + rr < 0 || r0 + rr >= n || c0 + cc < 0 || c0 + cc >= n) continue;
+            modules[r0 + rr][c0 + cc] =
+              (0 <= rr && rr <= 6 && (cc === 0 || cc === 6)) ||
+              (0 <= cc && cc <= 6 && (rr === 0 || rr === 6)) ||
+              (2 <= rr && rr <= 4 && 2 <= cc && cc <= 4);
+          }
+        }
+      }
+      probe(0, 0);
+      probe(n - 7, 0);
+      probe(0, n - 7);
+      var pos = ALIGN_POS[version - 1];
+      for (i = 0; i < pos.length; i++) {
+        for (j = 0; j < pos.length; j++) {
+          var ar = pos[i], ac = pos[j];
+          if (modules[ar][ac] !== null) continue;
+          for (r = -2; r <= 2; r++) {
+            for (c = -2; c <= 2; c++) {
+              modules[ar + r][ac + c] = Math.max(Math.abs(r), Math.abs(c)) !== 1;
+            }
+          }
+        }
+      }
+      for (r = 8; r < n - 8; r++) {
+        if (modules[r][6] === null) modules[r][6] = r % 2 === 0;
+      }
+      for (c = 8; c < n - 8; c++) {
+        if (modules[6][c] === null) modules[6][c] = c % 2 === 0;
+      }
+      var bits = bchTypeInfo((1 << 3) | mask); // 纠错级别 L = 01
+      var mod;
+      for (i = 0; i < 15; i++) {
+        mod = !test && ((bits >> i) & 1) === 1;
+        if (i < 6) modules[i][8] = mod;
+        else if (i < 8) modules[i + 1][8] = mod;
+        else modules[n - 15 + i][8] = mod;
+      }
+      for (i = 0; i < 15; i++) {
+        mod = !test && ((bits >> i) & 1) === 1;
+        if (i < 8) modules[8][n - i - 1] = mod;
+        else if (i < 9) modules[8][15 - i - 1 + 1] = mod;
+        else modules[8][15 - i - 1] = mod;
+      }
+      modules[n - 8][8] = !test;
+      if (version >= 7) {
+        bits = bchTypeNumber(version);
+        for (i = 0; i < 18; i++) {
+          mod = !test && ((bits >> i) & 1) === 1;
+          modules[Math.floor(i / 3)][i % 3 + n - 11] = mod;
+          modules[i % 3 + n - 11][Math.floor(i / 3)] = mod;
+        }
+      }
+      var inc = -1, rr2 = n - 1, bitIndex = 7, byteIndex = 0;
+      for (var col = n - 1; col > 0; col -= 2) {
+        if (col === 6) col--;
+        while (true) {
+          for (c = 0; c < 2; c++) {
+            if (modules[rr2][col - c] === null) {
+              var dark = false;
+              if (byteIndex < data.length) dark = ((data[byteIndex] >>> bitIndex) & 1) === 1;
+              if (maskBit(mask, rr2, col - c)) dark = !dark;
+              modules[rr2][col - c] = dark;
+              bitIndex--;
+              if (bitIndex === -1) { byteIndex++; bitIndex = 7; }
+            }
+          }
+          rr2 += inc;
+          if (rr2 < 0 || rr2 >= n) { rr2 -= inc; inc = -inc; break; }
+        }
+      }
+      return modules;
+    }
+
+    function lostPoint(modules, n) {
+      var lost = 0, row, col, sameCount, dark, c2;
+      for (row = 0; row < n; row++) {
+        sameCount = 0;
+        dark = modules[row][0];
+        for (col = 0; col < n; col++) {
+          if (modules[row][col] === dark) {
+            sameCount++;
+            if (sameCount === 5) lost += 3;
+            else if (sameCount > 5) lost++;
+          } else {
+            sameCount = 1;
+            dark = modules[row][col];
+          }
+        }
+      }
+      for (col = 0; col < n; col++) {
+        sameCount = 0;
+        dark = modules[0][col];
+        for (row = 0; row < n; row++) {
+          if (modules[row][col] === dark) {
+            sameCount++;
+            if (sameCount === 5) lost += 3;
+            else if (sameCount > 5) lost++;
+          } else {
+            sameCount = 1;
+            dark = modules[row][col];
+          }
+        }
+      }
+      for (row = 0; row < n - 1; row++) {
+        for (col = 0; col < n - 1; col++) {
+          var count = 0;
+          if (modules[row][col]) count++;
+          if (modules[row + 1][col]) count++;
+          if (modules[row][col + 1]) count++;
+          if (modules[row + 1][col + 1]) count++;
+          if (count === 0 || count === 4) lost += 3;
+        }
+      }
+      for (row = 0; row < n; row++) {
+        for (col = 0; col < n - 6; col++) {
+          if (modules[row][col] && !modules[row][col + 1] && modules[row][col + 2] &&
+              modules[row][col + 3] && modules[row][col + 4] && !modules[row][col + 5] &&
+              modules[row][col + 6]) lost += 40;
+        }
+      }
+      for (col = 0; col < n; col++) {
+        for (row = 0; row < n - 6; row++) {
+          if (modules[row][col] && !modules[row + 1][col] && modules[row + 2][col] &&
+              modules[row + 3][col] && modules[row + 4][col] && !modules[row + 5][col] &&
+              modules[row + 6][col]) lost += 40;
+        }
+      }
+      var darkCount = 0;
+      for (row = 0; row < n; row++) {
+        for (c2 = 0; c2 < n; c2++) if (modules[row][c2]) darkCount++;
+      }
+      lost += Math.floor(Math.abs(100 * darkCount / n / n - 50) / 5) * 10;
+      return lost;
+    }
+
+    var version = 0;
+    for (var v = 1; v <= 10; v++) {
+      var need = 4 + (v < 10 ? 8 : 16) + text.length * 8;
+      if (need <= totalDataCount(v) * 8) { version = v; break; }
+    }
+    if (!version) throw new Error('内容过长，无法生成二维码');
+    var data = makeData(version, text);
+    var n = version * 4 + 17;
+    var bestLost = -1, bestMask = 0;
+    for (var mask = 0; mask < 8; mask++) {
+      var lost = lostPoint(buildMatrix(version, data, true, mask), n);
+      if (bestLost < 0 || lost < bestLost) { bestLost = lost; bestMask = mask; }
+    }
+    return { size: n, modules: buildMatrix(version, data, false, bestMask), mask: bestMask, version: version };
+  },
+
   fmtSize(bytes) {
     var n = Number(bytes) || 0;
     if (n < 1024) return n + ' B';
@@ -967,24 +1281,238 @@ App({
   },
 
   // =====================================================================
+  // 扫码登录（阿里云盘 / 百度网盘）
+  // 二维码在本地渲染（纯 JS 生成矩阵，WXSS 画点），不依赖 web-view。
+  // =====================================================================
+
+  jsonOf(res) {
+    var d = res && res.data;
+    if (typeof d === 'string') {
+      try { return JSON.parse(d); } catch (e) { return null; }
+    }
+    return d || null;
+  },
+
+  // ---------- 阿里云盘：网页登录二维码换 refresh_token ----------
+  aliyunQrHeaders() {
+    return {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
+      'Referer': 'https://www.aliyundrive.com/'
+    };
+  },
+
+  aliyunQrCreate() {
+    var self = this;
+    return self.http({
+      url: 'https://passport.aliyun.com/newlogin/qrcode/generate.do?appName=aliyun_drive&fromSite=0',
+      header: self.aliyunQrHeaders()
+    }).then(function (res) {
+      var body = self.jsonOf(res) || {};
+      var d = (body.content && body.content.data) || {};
+      if (!d.codeContent || !d.ck) throw new Error('阿里云盘二维码获取失败');
+      return { content: d.codeContent, t: d.t, ck: d.ck };
+    });
+  },
+
+  aliyunQrPoll(session) {
+    var self = this;
+    var header = self.aliyunQrHeaders();
+    header['Content-Type'] = 'application/x-www-form-urlencoded';
+    // query.do 只认 POST 表单，GET 会直接返回 EXPIRED。
+    var payload = 't=' + session.t + '&ck=' + encodeURIComponent(session.ck) +
+                  '&appName=aliyun_drive&fromSite=0';
+    return self.http({
+      url: 'https://passport.aliyun.com/newlogin/qrcode/query.do?appName=aliyun_drive&fromSite=0',
+      method: 'POST',
+      header: header,
+      data: payload
+    }).then(function (res) {
+      var body = self.jsonOf(res) || {};
+      var data = (body.content && body.content.data) || {};
+      var status = data.qrCodeStatus || 'NEW';
+      if (status !== 'CONFIRMED') return { status: status };
+      var parsed = self.parseAliyunLogin(data.bizExt);
+      if (!parsed.refreshToken) throw new Error('扫码成功但没有拿到登录凭证，请刷新二维码重试');
+      return {
+        status: 'CONFIRMED',
+        refreshToken: parsed.refreshToken,
+        accessToken: parsed.accessToken,
+        driveId: parsed.driveId,
+        nickname: parsed.nickname
+      };
+    });
+  },
+
+  parseAliyunLogin(bizExt) {
+    if (!bizExt) return {};
+    try {
+      var json = JSON.parse(this.atob(bizExt));
+      var r = json.pds_login_result || json;
+      return {
+        refreshToken: r.refresh_token || '',
+        accessToken: r.access_token || '',
+        driveId: r.default_drive_id || '',
+        nickname: r.nick_name || ''
+      };
+    } catch (e) {
+      var m = String(bizExt).match(/refresh_token["'\s:=]+([A-Za-z0-9._-]+)/);
+      return { refreshToken: m ? m[1] : '' };
+    }
+  },
+
+  // ---------- 百度网盘：网页扫码拿 BDUSS / STOKEN ----------
+  baiduQrHeaders() {
+    return {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
+      'Referer': 'https://pan.baidu.com/'
+    };
+  },
+
+  baiduQrCreate() {
+    var self = this;
+    var gid = String(Math.floor(Math.random() * 90000000) + 10000000);
+    return self.http({
+      url: 'https://passport.baidu.com/v2/api/getqrcode?lp=pc&qrloginfrom=pc&gid=' + gid,
+      header: self.baiduQrHeaders()
+    }).then(function (res) {
+      var d = self.jsonOf(res) || {};
+      if (!d.sign || !d.imgurl) throw new Error('百度网盘二维码获取失败');
+      // imgurl 本身就是要编码进二维码的登录地址，本地画码即可，
+      // 不依赖百度返回的 1bit 调色板 PNG（容器图片解码不一定支持）。
+      var content = String(d.imgurl);
+      if (content.indexOf('//') === 0) content = 'https:' + content;
+      else if (content.indexOf('http') !== 0) content = 'https://' + content;
+      return { content: content, sign: d.sign };
+    });
+  },
+
+  baiduQrPoll(session) {
+    var self = this;
+    var url = 'https://passport.baidu.com/channel/unicast?channel_id=' +
+              encodeURIComponent(session.sign) + '&tpl=netdisk&callback=&_=' + Date.now();
+    return self.http({ url: url, header: self.baiduQrHeaders() }).then(function (res) {
+      var body = self.jsonOf(res) || {};
+      var errno = body.errno;
+      if (errno === 1) return { status: 'SCANED' };
+      if (errno === 2) return { status: 'EXPIRED' };
+      if (errno !== 0) return { status: 'NEW' };
+      var cookie = self.parseBaiduChannel(body.channel_v);
+      if (!cookie) return { status: 'NEW' };
+      return self.baiduFillStoken(cookie).then(function (full) {
+        return { status: 'CONFIRMED', cookie: full };
+      });
+    });
+  },
+
+  parseBaiduChannel(channelV) {
+    var text = String(channelV || '');
+    try {
+      var outer = JSON.parse(text);
+      if (outer) text = outer.v || outer.cookie || text;
+    } catch (e) {}
+    for (var i = 0; i < 2; i++) {
+      try {
+        var decoded = decodeURIComponent(text);
+        if (decoded === text) break;
+        text = decoded;
+      } catch (e) { break; }
+    }
+    var bduss = (text.match(/bduss=([^&;\s"']+)/i) || [])[1];
+    var stoken = (text.match(/stoken=([^&;\s"']+)/i) || [])[1];
+    if (!bduss) return '';
+    return 'BDUSS=' + bduss + (stoken ? '; STOKEN=' + stoken : '');
+  },
+
+  // 部分账号的通道只回 BDUSS，STOKEN 需要再取一次；失败也不影响列表。
+  baiduFillStoken(cookie) {
+    var self = this;
+    if (/stoken=/i.test(cookie)) return Promise.resolve(cookie);
+    return self.http({
+      url: 'https://pan.baidu.com/api/gettemplatevariable?fields=' +
+           encodeURIComponent('["stoken"]'),
+      header: { 'Cookie': cookie, 'User-Agent': 'pan.baidu.com', 'Referer': 'https://pan.baidu.com/' }
+    }).then(function (res) {
+      var body = self.jsonOf(res) || {};
+      var stoken = (body.result && body.result.stoken) || '';
+      return stoken ? (cookie + '; STOKEN=' + stoken) : cookie;
+    }).catch(function () { return cookie; });
+  },
+
+  // =====================================================================
   // 百度网盘适配器
-  // 用 access_token 调用 OpenAPI
+  // 扫码登录后走网页接口（Cookie），也兼容旧版 access_token。
   // =====================================================================
   baiduConfig(source) {
     return source.config || {};
+  },
+
+  baiduCookie(source) {
+    return String(this.baiduConfig(source).cookie || '').trim();
+  },
+
+  baiduHeaders(source) {
+    var cookie = this.baiduCookie(source);
+    if (!cookie) return { 'User-Agent': 'pan.baidu.com' };
+    return {
+      'Cookie': cookie,
+      'User-Agent': 'pan.baidu.com',
+      'Referer': 'https://pan.baidu.com/'
+    };
+  },
+
+  // mpv 的 http-header-fields 是逗号分隔的字符串列表。
+  baiduPlayHeaders(source) {
+    var cookie = this.baiduCookie(source);
+    if (!cookie) return '';
+    return 'Cookie: ' + cookie + ',User-Agent: pan.baidu.com,Referer: https://pan.baidu.com/';
+  },
+
+  // 统一的文件信息接口：网页端返回 info，开放平台返回 list。
+  baiduFileMeta(source, fsid) {
+    var self = this;
+    var cookie = self.baiduCookie(source);
+    var cfg = self.baiduConfig(source);
+    var url;
+    if (cookie) {
+      url = 'https://pan.baidu.com/api/filemetas?target=' + encodeURIComponent('[' + fsid + ']') +
+            '&dlink=1&web=5&clienttype=0&app_id=250528';
+    } else {
+      url = 'https://pan.baidu.com/rest/2.0/xpan/multimedia?method=filemetas&access_token=' +
+            cfg.accessToken + '&fsids=' + encodeURIComponent('[' + fsid + ']') + '&dlink=1';
+    }
+    return self.http({ url: url, header: self.baiduHeaders(source) }).then(function (res) {
+      var body = res.data || {};
+      if (body.errno && body.errno !== 0) {
+        throw new Error(body.errno === -6
+          ? '百度网盘登录已过期，请重新扫码'
+          : ('百度网盘错误：' + (body.errmsg || body.errno)));
+      }
+      return (body.list && body.list[0]) || (body.info && body.info[0]) || {};
+    });
   },
 
   baiduScanDir(source, dir, depth) {
     var self = this;
     if (depth > 6) return Promise.resolve([]);
     var cfg = self.baiduConfig(source);
+    var cookie = self.baiduCookie(source);
+    var url;
+    if (cookie) {
+      url = 'https://pan.baidu.com/api/list?order=name&desc=0&showempty=0&web=1&page=1&num=1000&dir=' +
+            encodeURIComponent(dir) + '&app_id=250528';
+    } else {
+      url = 'https://pan.baidu.com/rest/2.0/xpan/file?method=list&access_token=' + cfg.accessToken +
+            '&dir=' + encodeURIComponent(dir) + '&limit=1000';
+    }
     return self.http({
-      url: 'https://pan.baidu.com/rest/2.0/xpan/file?method=list&access_token=' + cfg.accessToken + '&dir=' + encodeURIComponent(dir) + '&limit=1000',
-      header: { 'User-Agent': 'pan.baidu.com' }
+      url: url,
+      header: self.baiduHeaders(source)
     }).then(function (res) {
       var body = res.data || {};
       if (body.errno && body.errno !== 0) {
-        throw new Error('百度网盘错误：' + (body.errmsg || body.errno));
+        throw new Error(body.errno === -6
+          ? '百度网盘登录已过期，请重新扫码'
+          : ('百度网盘错误：' + (body.errmsg || body.errno)));
       }
       var items = body.list || [];
       var dirs = [];
@@ -1024,13 +1552,7 @@ App({
 
   baiduGetDetail(source, itemId) {
     var self = this;
-    var cfg = self.baiduConfig(source);
-    return self.http({
-      url: 'https://pan.baidu.com/rest/2.0/xpan/multimedia?method=filemetas&access_token=' + cfg.accessToken + '&fsids=[' + itemId + ']&dlink=1',
-      header: { 'User-Agent': 'pan.baidu.com' }
-    }).then(function (res) {
-      var body = res.data || {};
-      var info = (body.list && body.list[0]) || {};
+    return self.baiduFileMeta(source, itemId).then(function (info) {
       var name = (info.server_filename || '').replace(/\.[^.]+$/, '');
       return self.makeMovie(source, itemId, {
         title: name,
@@ -1043,16 +1565,16 @@ App({
 
   baiduGetPlayUrl(source, itemId) {
     var self = this;
+    var cookie = self.baiduCookie(source);
     var cfg = self.baiduConfig(source);
-    return self.http({
-      url: 'https://pan.baidu.com/rest/2.0/xpan/multimedia?method=filemetas&access_token=' + cfg.accessToken + '&fsids=[' + itemId + ']&dlink=1',
-      header: { 'User-Agent': 'pan.baidu.com' }
-    }).then(function (res) {
-      var body = res.data || {};
-      var info = (body.list && body.list[0]) || {};
+    return self.baiduFileMeta(source, itemId).then(function (info) {
       if (!info.dlink) throw new Error('未获取到下载链接');
-      // dlink 需要带 access_token 才能访问
-      return info.dlink + '&access_token=' + cfg.accessToken;
+      if (!cookie) {
+        // 旧版 access_token 直接拼在 dlink 上
+        return info.dlink + '&access_token=' + cfg.accessToken;
+      }
+      // 网页端 dlink 带防盗链，必须把 Cookie 一起交给播放器
+      return { url: info.dlink, headers: self.baiduPlayHeaders(source) };
     });
   },
 
