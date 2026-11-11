@@ -1,15 +1,26 @@
 /* 数据源管理页 */
+.add-btn {
+  height: 56rpx;
+  padding: 0 24rpx;
+  font-size: 22rpx;
+}
+
 .src-card {
-  background-color: #17191e;
+  background-color: #14171c;
   border-radius: 16rpx;
-  padding: 20rpx;
+  padding: 18rpx 20rpx;
   margin-bottom: 14rpx;
 }
 
+.src-head {
+  flex-direction: row;
+  align-items: center;
+}
+
 .src-tag {
-  width: 120rpx;
-  height: 48rpx;
-  border-radius: 10rpx;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 14rpx;
   align-items: center;
   justify-content: center;
   margin-right: 16rpx;
@@ -17,7 +28,7 @@
 }
 
 .src-tag-text {
-  font-size: 20rpx;
+  font-size: 26rpx;
   color: #ffffff;
   font-weight: bold;
 }
@@ -32,40 +43,113 @@
 .src-info {
   flex: 1;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .src-name {
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: bold;
-  color: #e6e9ee;
+  color: #eef1f5;
 }
 
-.src-status {
-  font-size: 21rpx;
-  margin-top: 4rpx;
+.src-addr {
+  font-size: 20rpx;
+  color: #7d8693;
+  margin-top: 6rpx;
+}
+
+.src-state {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 6rpx;
+  margin-right: 8rpx;
+}
+
+.dot-on { background-color: #0fdc78; }
+.dot-off { background-color: #5b636d; }
+
+.src-state-text {
+  font-size: 20rpx;
 }
 
 .src-on { color: #0fdc78; }
 .src-off { color: #7d8693; }
 
-.src-actions {
-  margin-top: 14rpx;
+.src-foot {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 16rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx solid #1f242b;
 }
 
-.btn-sm {
-  height: 52rpx;
-  padding: 0 20rpx;
-  font-size: 22rpx;
-  margin-right: 12rpx;
+.src-count {
+  font-size: 20rpx;
+  color: #8892a0;
 }
 
-.btn-del {
-  color: #ff6b6b;
+.link {
+  padding: 6rpx 14rpx;
+  margin-left: 6rpx;
+  border-radius: 10rpx;
+  background-color: #1c2027;
 }
 
-.card-title {
-  font-size: 26rpx;
+.link-text {
+  font-size: 21rpx;
+  color: #cfd5dd;
+}
+
+.link-del {
+  color: #ff7a72;
+}
+
+.src-test {
+  margin-top: 12rpx;
+  font-size: 20rpx;
+  color: #8892a0;
+}
+
+.src-test-ok { color: #3ddc84; }
+.src-test-fail { color: #ff7a72; }
+
+/* 空态 */
+.empty-big {
+  padding: 70rpx 0 40rpx;
+  align-items: center;
+}
+
+.empty-title {
+  font-size: 30rpx;
   font-weight: bold;
-  color: #9aa1ab;
-  margin-bottom: 10rpx;
+  color: #e7ebf0;
+}
+
+.empty-sub {
+  font-size: 21rpx;
+  color: #79828e;
+  margin-top: 10rpx;
+}
+
+.empty-btn {
+  margin-top: 26rpx;
+  height: 64rpx;
+}
+
+/* 帮助卡 */
+.help {
+  background-color: #12151a;
+  margin-top: 8rpx;
+}
+
+.help-line {
+  font-size: 20rpx;
+  color: #78818d;
+  margin-top: 8rpx;
 }

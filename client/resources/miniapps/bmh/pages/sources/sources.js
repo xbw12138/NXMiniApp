@@ -1,28 +1,51 @@
+var BADGES = { emby: 'E', jellyfin: 'J', webdav: 'W', smb: 'S', aliyun: '阿', baidu: '百' };
+
 Page({
   data: {
-    sources: [],
-    testing: {}
+    sources: []
+  },
+
+  onLoad() {
+    this.tests = {};
   },
 
   onShow() {
     this.refresh();
   },
 
-  refresh() {
+  buildItem(s) {
     var app = getApp();
-    var list = app.getSources().map(function (s) {
-      var cfg = s.config || {};
-      var configured = cfg.url || cfg.server || cfg.refreshToken || cfg.accessToken;
-      return {
-        id: s.id,
-        name: s.name,
-        type: s.type,
-        typeLabel: app.sourceTypeLabel(s.type),
-        enabled: s.enabled !== false,
-        summary: configured ? '已配置' : '未配置'
-      };
-    });
-    this.setData({ sources: list });
+    var cfg = s.config || {};
+    var addr = '';
+    if (s.type === 'smb') {
+      addr = (cfg.server || '') + (cfg.share ? ' / ' + cfg.share : '');
+    } else if (s.type === 'aliyun') {
+      addr = cfg.refreshToken ? 'refresh_token 已填写' : '未填写 refresh_token';
+    } else if (s.type === 'baidu') {
+      addr = cfg.accessToken ? 'access_token 已填写' : '未填写 access_token';
+    } else {
+      addr = cfg.url || '';
+    }
+    var cache = app.getMoviesCache(s.id);
+    var test = this.tests && this.tests[s.id];
+    return {
+      id: s.id,
+      type: s.type,
+      badge: BADGES[s.type] || '?',
+      name: s.name || app.sourceTypeLabel(s.type),
+      addr: addr || '未填写地址',
+      enabled: s.enabled !== false,
+      countText: cache ? (cache.list.length + ' 部影片') : '尚未扫描',
+      testText: test ? test.text : '',
+      testOk: test ? test.ok : false
+    };
+  },
+
+  refresh() {
+    var list = getApp().getSources();
+    var items = [];
+    for (var i = 0; i < list.length; i++) items.push(this.buildItem(list[i]));
+    this.setData({ sources: items });
   },
 
   onAdd() {
@@ -39,7 +62,9 @@ Page({
     var app = getApp();
     var s = app.getSource(id);
     if (!s) return;
-    app.updateSource(id, { enabled: s.enabled === false });
+    var next = s.enabled === false;
+    app.updateSource(id, { enabled: next });
+    wx.showToast({ title: next ? '已启用' : '已禁用' });
     this.refresh();
   },
 
@@ -49,23 +74,14 @@ Page({
     var s = app.getSource(id);
     if (!s) return;
     var self = this;
-    var testing = {};
-    testing[id] = true;
-    self.setData({ testing: testing });
+    this.tests[id] = { text: '测试中…', ok: null };
+    this.refresh();
     app.testConnection(s).then(function (r) {
-      var done = {};
-      done[id] = false;
-      self.setData({ testing: done });
-      wx.showToast({ title: '连接成功，共 ' + r.count + ' 个视频', icon: 'success' });
+      self.tests[id] = { text: '连接成功 · ' + r.count + ' 个视频', ok: true };
+      self.refresh();
     }).catch(function (err) {
-      var done = {};
-      done[id] = false;
-      self.setData({ testing: done });
-      wx.showModal({
-        title: '连接失败',
-        content: (err && err.errMsg) || (err && err.message) || '请检查地址与凭证',
-        showCancel: false
-      });
+      self.tests[id] = { text: (err && (err.errMsg || err.message)) || '连接失败', ok: false };
+      self.refresh();
     });
   },
 
@@ -74,20 +90,15 @@ Page({
     var self = this;
     wx.showModal({
       title: '删除数据源',
-      content: '确定要删除这个数据源吗？',
-      confirmText: '删除',
-      cancelText: '取消',
+      content: '删除后需要重新添加，已缓存的影片信息会一并清除。',
       success: function (res) {
-        if (res.confirm) {
-          getApp().removeSource(id);
-          self.refresh();
-          wx.showToast({ title: '已删除' });
-        }
+        if (!res.confirm) return;
+        getApp().removeSource(id);
+        delete self.tests[id];
+        try { wx.removeStorageSync(getApp().moviesCacheKey(id)); } catch (err) {}
+        wx.showToast({ title: '已删除' });
+        self.refresh();
       }
     });
-  },
-
-  onBack() {
-    wx.navigateBack({ delta: 1 });
   }
 });

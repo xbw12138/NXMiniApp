@@ -329,9 +329,27 @@ App({
   },
 
   testConnection(source) {
-    // 用一次轻量请求验证
-    return this.listMovies(source).then(function (list) {
-      return { ok: true, count: list.length };
+    // 用一次轻量请求验证；网络挂住时给个上限，避免测试按钮一直转圈。
+    // 失败要把真实原因抛出去（withTimeout 会把 reject 吞成 fallback，这里不用它）。
+    var self = this;
+    return new Promise(function (resolve, reject) {
+      var finished = false;
+      var timer = setTimeout(function () {
+        if (finished) return;
+        finished = true;
+        reject(new Error('连接超时，请检查地址与网络'));
+      }, 15000);
+      self.listMovies(source).then(function (list) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        resolve({ ok: true, count: (list || []).length });
+      }, function (err) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        reject(err || new Error('连接失败'));
+      });
     });
   },
 

@@ -1,98 +1,146 @@
 <view class="page">
-  <scroll-view class="scroll" scroll-y="{{true}}" style="height: 100%;">
-    <!-- 数据源类型选择 -->
-    <text class="section-title">选择数据源类型</text>
+  <view class="topbar">
+    <text class="brand">{{editId ? '编辑数据源' : '添加数据源'}}</text>
+    <view class="spacer"/>
+    <text class="step">{{editId ? '修改后保存即可' : '选类型 → 填信息 → 保存'}}</text>
+  </view>
+
+  <scroll-view class="scroll" scroll-y="{{true}}">
+    <!-- 类型 -->
     <view class="type-grid">
-      <view wx:for="{{types}}" wx:key="key"
-            class="type-btn {{type === item.key ? 'type-on' : ''}}"
-            data-key="{{item.key}}" bindtap="onType">
-        <text class="type-text">{{item.label}}</text>
+      <view class="type-row" wx:for="{{typeRows}}" wx:for-item="row" wx:key="index">
+        <view class="type-card {{type === item.key ? 'type-on' : ''}}"
+              wx:for="{{row}}" wx:key="key" data-key="{{item.key}}" bindtap="onType">
+          <view class="type-badge {{type === item.key ? 'type-badge-on' : ''}}">
+            <text class="type-badge-text">{{item.badge}}</text>
+          </view>
+          <view class="type-meta">
+            <text class="type-name">{{item.label}}</text>
+            <text class="type-desc">{{item.desc}}</text>
+          </view>
+        </view>
       </view>
     </view>
 
-    <!-- 名称 -->
-    <text class="section-title">名称</text>
-    <input class="input" placeholder="给这个数据源起个名字" value="{{name}}"
-           data-field="name" bindinput="onInput"/>
+    <!-- 通用名称 -->
+    <view class="field">
+      <text class="field-label">名称</text>
+      <input class="field-input" placeholder="留空则用类型名" value="{{name}}"
+             data-field="name" bindinput="onInput"/>
+    </view>
 
     <!-- Emby / Jellyfin -->
     <block wx:if="{{type === 'emby' || type === 'jellyfin'}}">
-      <text class="section-title">服务器地址</text>
-      <input class="input" placeholder="例如 http://192.168.1.100:8096" value="{{url}}"
-             data-field="url" bindinput="onInput"/>
-      <text class="section-title">用户名（可选，留空用 API Key）</text>
-      <input class="input" placeholder="Emby 用户名" value="{{username}}"
-             data-field="username" bindinput="onInput"/>
-      <text class="section-title">密码</text>
-      <input class="input" placeholder="Emby 密码" password="{{true}}" value="{{password}}"
-             data-field="password" bindinput="onInput"/>
-      <text class="section-title">API Key（可选，后台生成）</text>
-      <input class="input" placeholder="Emby API Key" value="{{token}}"
-             data-field="token" bindinput="onInput"/>
-      <text class="hint">推荐在 Emby 后台「高级 → API 密钥」生成一个 Key 填入，无需密码。</text>
+      <view class="field">
+        <text class="field-label">服务器地址<text class="req">*</text></text>
+        <input class="field-input" placeholder="192.168.1.100:8096" value="{{url}}"
+               data-field="url" bindinput="onInput"/>
+      </view>
+      <view class="field">
+        <text class="field-label">API Key</text>
+        <input class="field-input" placeholder="后台「高级 → API 密钥」生成" value="{{token}}"
+               data-field="token" bindinput="onInput"/>
+      </view>
+      <view class="field">
+        <text class="field-label">用户名</text>
+        <input class="field-input" placeholder="没有 API Key 时填用户名" value="{{username}}"
+               data-field="username" bindinput="onInput"/>
+      </view>
+      <view class="field">
+        <text class="field-label">密码</text>
+        <input class="field-input" placeholder="与用户名配对使用" password="{{true}}" value="{{password}}"
+               data-field="password" bindinput="onInput"/>
+      </view>
+      <text class="hint">API Key 与「用户名 + 密码」二选一；填 Key 更快，也不会因改密码失效。</text>
     </block>
 
     <!-- WebDAV -->
     <block wx:if="{{type === 'webdav'}}">
-      <text class="section-title">WebDAV 地址</text>
-      <input class="input" placeholder="例如 http://192.168.1.100:5005" value="{{url}}"
-             data-field="url" bindinput="onInput"/>
-      <text class="section-title">用户名</text>
-      <input class="input" placeholder="WebDAV 用户名" value="{{username}}"
-             data-field="username" bindinput="onInput"/>
-      <text class="section-title">密码</text>
-      <input class="input" placeholder="WebDAV 密码" password="{{true}}" value="{{password}}"
-             data-field="password" bindinput="onInput"/>
-      <text class="section-title">根路径（可选）</text>
-      <input class="input" placeholder="默认 /" value="{{rootPath}}"
-             data-field="rootPath" bindinput="onInput"/>
-      <text class="hint">群晖：http://NAS_IP:5005  极空间：http://NAS_IP:5005  飞牛 fnOS：WebDAV 默认端口。</text>
+      <view class="field">
+        <text class="field-label">WebDAV 地址<text class="req">*</text></text>
+        <input class="field-input" placeholder="192.168.1.100:5005" value="{{url}}"
+               data-field="url" bindinput="onInput"/>
+      </view>
+      <view class="field">
+        <text class="field-label">用户名</text>
+        <input class="field-input" placeholder="NAS 账号" value="{{username}}"
+               data-field="username" bindinput="onInput"/>
+      </view>
+      <view class="field">
+        <text class="field-label">密码</text>
+        <input class="field-input" placeholder="NAS 密码" password="{{true}}" value="{{password}}"
+               data-field="password" bindinput="onInput"/>
+      </view>
+      <view class="field">
+        <text class="field-label">根路径</text>
+        <input class="field-input" placeholder="默认 /" value="{{rootPath}}"
+               data-field="rootPath" bindinput="onInput"/>
+      </view>
+      <text class="hint">群晖 / 极空间用 5005 端口，飞牛 fnOS 用 WebDAV 默认端口。</text>
     </block>
 
     <!-- SMB -->
     <block wx:if="{{type === 'smb'}}">
-      <text class="section-title">服务器地址</text>
-      <input class="input" placeholder="例如 192.168.1.100 或 NAS 主机名" value="{{server}}"
-             data-field="server" bindinput="onInput"/>
-      <text class="section-title">共享名</text>
-      <input class="input" placeholder="例如 movies 或 video" value="{{share}}"
-             data-field="share" bindinput="onInput"/>
-      <text class="section-title">用户名</text>
-      <input class="input" placeholder="SMB 用户名" value="{{username}}"
-             data-field="username" bindinput="onInput"/>
-      <text class="section-title">密码</text>
-      <input class="input" placeholder="SMB 密码" password="{{true}}" value="{{password}}"
-             data-field="password" bindinput="onInput"/>
-      <text class="section-title">域（可选）</text>
-      <input class="input" placeholder="工作组/域，通常留空" value="{{domain}}"
-             data-field="domain" bindinput="onInput"/>
-      <text class="hint">Windows 共享、群晖、飞牛、极空间等均支持 SMB。默认端口 445。</text>
+      <view class="field">
+        <text class="field-label">地址<text class="req">*</text></text>
+        <input class="field-input" placeholder="192.168.1.100 或 NAS 主机名" value="{{server}}"
+               data-field="server" bindinput="onInput"/>
+      </view>
+      <view class="field">
+        <text class="field-label">共享名</text>
+        <input class="field-input" placeholder="例如 movies，可留空自动识别" value="{{share}}"
+               data-field="share" bindinput="onInput"/>
+      </view>
+      <view class="field">
+        <text class="field-label">用户名</text>
+        <input class="field-input" placeholder="SMB 账号" value="{{username}}"
+               data-field="username" bindinput="onInput"/>
+      </view>
+      <view class="field">
+        <text class="field-label">密码</text>
+        <input class="field-input" placeholder="SMB 密码" password="{{true}}" value="{{password}}"
+               data-field="password" bindinput="onInput"/>
+      </view>
+      <view class="field">
+        <text class="field-label">域</text>
+        <input class="field-input" placeholder="工作组 / 域，通常留空" value="{{domain}}"
+               data-field="domain" bindinput="onInput"/>
+      </view>
+      <text class="hint">地址也可以直接粘贴 \\192.168.1.100\movies，会自动拆成地址与共享名。</text>
     </block>
 
     <!-- 阿里云盘 -->
     <block wx:if="{{type === 'aliyun'}}">
-      <text class="section-title">Refresh Token</text>
-      <input class="input" placeholder="粘贴阿里云盘 refresh_token" value="{{refreshToken}}"
-             data-field="refreshToken" bindinput="onInput"/>
-      <text class="hint">获取方式：登录阿里云盘网页版，F12 → Application → Local Storage → token，复制 refresh_token 的值。</text>
-      <text class="hint">refresh_token 有效期较长，可长期使用。</text>
+      <view class="field">
+        <text class="field-label">refresh_token<text class="req">*</text></text>
+        <input class="field-input" placeholder="粘贴阿里云盘 refresh_token" value="{{refreshToken}}"
+               data-field="refreshToken" bindinput="onInput"/>
+      </view>
+      <text class="hint">网页版登录后按 F12 → Application → Local Storage → token，复制 refresh_token。</text>
     </block>
 
     <!-- 百度网盘 -->
     <block wx:if="{{type === 'baidu'}}">
-      <text class="section-title">Access Token</text>
-      <input class="input" placeholder="粘贴百度网盘 access_token" value="{{accessToken}}"
-             data-field="accessToken" bindinput="onInput"/>
-      <text class="hint">获取方式：通过百度网盘开放平台 OAuth 授权获取 access_token，有效期约 30 天。</text>
+      <view class="field">
+        <text class="field-label">access_token<text class="req">*</text></text>
+        <input class="field-input" placeholder="粘贴百度网盘 access_token" value="{{accessToken}}"
+               data-field="accessToken" bindinput="onInput"/>
+      </view>
+      <text class="hint">通过百度网盘开放平台 OAuth 授权获取，有效期约 30 天。</text>
     </block>
 
-    <!-- 操作按钮 -->
-    <view class="row action-row">
-      <button class="btn btn-ghost" bindtap="onTest" disabled="{{testing}}">
-        {{testing ? '测试中…' : '测试连接'}}
-      </button>
-      <button class="btn" bindtap="onSave">保存</button>
+    <view wx:if="{{testState !== 'idle'}}" class="test-box test-{{testState}}">
+      <text class="test-text">{{testText}}</text>
     </view>
-    <text wx:if="{{testResult === 'ok'}}" class="hint test-ok">✓ 连接测试通过</text>
   </scroll-view>
+
+  <view class="footer">
+    <text wx:if="{{errText}}" class="err-text">{{errText}}</text>
+    <view class="footer-row">
+      <button class="btn btn-ghost foot-btn" bindtap="onTest" disabled="{{testing}}">
+        {{testing ? '连接中…' : '测试连接'}}
+      </button>
+      <button class="btn foot-btn" bindtap="onSave">{{editId ? '保存修改' : '添加数据源'}}</button>
+    </view>
+  </view>
 </view>
