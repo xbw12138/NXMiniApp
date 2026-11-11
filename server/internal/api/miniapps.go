@@ -27,6 +27,10 @@ func MiniAppJSONDevice(cfg config.Config, m *models.MiniApp, device string) gin.
 	iconURL := ""
 	if m.Icon != "" && FileExists(filepath.Join(miniappstore.MiniAppDir(cfg.DataDir, m.ID), m.Icon)) {
 		iconURL = "/api/v1/miniapps/" + m.ID + "/icon"
+		// 带上更新时间，后台换图标后 URL 变化，客户端/浏览器才会重新拉取。
+		if m.UpdatedAt > 0 {
+			iconURL += "?v=" + strconv.FormatInt(m.UpdatedAt, 10)
+		}
 	}
 	category := m.Category
 	if category == "" {
@@ -144,6 +148,7 @@ func (e *Env) MiniAppDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, MiniAppJSONDevice(e.Cfg, m, deviceID(c)))
 }
 
+// MiniAppIcon 返回小程序图标；图标会被就地替换，禁止中间层长期缓存。
 func (e *Env) MiniAppIcon(c *gin.Context) {
 	m := e.GetMiniApp(c, c.Param("id"))
 	if m == nil {
@@ -158,6 +163,7 @@ func (e *Env) MiniAppIcon(c *gin.Context) {
 		Abort(c, http.StatusNotFound, "icon not found")
 		return
 	}
+	c.Header("Cache-Control", "no-cache")
 	c.File(path)
 }
 
