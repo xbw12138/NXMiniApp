@@ -1,6 +1,23 @@
+<div align="center">
+
 # NXMiniApp
 
-Switch 小程序容器项目，独立于 NXKit 维护。
+**运行于 Nintendo Switch 的小程序容器**
+
+原生渲染 · 类微信小程序生态 · 独立于 NXKit 维护
+
+[![官网](https://img.shields.io/badge/官网-ecfun.cc-1e80ff?style=flat-square)](https://ecfun.cc)
+[![平台](https://img.shields.io/badge/平台-Switch%20%2F%20Desktop-e60012?style=flat-square)](#客户端)
+[![服务端](https://img.shields.io/badge/服务端-Go%20%2B%20Gin%20%2B%20MySQL-00ADD8?style=flat-square)](#服务端docker-推荐)
+[![QQ群](https://img.shields.io/badge/QQ群-1001582565-12B7F5?style=flat-square)](#社区交流)
+
+</div>
+
+---
+
+## 项目简介
+
+NXMiniApp 让小程序在 Switch 上原生运行：一套代码，同时覆盖 Switch 真机与桌面端。内置商店式启动器，支持在线下载、安装与管理小程序。
 
 ```
 NXMiniApp/
@@ -14,20 +31,27 @@ NXMiniApp/
 └── docker-compose.yml # MySQL + 服务端一键启动
 ```
 
-## 开发文档
+## 能力一览
 
-小程序能力手册在 [docs/index.html](docs/index.html)，按微信官方文档的结构组织：指南、组件、样式、API、参考。
-直接双击打开即可，也可以起一个静态服务：
+小程序能力手册在 [docs/index.html](docs/index.html)，按微信官方文档的结构组织：指南、组件、样式、API、参考。直接双击打开即可，也可以起一个静态服务：
 
 ```bash
 python3 -m http.server 8090 --directory docs
 # 打开 http://127.0.0.1:8090
 ```
 
-当前对齐范围（与微信对比）：22 类内置标签（含 scroll-view / swiper / 表单控件 / progress / rich-text / icon / video）、
-模板指令 `wx:for` / `wx:if` / `wx:elif` / `wx:else`、完整 JS 运行时常驻与 `setData`、页面栈与路由、
-鼠标左键与触摸点击（`bindtap` 冒泡 / `catchtap` 终止）、36 个可用的 `wx.*` API 和 18 个兼容占位接口。
-`video` 在 Switch 构建（默认 `NXKIT_WITH_MPV=ON`）中可真实播放，桌面构建需安装 libmpv 后开启。
+当前对齐范围（与微信对比）：
+
+| 能力 | 支持情况 |
+| --- | --- |
+| 内置标签 | 22 类（含 scroll-view / swiper / 表单控件 / progress / rich-text / icon / video） |
+| 模板指令 | `wx:for` / `wx:if` / `wx:elif` / `wx:else` |
+| JS 运行时 | 完整常驻运行时与 `setData` |
+| 页面导航 | 页面栈与路由 |
+| 交互事件 | 鼠标左键与触摸点击（`bindtap` 冒泡 / `catchtap` 终止） |
+| API | 36 个可用的 `wx.*` API，18 个兼容占位接口 |
+| 视频播放 | Switch 构建（默认 `NXKIT_WITH_MPV=ON`）真实播放，桌面构建需安装 libmpv 后开启 |
+
 详细边界见文档的「与微信的差异」。
 
 ## 服务端（Docker，推荐）
@@ -41,7 +65,7 @@ docker compose up --build -d
 - 管理后台：`http://127.0.0.1:8080/admin`
 - 文档站：`http://127.0.0.1:8080/docs`（内容存 MySQL，可在后台「文档」页在线编辑；编辑后即时生效）
 - 管理令牌：环境变量 `NXKIT_ADMIN_TOKEN`（默认 `nxkit-store-admin`）
-- 首次启动自动建表，并把 `client/resources/miniapps` 下的示例小程序、`docs/` 下的文档页写入 MySQL（仅在对应表为空时执行；后台「文档」页的「恢复默认」可从镜像内置的 docs 目录还原单页）。
+- 首次启动自动建表，并把 `client/resources/miniapps` 下的示例小程序、`docs/` 下的文档页写入 MySQL（仅在对应表为空时执行；后台「文档」页的「恢复默认」可从镜像内置的 docs 目录还原单页）
 
 数据：MySQL 存元数据，`server-data` 卷存安装包/图标/截图。
 
@@ -65,9 +89,9 @@ cmake --build build_desktop --target miniapp -j 8
 cd build_desktop/apps/miniapp && ./miniapp
 ```
 
-- 启动后进商店式启动器，默认连 `http://127.0.0.1:8080`；可用 `NXKIT_MINIAPP_SERVER` 覆盖，或写进 `nxkit_data/config.json` 的 `miniapp.serverUrl`。
-- 点卡片下载安装并进入；`B` 返回启动器；最近使用置顶。
-- 跳过商店直接预览本地包：`NXKIT_MINIAPP_DEV=<包目录> ./miniapp`（仅桌面）。
+- 启动后进商店式启动器，默认连 `http://127.0.0.1:8080`；可用 `NXKIT_MINIAPP_SERVER` 覆盖，或写进 `nxkit_data/config.json` 的 `miniapp.serverUrl`
+- 点卡片下载安装并进入；`B` 返回启动器；最近使用置顶
+- 跳过商店直接预览本地包：`NXKIT_MINIAPP_DEV=<包目录> ./miniapp`（仅桌面）
 
 Switch 真机（需要 devkitPro）：
 
@@ -79,3 +103,12 @@ cmake --build build_switch --target miniapp.nro -j 8
 ```
 
 把 `build_switch/apps/miniapp/miniapp.nro` 放到 `sdmc:/switch/`，服务器地址写进 `sdmc:/switch/nxkit/config.json`。
+
+## 社区交流
+
+- 官网：[ecfun.cc](https://ecfun.cc)
+- QQ 群：**1001582565**（Switch小程序），扫码加群一起交流：
+
+<div align="center">
+  <img src="docs/assets/qq-group.jpg" alt="QQ群二维码：1001582565" width="280">
+</div>
