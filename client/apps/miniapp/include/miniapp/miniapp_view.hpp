@@ -277,6 +277,8 @@ private:
     std::string focusPath;
     // 上一次生效的 autofocus 节点路径，用于弹窗出现时只抢一次焦点。
     std::string lastAutoFocusPath;
+    // 弹窗打开前的焦点路径，关闭弹窗后还原。
+    std::string restoreFocusPath;
 
     ModalState modal;
     std::string toastText;

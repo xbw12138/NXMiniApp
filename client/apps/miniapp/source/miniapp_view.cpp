@@ -643,6 +643,7 @@ bool MiniappView::openPage(const std::string& url, bool push) {
     focusInitialized = false;
     focusNodes.clear();
     lastAutoFocusPath.clear();
+    restoreFocusPath.clear();
     return true;
 }
 
@@ -819,7 +820,32 @@ void MiniappView::rebuildLayout(PageState& page, float width, float height) {
         }
     }
     if (autoFocus) {
+        // 焦点范围收敛到弹窗内部（最近的绝对定位祖先），摇杆不会跑到背后的列表。
+        RenderNode* scope = nullptr;
+        for (RenderNode* it = autoFocus; it; it = it->parent) {
+            if (it->style.absolute) {
+                scope = it;
+                break;
+            }
+        }
+        if (scope && scope->parent) {
+            std::vector<RenderNode*> scoped;
+            for (RenderNode* node : focusNodes) {
+                for (RenderNode* it = node; it; it = it->parent) {
+                    if (it == scope) {
+                        scoped.push_back(node);
+                        break;
+                    }
+                }
+            }
+            if (!scoped.empty()) focusNodes = std::move(scoped);
+        }
+
         if (autoFocus->path != lastAutoFocusPath) {
+            // 记住弹窗打开前的位置，关掉弹窗后还原。
+            if (!focusPath.empty() && focusPath != autoFocus->path) {
+                restoreFocusPath = focusPath;
+            }
             lastAutoFocusPath = autoFocus->path;
             focusPath = autoFocus->path;
             focusInitialized = true;
@@ -827,6 +853,16 @@ void MiniappView::rebuildLayout(PageState& page, float width, float height) {
         }
     } else {
         lastAutoFocusPath.clear();
+        // 弹窗关闭：焦点回到打开前的位置（如果那一个节点还在）。
+        if (!restoreFocusPath.empty()) {
+            for (RenderNode* node : focusNodes) {
+                if (node->path == restoreFocusPath) {
+                    focusPath = restoreFocusPath;
+                    break;
+                }
+            }
+            restoreFocusPath.clear();
+        }
     }
 
     if (!focusPath.empty()) {
