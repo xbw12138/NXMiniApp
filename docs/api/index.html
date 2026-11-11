@@ -243,6 +243,7 @@ Page({
       <tbody>
         <tr><td><code>wx.getSystemInfoSync()</code></td><td>返回 <code>windowWidth</code>、<code>windowHeight</code>、<code>platform</code>、<code>SDKVersion</code> 等</td></tr>
         <tr><td><code>wx.getSystemInfo()</code></td><td>回调风格的异步版本</td></tr>
+        <tr><td><code>keyEvents</code></td><td><code>getSystemInfoSync()</code> 字段，为 <code>true</code> 时支持页面 <code>onKeyDown</code> 按键事件</td></tr>
         <tr><td><code>wx.getWindowInfo()</code></td><td>窗口尺寸与安全区</td></tr>
         <tr><td><code>wx.getDeviceInfo()</code></td><td>设备型号、系统、平台</td></tr>
         <tr><td><code>wx.getAppBaseInfo()</code></td><td>语言、版本、主题、SDKVersion</td></tr>
@@ -278,7 +279,7 @@ Page({
     <table>
       <thead><tr><th>名称</th><th>说明</th></tr></thead>
       <tbody>
-        <tr><td><code>Page(options)</code></td><td>注册页面，<code>data</code> 与生命周期、方法</td></tr>
+        <tr><td><code>Page(options)</code></td><td>注册页面，<code>data</code> 与生命周期、方法；可选 <code>onKeyDown</code> 接收手柄按键</td></tr>
         <tr><td><code>App(options)</code></td><td>注册应用级对象，支持 <code>onLaunch</code> / <code>onShow</code> / <code>onHide</code></td></tr>
         <tr><td><code>getApp()</code></td><td>返回 App 实例</td></tr>
         <tr><td><code>getCurrentPages()</code></td><td>返回页面路径数组</td></tr>

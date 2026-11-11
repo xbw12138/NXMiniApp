@@ -1,0 +1,74 @@
+<view class="page all-page">
+  <view class="all-head">
+    <text class="all-title">全部小程序</text>
+    <view class="spacer"></view>
+    <text class="all-count">{{status}}</text>
+  </view>
+
+  <scroll-view class="all-body" scroll-y="{{true}}">
+    <view class="all-grid">
+      <view class="all-row" wx:for="{{rows}}" wx:for-item="row" wx:key="index">
+        <view class="all-card" wx:for="{{row.items}}" wx:key="id" data-id="{{item.id}}" bindtap="onCard">
+          <image wx:if="{{item.icon_url}}" class="all-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+          <view wx:else class="all-icon all-icon-empty"/>
+          <view class="all-name-box">
+            <text class="all-name">{{item.title}}</text>
+          </view>
+          <view class="all-sub-box">
+            <text class="all-sub">{{item.metaLine}}</text>
+          </view>
+          <view class="all-sub-box">
+            <text class="all-sub">{{item.statLine}}</text>
+          </view>
+        </view>
+        <view class="all-card all-card-blank" wx:for="{{row.blanks}}" wx:for-item="b"></view>
+      </view>
+    </view>
+    <view wx:if="{{rows.length === 0}}" class="empty">
+      <text class="empty-text">{{status}}</text>
+    </view>
+  </scroll-view>
+
+  <view class="pager">
+    <view class="pg-btn {{page === 1 ? 'pg-off' : ''}}" bindtap="onPrev">
+      <text class="pg-text">上一页</text>
+    </view>
+    <text class="pg-info">{{page}} / {{totalPages}}</text>
+    <view class="pg-btn {{page === totalPages ? 'pg-off' : ''}}" bindtap="onNext">
+      <text class="pg-text">下一页</text>
+    </view>
+  </view>
+
+  <!-- 详情确认弹窗 -->
+  <view wx:if="{{modal}}" class="modal-mask">
+    <view class="modal-card">
+      <view class="modal-top">
+        <image wx:if="{{modal.icon_url}}" class="modal-icon" src="{{modal.icon_url}}" mode="aspectFill"/>
+        <view wx:else class="modal-icon modal-icon-empty"/>
+        <view class="modal-title-box">
+          <text class="modal-title">{{modal.title}}</text>
+          <text wx:if="{{modal.developer}}" class="modal-meta">{{modal.metaLine}} · {{modal.developer}}</text>
+          <text wx:else class="modal-meta">{{modal.metaLine}}</text>
+        </view>
+      </view>
+
+      <view class="modal-stats-box">
+        <text class="modal-stats">{{modal.statsText}}</text>
+        <text wx:if="{{modal.updateText}}" class="modal-stats">{{modal.updateText}}</text>
+      </view>
+
+      <view class="modal-desc-box">
+        <text class="modal-desc">{{modal.description}}</text>
+      </view>
+
+      <view class="modal-actions">
+        <view class="modal-btn" bindtap="onCloseModal">
+          <text class="modal-btn-text">取消</text>
+        </view>
+        <view class="modal-btn modal-btn-primary" bindtap="onConfirmLaunch">
+          <text class="modal-btn-text modal-btn-text-on">进入小程序</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -88,7 +88,7 @@
       <thead><tr><th style="width:16%">方法</th><th style="width:42%">路径</th><th>说明</th></tr></thead>
       <tbody>
         <tr><td>GET</td><td><code>/api/v1/health</code></td><td>健康检查。</td></tr>
-        <tr><td>GET</td><td><code>/api/v1/miniapps</code></td><td>列表；支持 <code>q</code>（标题/简介/ID 模糊匹配）与 <code>category</code> 精确过滤。</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/miniapps</code></td><td>列表；支持 <code>q</code>（标题/简介/ID 模糊匹配）与 <code>category</code> 精确过滤。带 <code>page_size</code> 时分页返回：<code>items</code> + <code>total</code> / <code>page</code> / <code>page_size</code> / <code>total_pages</code> / <code>has_more</code>；不带则一次返回全部（兼容旧客户端）。</td></tr>
         <tr><td>GET</td><td><code>/api/v1/miniapps/{id}</code></td><td>详情。</td></tr>
         <tr><td>GET</td><td><code>/api/v1/miniapps/{id}/download</code></td><td>下载 <code>.nxpkg</code>，始终 ZIP_STORED。</td></tr>
         <tr><td>GET</td><td><code>/api/v1/miniapps/{id}/icon</code></td><td>封面图片，可能 404。</td></tr>

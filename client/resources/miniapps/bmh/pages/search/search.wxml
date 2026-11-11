@@ -1,40 +1,45 @@
 <view class="page">
-  <view wx:if="{{mode === 'search'}}" class="searchbar">
-    <input class="input" value="{{keyword}}" placeholder="搜索片名 / 演员"
-           bindinput="onInput" bindconfirm="onConfirm"/>
-    <button class="btn go-btn" bindtap="onSearch" disabled="{{loading}}">
-      {{loading ? '…' : '搜索'}}
-    </button>
-  </view>
-  <view wx:else class="searchbar">
-    <text class="brand">{{title}}</text>
-    <view class="spacer"/>
-    <button class="btn btn-ghost" bindtap="onBack">返回</button>
+  <view class="searchbar">
+    <view wx:if="{{mode === 'search'}}" class="input-box">
+      <input class="input" value="{{keyword}}" placeholder="搜索片名 / 演员"
+             bindinput="onInput" bindconfirm="onConfirm"/>
+      <view class="go-btn" bindtap="onSearch">
+        <text class="go-text">{{loading ? '搜索中' : '搜索'}}</text>
+      </view>
+    </view>
+    <view wx:else class="fav-head">
+      <text class="fav-title">{{title}}</text>
+      <text class="fav-count">{{results.length}} 部</text>
+    </view>
   </view>
 
-  <scroll-view class="scroll" scroll-y="{{true}}" style="height: 100%;">
+  <scroll-view class="body" scroll-y="{{true}}" style="height: 100%;">
     <view wx:if="{{sourceCount === 0 && mode === 'search'}}" class="empty">
       <text class="empty-text">请先添加数据源</text>
     </view>
 
     <view wx:if="{{results.length === 0 && !loading}}" class="empty">
-      <text class="empty-text">
-        {{mode === 'fav' ? '还没有收藏任何影片' : (keyword ? '未找到匹配的影片' : '输入关键词开始搜索')}}
-      </text>
+      <text class="empty-text">{{mode === 'fav' ? '还没有收藏任何影片' : (keyword ? '未找到匹配的影片' : '输入关键词开始搜索')}}</text>
     </view>
 
-    <view wx:for="{{results}}" wx:key="id"
-          class="result-item" data-id="{{item.id}}" bindtap="onItem">
-      <image wx:if="{{item.poster}}" class="result-cover" src="{{item.poster}}" mode="aspectFill"/>
-      <view wx:else class="result-cover result-cover-empty">
-        <text class="result-empty-text">无海报</text>
+    <view class="grid">
+      <view class="poster-row" wx:for="{{resultRows}}" wx:for-item="row" wx:key="index">
+        <view class="poster-card" wx:for="{{row}}" wx:key="id" data-id="{{item.id}}" bindtap="onItem">
+          <view class="poster-box">
+            <image wx:if="{{item.poster}}" class="poster" src="{{item.poster}}" mode="aspectFill"/>
+            <view wx:else class="poster poster-empty">
+              <text class="poster-empty-text">{{item.title}}</text>
+            </view>
+            <view wx:if="{{item.rating}}" class="rating-badge">
+              <text class="rating-text">{{item.rating}}</text>
+            </view>
+          </view>
+          <view class="poster-title-box">
+            <text class="poster-title">{{item.title}}</text>
+          </view>
+          <text class="poster-sub">{{item.meta}}</text>
+        </view>
       </view>
-      <view class="result-meta">
-        <text class="result-title">{{item.title}}</text>
-        <text class="result-line">{{item.sourceName}}{{item.year ? ' · ' + item.year : ''}}{{item.rating ? ' · ' + item.rating + '分' : ''}}</text>
-        <text wx:if="{{item.genre}}" class="result-line">{{item.genre}}</text>
-      </view>
-      <text class="result-arrow">›</text>
     </view>
   </scroll-view>
 </view>

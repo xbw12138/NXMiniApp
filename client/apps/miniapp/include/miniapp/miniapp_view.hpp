@@ -24,7 +24,8 @@ namespace miniapp {
 
 class MiniappView : public brls::View, public JsRuntimeHost {
 public:
-    explicit MiniappView(std::string packagePath = "");
+    // appTitleHint：启动加载页显示的标题（包还没解析出来时先给个名字）。
+    explicit MiniappView(std::string packagePath = "", std::string appTitleHint = "");
     ~MiniappView() override;
 
     // 根页面再按 B 时的兜底回调。为空（默认）时直接 popActivity；
@@ -183,6 +184,12 @@ private:
     void drawIcon(NVGcontext* vg, RenderNode& node, float alpha);
     void drawVideo(NVGcontext* vg, RenderNode& node, float alpha);
     void drawVideoSurface();
+    // 全屏视频时在 video 直出之后单独开一帧 NanoVG，把 data-overlay 子树
+    // 与弹窗/提示画到画面上层。
+    void drawVideoOverlay();
+    void drawOverlayNodes(NVGcontext* vg, RenderNode& node, float parentAlpha);
+    bool hasOverlayNodes(const RenderNode& node) const;
+    bool isOverlayNode(const RenderNode* node) const;
     void drawSwitch(NVGcontext* vg, RenderNode& node, float alpha);
     void drawCheckbox(NVGcontext* vg, RenderNode& node, float alpha);
     void drawRadio(NVGcontext* vg, RenderNode& node, float alpha);
@@ -194,8 +201,15 @@ private:
     void drawOverlays(NVGcontext* vg, float width, float height);
     void drawError(NVGcontext* vg, float x, float y, float width, float height,
                    const std::string& message);
+    // 包解析完成前先画加载页，避免启动时黑屏/卡住。
+    void drawLoading(NVGcontext* vg, float x, float y, float width, float height);
 
     // 输入
+    // 页面级按键事件 onKeyDown；返回 true 表示脚本消费了该按键，
+    // 调用方应跳过默认的焦点移动 / 确认 / 返回逻辑。
+    bool dispatchKeyToPage(const std::string& key);
+    // 当前帧物理十字键是否按下（用于区分摇杆与十字键）。
+    static bool isDpadHeld(brls::ControllerButton pad);
     void handleActivate();
     void handlePointerTap(float x, float y);
     void activateNode(RenderNode* node);
@@ -249,6 +263,11 @@ private:
     std::string appTitle = "NX MiniApp";
     std::string appBackground = "#141518";
     std::string errorMessage;
+    // 加载页：首帧先出画面，包读取/解析推迟到下一帧之后执行。
+    bool pendingLoad = false;
+    int loadDelayFrames = 1;
+    double loadingStart = 0.0;
+    std::string loadingTitle;
 
     std::vector<std::unique_ptr<PageState>> pages;
     PageState* current = nullptr;
@@ -288,6 +307,8 @@ private:
     std::string activeVideoSrc;
     // 非空表示当前处于视频全屏，值为对应 video 节点的 path。
     std::string fullscreenVideoPath;
+    // 当前页面是否存在 data-overlay 子树（每帧布局后在 draw() 里更新）。
+    bool fullscreenHasOverlay = false;
     brls::VoidEvent::Subscription postDrawToken;
 
     void onVideoState(const nxkit::VideoState& vs);

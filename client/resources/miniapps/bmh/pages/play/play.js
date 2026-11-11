@@ -102,8 +102,10 @@ Page({
   },
 
   onError(e) {
+    // 播放失败时收起播放器，露出错误提示和返回按钮，避免黑屏无从操作。
     this.setData({
       playing: false,
+      videoSrc: '',
       statusText: '播放失败：' + ((e.detail && e.detail.errMsg) || '请检查网络或数据源')
     });
   },

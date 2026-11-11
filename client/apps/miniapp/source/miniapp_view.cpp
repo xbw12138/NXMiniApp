@@ -18,10 +18,12 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -34,6 +36,8 @@
 #include <thread>
 #include <utility>
 #include <vector>
+
+#include <stb_image.h>
 
 #ifdef __SWITCH__
 #include <malloc.h>
@@ -79,11 +83,6 @@ std::string joinPath(const std::string& dir, const std::string& name) {
     if (dir.empty()) return name;
     if (dir.back() == '/' || dir.back() == '\\') return dir + name;
     return dir + "/" + name;
-}
-
-std::string baseName(const std::string& path) {
-    size_t slash = path.find_last_of("/\\");
-    return slash == std::string::npos ? path : path.substr(slash + 1);
 }
 
 /// rich-text 的 nodes 目前按纯文本降级：剥离标签并还原常见实体。
@@ -241,15 +240,6 @@ std::string imageCachePath(const std::string& url) {
     return imageCacheDir() + "/" + name;
 }
 
-// 诊断：解码前的堆余量（MB），排查真机解码 OOM 崩溃。
-int heapFreeMB() {
-#ifdef __SWITCH__
-    return static_cast<int>(mallinfo().fordblks / 1048576);
-#else
-    return -1;
-#endif
-}
-
 std::shared_ptr<std::string> readImageCache(const std::string& url) {
     std::ifstream file(imageCachePath(url), std::ios::binary);
     if (!file.good()) return nullptr;
@@ -293,10 +283,86 @@ void writeImageCache(const std::string& url, const std::string& bytes) {
     trimImageCache();
 }
 
+// 图片解码线程：读盘 + stb 解码（CPU 密集）都在这里做，主线程只做 GPU 上传。
+// 解码是数据加载时最容易卡住 UI 的环节，同步解码多张封面会直接掉帧。
+class DecodeQueue {
+public:
+    static DecodeQueue& instance() {
+        // 故意不析构：线程可能仍在跑，静态析构时销毁锁会导致退出阶段的数据竞争。
+        static DecodeQueue* queue = new DecodeQueue();
+        return *queue;
+    }
+
+    void submit(std::function<void()> task) {
+        if (disabled) {
+            // 线程起不来就退回同步解码：慢，但功能不缺失。
+            try {
+                task();
+            } catch (...) {
+            }
+            return;
+        }
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            tasks.push_back(std::move(task));
+        }
+        ready.notify_one();
+    }
+
+private:
+    DecodeQueue() {
+        // 与日志线程一致：用 pthread 直接创建，避免 std::thread 在某些情况下
+        // 抛异常把整个进程带走（解码线程是在绘制过程中懒启动的）。
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        pthread_attr_setstacksize(&attr, 256 * 1024);
+        int rc = pthread_create(&worker, &attr, &DecodeQueue::entry, this);
+        pthread_attr_destroy(&attr);
+        disabled = rc != 0;
+    }
+
+    static void* entry(void* raw) {
+        static_cast<DecodeQueue*>(raw)->run();
+        return nullptr;
+    }
+
+    void run() {
+        for (;;) {
+            std::function<void()> task;
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                ready.wait(lock, [this] { return !tasks.empty(); });
+                task = std::move(tasks.front());
+                tasks.pop_front();
+            }
+            try {
+                task();
+            } catch (...) {
+                // 单张图解码失败不能影响后续任务。
+            }
+        }
+    }
+
+    std::mutex mutex;
+    std::condition_variable ready;
+    std::deque<std::function<void()>> tasks;
+    pthread_t worker{};
+    bool disabled = false;
+};
+
+// 解码为 RGBA（调用方负责 stbi_image_free）。
+unsigned char* decodeToRgba(const std::string& bytes, int& width, int& height) {
+    if (bytes.empty()) return nullptr;
+    return stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(bytes.data()),
+                                 static_cast<int>(bytes.size()), &width, &height,
+                                 nullptr, 4);
+}
+
 }  // namespace
 
-MiniappView::MiniappView(std::string packagePath)
-    : packagePathOverride(std::move(packagePath)) {
+MiniappView::MiniappView(std::string packagePath, std::string appTitleHint)
+    : packagePathOverride(std::move(packagePath)), loadingTitle(std::move(appTitleHint)) {
     brls::Logger::info("MiniappView: ctor enter");
     rpxScale = kRpxBaseWidth / kRpxDesignWidth;
 #ifdef __SWITCH__
@@ -316,12 +382,14 @@ MiniappView::MiniappView(std::string packagePath)
     this->setHideHighlight(true);
 
     auto action = [this](brls::View*) {
+        if (this->dispatchKeyToPage("a")) return true;
         this->handleActivate();
         return true;
     };
     this->registerAction("确认", brls::BUTTON_A, action);
 
     this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) {
+        if (this->dispatchKeyToPage("b")) return true;
         // 全屏视频优先退出全屏，不直接离开小程序。
         if (!fullscreenVideoPath.empty()) {
             exitVideoFullscreen();
@@ -347,26 +415,49 @@ MiniappView::MiniappView(std::string packagePath)
         return true;
     });
 
+    // 十字键：先派发页面按键事件，未被消费时才移动焦点。
     auto up = [this](brls::View*) {
+        if (this->dispatchKeyToPage("up")) return true;
         return this->handleDirection(brls::FocusDirection::UP);
     };
     auto down = [this](brls::View*) {
+        if (this->dispatchKeyToPage("down")) return true;
         return this->handleDirection(brls::FocusDirection::DOWN);
     };
     auto left = [this](brls::View*) {
+        if (this->dispatchKeyToPage("left")) return true;
         return this->handleDirection(brls::FocusDirection::LEFT);
     };
     auto right = [this](brls::View*) {
+        if (this->dispatchKeyToPage("right")) return true;
+        return this->handleDirection(brls::FocusDirection::RIGHT);
+    };
+    // 摇杆（BUTTON_NAV_* 同时覆盖十字键与摇杆）：只移动焦点，
+    // 不派发按键事件，避免摇杆误切台。十字键按下时交给上面的 action。
+    auto navUp = [this](brls::View*) {
+        if (this->isDpadHeld(brls::BUTTON_UP)) return true;
+        return this->handleDirection(brls::FocusDirection::UP);
+    };
+    auto navDown = [this](brls::View*) {
+        if (this->isDpadHeld(brls::BUTTON_DOWN)) return true;
+        return this->handleDirection(brls::FocusDirection::DOWN);
+    };
+    auto navLeft = [this](brls::View*) {
+        if (this->isDpadHeld(brls::BUTTON_LEFT)) return true;
+        return this->handleDirection(brls::FocusDirection::LEFT);
+    };
+    auto navRight = [this](brls::View*) {
+        if (this->isDpadHeld(brls::BUTTON_RIGHT)) return true;
         return this->handleDirection(brls::FocusDirection::RIGHT);
     };
     this->registerAction("上", brls::BUTTON_UP, up);
-    this->registerAction("上", brls::BUTTON_NAV_UP, up);
+    this->registerAction("上", brls::BUTTON_NAV_UP, navUp);
     this->registerAction("下", brls::BUTTON_DOWN, down);
-    this->registerAction("下", brls::BUTTON_NAV_DOWN, down);
+    this->registerAction("下", brls::BUTTON_NAV_DOWN, navDown);
     this->registerAction("左", brls::BUTTON_LEFT, left);
-    this->registerAction("左", brls::BUTTON_NAV_LEFT, left);
+    this->registerAction("左", brls::BUTTON_NAV_LEFT, navLeft);
     this->registerAction("右", brls::BUTTON_RIGHT, right);
-    this->registerAction("右", brls::BUTTON_NAV_RIGHT, right);
+    this->registerAction("右", brls::BUTTON_NAV_RIGHT, navRight);
 
     // 鼠标左键 / 触摸点击：由手势识别器统一转发到渲染树命中测试。
     this->addGestureRecognizer(new brls::TapGestureRecognizer(
@@ -376,7 +467,11 @@ MiniappView::MiniappView(std::string packagePath)
             }
         }));
 
-    this->loadPackage();
+    // 包读取/解析（SD 卡 I/O + QuickJS 初始化）会阻塞主线程：先让加载页画出来，
+    // 等下一帧之后再同步加载，避免打开小程序时整屏卡住没有任何反馈。
+    this->pendingLoad = true;
+    this->loadingStart = steadyMilliseconds();
+    this->loadDelayFrames = 1;
 
     runLoopToken = brls::Application::getRunLoopEvent()->subscribe([this]() {
         this->tick(steadyMilliseconds());
@@ -384,8 +479,10 @@ MiniappView::MiniappView(std::string packagePath)
     runLoopActive = true;
 
     // 视频走 OpenGL 直出，只能在 NanoVG 帧结束后、交换缓冲前绘制。
+    // 之后再用一帧 NanoVG 把 data-overlay 子树画到视频上层。
     postDrawToken = brls::Application::getPostDrawEvent()->subscribe([this]() {
         this->drawVideoSurface();
+        this->drawVideoOverlay();
     });
 
     // 对接 wiliwili 风格播放器：用 MpvEvent 回调驱动状态，不轮询 mpv。
@@ -1098,6 +1195,10 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
             render->dataset[entry.first.substr(5)] = interpolate(entry.second, locals);
         }
     }
+    if (const std::string* rawOverlay = node.attr("data-overlay")) {
+        const std::string text = trim(interpolate(*rawOverlay, locals));
+        render->overlay = !text.empty() && text != "false" && text != "0";
+    }
 
     // 组件属性。
     if (tag == "image") {
@@ -1112,8 +1213,6 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
         }
         render->bindImageError = render->bindError;
         if (render->imageMode.empty()) render->imageMode = "scaleToFill";
-        render->imageLabel = baseName(render->src);
-        if (render->imageLabel.empty()) render->imageLabel = "image";
     } else if (tag == "input" || tag == "textarea") {
         JsonValue boundValue;
         if (evaluateAttribute(node, "value", locals, boundValue)) {
@@ -1326,6 +1425,10 @@ std::string MiniappView::collectText(const WxmlNode& node,
 
 void MiniappView::draw(NVGcontext* vg, float x, float y, float width, float height,
                        brls::Style, brls::FrameContext*) {
+    if (this->pendingLoad) {
+        drawLoading(vg, x, y, width, height);
+        return;
+    }
     if (!current || !current->loaded) {
         drawError(vg, x, y, width, height,
                   errorMessage.empty() ? "miniapp failed to load" : errorMessage);
@@ -1376,6 +1479,7 @@ void MiniappView::draw(NVGcontext* vg, float x, float y, float width, float heig
             nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, 0.75f));
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
             nvgText(vg, x + width - 16.0f, y + 12.0f, "按 B 退出全屏", nullptr);
+            fullscreenHasOverlay = hasOverlayNodes(*page.root);
             if (!page.readyCalled && page.runtime) {
                 page.readyCalled = true;
                 page.runtime->callLifecycle("onReady");
@@ -1571,28 +1675,38 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
     if (it != imageTextures.end()) return it->second;
 
     if (fetchRemote) {
-        // 磁盘缓存命中：直接本地解码，不再走网络。
-        std::shared_ptr<std::string> cached = readImageCache(key);
-        if (cached) {
-            NVGcontext* vg = brls::Application::getNVGContext();
-            brls::Logger::info("miniapp: decode cached image {} ({} bytes, heapFree={}MB)",
-                               key, cached->size(), heapFreeMB());
-            int texture =
-                nvgCreateImageMem(vg, 0,
-                                  reinterpret_cast<unsigned char*>(cached->data()),
-                                  static_cast<int>(cached->size()));
-            if (texture > 0) {
-                imageTextures[key] = texture;
-                return texture;
-            }
-            brls::Logger::warning("miniapp: cached image decode failed {}", key);
-            // 解码失败不再逐帧重试（否则每帧读盘 + 反复 malloc，直接把堆打干）。
-            imageTextures[key] = -1;
-            return -1;
+        // 磁盘缓存命中时也交给解码线程：读盘 + 解码是首屏最容易卡住 UI 的环节。
+        // 解码完成后再回主线程做 GPU 上传（nvgCreateImageRGBA）。
+        if (pendingImages.insert(key).second) {
+            std::weak_ptr<bool> weak = aliveToken;
+            std::string requestHeaders = headers;
+            DecodeQueue::instance().submit([this, key, weak, requestHeaders] {
+                std::shared_ptr<std::string> cached = readImageCache(key);
+                int width = 0;
+                int height = 0;
+                unsigned char* pixels =
+                    cached ? decodeToRgba(*cached, width, height) : nullptr;
+                brls::sync([this, key, weak, requestHeaders, pixels, width, height] {
+                    auto token = weak.lock();
+                    if (!token || !*token) {
+                        if (pixels) stbi_image_free(pixels);
+                        return;
+                    }
+                    pendingImages.erase(key);
+                    if (!pixels) {
+                        // 没有缓存（或解码失败）：保持下载中占位并走网络。
+                        imageTextures[key] = -3;
+                        this->requestRemoteImage(key, requestHeaders);
+                        return;
+                    }
+                    NVGcontext* vg = brls::Application::getNVGContext();
+                    int texture = nvgCreateImageRGBA(vg, width, height, 0, pixels);
+                    stbi_image_free(pixels);
+                    imageTextures[key] = texture > 0 ? texture : -1;
+                    this->invalidate();
+                });
+            });
         }
-        // 远程图先返回「下载中」占位（-3），下载完成后再绘制；
-        // 与下载失败（-1）区分开，避免 binderror 在下载途中就被误触发。
-        if (pendingImages.insert(key).second) requestRemoteImage(key, headers);
         return -3;
     }
 
@@ -1635,21 +1749,33 @@ void MiniappView::requestRemoteImage(const std::string& url, const std::string& 
         }
         std::shared_ptr<std::string> bytes =
             std::make_shared<std::string>(result.body);
-        // 在工作线程落盘，避免主线程写存储卡。
+        // 在工作线程落盘 + 解码，主线程只做纹理上传。
         writeImageCache(url, *bytes);
-        brls::sync([this, url, weak, bytes] {
+        int width = 0;
+        int height = 0;
+        unsigned char* pixels = nullptr;
+        try {
+            pixels = decodeToRgba(*bytes, width, height);
+        } catch (...) {
+            pixels = nullptr;
+        }
+        brls::sync([this, url, weak, pixels, width, height] {
             auto token = weak.lock();
-            if (!token || !*token) return;
-            pendingImages.erase(url);
-            NVGcontext* vg = brls::Application::getNVGContext();
-            int texture = nvgCreateImageMem(
-                vg, 0, reinterpret_cast<unsigned char*>(bytes->data()),
-                static_cast<int>(bytes->size()));
-            if (texture <= 0) {
-                brls::Logger::warning("miniapp: cannot decode remote image {}", url);
-                texture = -1;
+            if (!token || !*token) {
+                if (pixels) stbi_image_free(pixels);
+                return;
             }
-            imageTextures[url] = texture;
+            pendingImages.erase(url);
+            if (!pixels) {
+                brls::Logger::warning("miniapp: cannot decode remote image {}", url);
+                imageTextures[url] = -1;
+                this->invalidate();
+                return;
+            }
+            NVGcontext* vg = brls::Application::getNVGContext();
+            int texture = nvgCreateImageRGBA(vg, width, height, 0, pixels);
+            stbi_image_free(pixels);
+            imageTextures[url] = texture > 0 ? texture : -1;
             this->invalidate();
         });
     });
@@ -1704,6 +1830,7 @@ void MiniappView::drawImage(NVGcontext* vg, RenderNode& node, float alpha) {
         current->runtime->dispatchEvent(node.bindImageError, "error", node.dataset, detail);
     }
     if (texture <= 0) {
+        // 加载中/失败只保留底色占位块，不画文件名文字。
         if (!node.style.hasBackground) {
             nvgBeginPath(vg);
             nvgRoundedRect(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight,
@@ -1711,12 +1838,6 @@ void MiniappView::drawImage(NVGcontext* vg, RenderNode& node, float alpha) {
             nvgFillColor(vg, nvgRGBAf(0.16f, 0.17f, 0.19f, alpha));
             nvgFill(vg);
         }
-        nvgFontFaceId(vg, fontId);
-        nvgFontSize(vg, std::min(node.fontSize, std::min(node.absWidth, node.absHeight) * 0.3f));
-        nvgFillColor(vg, nvgRGBAf(kTextMuted.r, kTextMuted.g, kTextMuted.b, alpha));
-        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgText(vg, node.absLeft + node.absWidth * 0.5f,
-                node.absTop + node.absHeight * 0.5f, node.imageLabel.c_str(), nullptr);
         return;
     }
 
@@ -1980,6 +2101,61 @@ void MiniappView::drawVideoSurface() {
     brls::Rect rect(node->absLeft, node->absTop, node->absWidth,
                     std::max(1.0f, node->absHeight - barHeight));
     nxkit::VideoView::instance().draw(rect, node->style.opacity);
+}
+
+bool MiniappView::hasOverlayNodes(const RenderNode& node) const {
+    if (node.overlay) return true;
+    for (const auto& child : node.children) {
+        if (child && hasOverlayNodes(*child)) return true;
+    }
+    return false;
+}
+
+bool MiniappView::isOverlayNode(const RenderNode* node) const {
+    for (const RenderNode* it = node; it; it = it->parent) {
+        if (it->overlay) return true;
+    }
+    return false;
+}
+
+void MiniappView::drawOverlayNodes(NVGcontext* vg, RenderNode& node, float parentAlpha) {
+    if (node.overlay) {
+        drawNode(vg, node, parentAlpha, nullptr);
+        return;
+    }
+    if (node.style.displayNone) return;
+    for (auto& child : node.children) {
+        if (child) drawOverlayNodes(vg, *child, parentAlpha);
+    }
+}
+
+void MiniappView::drawVideoOverlay() {
+    if (fullscreenVideoPath.empty() || !current || !current->root) return;
+    const bool overlaysActive = modal.active || loadingVisible ||
+                                (!toastText.empty() && overlayClock < toastUntil);
+    if (!fullscreenHasOverlay && !overlaysActive) return;
+
+    NVGcontext* vg = brls::Application::getNVGContext();
+    if (!vg) return;
+    const float width = brls::Application::contentWidth;
+    const float height = brls::Application::contentHeight;
+    const float ratio = static_cast<float>(brls::Application::windowWidth) /
+                        static_cast<float>(brls::Application::windowHeight);
+    nvgBeginFrame(vg, static_cast<float>(brls::Application::windowWidth),
+                  static_cast<float>(brls::Application::windowHeight), ratio);
+    nvgScale(vg, brls::Application::windowScale, brls::Application::windowScale);
+
+    if (fullscreenHasOverlay) {
+        drawOverlayNodes(vg, *current->root, 1.0f);
+        RenderNode* focused = findFocusByPath(focusPath);
+        if (focused && focused->isInteractive() && isOverlayNode(focused)) {
+            drawFocusRing(vg, *focused);
+        }
+    }
+    drawOverlays(vg, width, height);
+
+    nvgResetTransform(vg);
+    nvgEndFrame(vg);
 }
 
 float MiniappView::valueOf(RenderNode* node) const {
@@ -2325,6 +2501,54 @@ void MiniappView::drawError(NVGcontext* vg, float x, float y, float width,
 }
 
 // ---------------- 输入 ----------------
+
+void MiniappView::drawLoading(NVGcontext* vg, float x, float y, float width, float height) {
+    nvgBeginPath(vg);
+    nvgRect(vg, x, y, width, height);
+    nvgFillColor(vg, nvgRGB(20, 21, 24));
+    nvgFill(vg);
+
+    const double elapsed = (steadyMilliseconds() - loadingStart) / 1000.0;
+    const float cx = x + width * 0.5f;
+    const float cy = y + height * 0.5f - 12.0f;
+    const float radius = 22.0f;
+
+    nvgBeginPath(vg);
+    nvgArc(vg, cx, cy, radius, static_cast<float>(elapsed * 4.0),
+           static_cast<float>(elapsed * 4.0 + 1.9), NVG_CW);
+    nvgStrokeWidth(vg, 4.0f);
+    nvgLineCap(vg, NVG_ROUND);
+    nvgStrokeColor(vg, nvgRGBAf(kAccent.r, kAccent.g, kAccent.b, 0.95f));
+    nvgStroke(vg);
+
+    nvgFontFaceId(vg, fontId);
+    nvgFontSize(vg, 20.0f);
+    nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+    nvgFillColor(vg, nvgRGBAf(0.92f, 0.94f, 0.96f, 0.96f));
+    const std::string title = loadingTitle.empty() ? std::string("小程序") : loadingTitle;
+    nvgText(vg, cx, cy + radius + 24.0f, title.c_str(), nullptr);
+
+    nvgFontSize(vg, 15.0f);
+    nvgFillColor(vg, nvgRGBAf(0.55f, 0.58f, 0.62f, 0.9f));
+    nvgText(vg, cx, cy + radius + 52.0f, "正在启动…", nullptr);
+}
+
+bool MiniappView::isDpadHeld(brls::ControllerButton pad) {
+    auto* platform = brls::Application::getPlatform();
+    auto* input = platform ? platform->getInputManager() : nullptr;
+    if (!input) return false;
+    brls::ControllerState state{};
+    input->updateUnifiedControllerState(&state);
+    return state.buttons[pad];
+}
+
+bool MiniappView::dispatchKeyToPage(const std::string& key) {
+    // 容器弹窗打开时按键归弹窗所有；没有页面时也不转发。
+    if (!current || !current->runtime || modal.active) return false;
+    bool consumed = false;
+    if (!current->runtime->dispatchKey(key, consumed)) return false;
+    return consumed;
+}
 
 void MiniappView::handleActivate() {
     if (modal.active) {
@@ -2840,6 +3064,19 @@ void MiniappView::ensureVisible(RenderNode* node) {
 }
 
 void MiniappView::tick(double now) {
+    if (this->pendingLoad) {
+        if (this->loadDelayFrames > 0) {
+            // 留一帧给加载页，确保窗口里先出现反馈再开始读包。
+            --this->loadDelayFrames;
+            // 加载页的旋转指示需要持续重绘。
+            this->invalidate();
+        } else {
+            this->pendingLoad = false;
+            this->loadPackage();
+            this->invalidate();
+            return;
+        }
+    }
     flushPendingNavigation();
     if (!current) return;
     overlayClock = now;
@@ -3413,7 +3650,8 @@ bool MiniappView::performReLaunch(const std::string& url) {
 namespace {
 
 // 记录「最近使用」，供 wx.miniapp.listRecent 展示。
-void rememberMiniApp(const std::string& id, const std::string& title) {
+void rememberMiniApp(const std::string& id, const std::string& title,
+                     const std::string& iconUrl) {
     auto& config = nxkit::Config::instance();
     nlohmann::json updated = nlohmann::json::array();
     updated.push_back(id);
@@ -3427,7 +3665,7 @@ void rememberMiniApp(const std::string& id, const std::string& title) {
                 for (const auto& entry : *recent) {
                     if (!entry.is_string()) continue;
                     if (entry.get<std::string>() == id) continue;
-                    if (updated.size() >= 8) break;
+                    if (updated.size() >= 9) break;
                     updated.push_back(entry);
                 }
             }
@@ -3436,6 +3674,8 @@ void rememberMiniApp(const std::string& id, const std::string& title) {
 
     config.setValue("miniapp.recent", updated);
     if (!title.empty()) config.setString("miniapp.title." + id, title);
+    // 启动时顺手把图标地址落盘，首页直接用，不必再查商店列表。
+    if (!iconUrl.empty()) config.setString("miniapp.icon." + id, iconUrl);
     std::string usage = "miniapp.usage." + id + ".count";
     config.setInt(usage, config.getInt(usage, 0) + 1);
     config.save();
@@ -3464,7 +3704,8 @@ bool MiniappView::launchMiniApp(const std::string& id, const std::string& title)
         // 本地包已是最新（或拿不到商店数据但本地有包）：直接进入。
         if (!latest || packages::installed(id, latest->version)) {
             if (!packages::installed(id, "")) return;
-            brls::sync([weak, id, title] {
+            std::string iconUrl = latest ? latest->iconUrl : "";
+            brls::sync([weak, id, title, iconUrl] {
                 auto token = weak.lock();
                 if (!token || !*token) return;
                 // 调用方（首页卡片）通常知道应用名；没有时沿用已有的缓存标题。
@@ -3472,7 +3713,8 @@ bool MiniappView::launchMiniApp(const std::string& id, const std::string& title)
                 if (name.empty()) {
                     name = nxkit::Config::instance().getString("miniapp.title." + id, "");
                 }
-                rememberMiniApp(id, name);
+                rememberMiniApp(id, name, iconUrl);
+                MiniAppApi::instance().reportOpen(id);
                 brls::Application::pushActivity(new MiniappActivity(packages::directory(id)));
             });
             return;
@@ -3495,12 +3737,14 @@ bool MiniappView::launchMiniApp(const std::string& id, const std::string& title)
                         // 更新下载失败时若本地有旧版本，仍进入旧版本。
                         if (!packages::installed(item.id, "")) return;
                         brls::Application::notify("更新失败，进入旧版本");
-                        rememberMiniApp(item.id, item.title);
+                        rememberMiniApp(item.id, item.title, item.iconUrl);
+                        MiniAppApi::instance().reportOpen(item.id);
                         brls::Application::pushActivity(
                             new MiniappActivity(packages::directory(item.id)));
                         return;
                     }
-                    rememberMiniApp(item.id, item.title);
+                    rememberMiniApp(item.id, item.title, item.iconUrl);
+                    MiniAppApi::instance().reportOpen(item.id);
                     brls::Application::pushActivity(
                         new MiniappActivity(packages::directory(item.id)));
                 });
@@ -3530,6 +3774,9 @@ JsonValue MiniappView::recentMiniApps() {
         item.setMember("count", JsonValue::number(
                                     nxkit::Config::instance().getInt(
                                         "miniapp.usage." + id + ".count", 0)));
+        item.setMember("icon", JsonValue::string(
+                                   nxkit::Config::instance().getString(
+                                       "miniapp.icon." + id, "")));
         item.setMember("installed", JsonValue::boolean(packages::installed(id, "")));
         items.push_back(std::move(item));
     }
@@ -3550,6 +3797,8 @@ JsonValue MiniappView::systemInfo() {
     info.setMember("statusBarHeight", JsonValue::number(0.0));
     info.setMember("language", JsonValue::string("zh_CN"));
     info.setMember("version", JsonValue::string("1.1.2"));
+    // 页面级按键事件（onKeyDown）能力标记，旧容器没有该字段。
+    info.setMember("keyEvents", JsonValue::boolean(true));
 #ifdef __SWITCH__
     auto* platform = brls::Application::getPlatform();
     if (platform && platform->hasEthernetConnection()) {

@@ -194,10 +194,21 @@ ctx.stop();</code></pre>
       <code>seekcomplete</code> 在 seek 结束后触发；<code>fullscreenchange</code>
       带有 <code>{ fullScreen }</code>。
     </p>
+    <p id="overlay">
+      全屏播放时视频位于最上层，普通节点会被画面盖住。给需要悬浮在画面上的子树加
+      <code>data-overlay="true"</code>，容器会在视频直出之后单独合成这一层；
+      普通（非全屏）模式下该属性没有任何影响。
+    </p>
+<pre><code>&lt;view class="stage"&gt;
+  &lt;video id="player" src="{{url}}" /&gt;
+&lt;/view&gt;
+&lt;view class="hud" data-overlay="true"&gt;
+  &lt;text&gt;{{channelName}}&lt;/text&gt;
+&lt;/view&gt;</code></pre>
     <div class="warn">
       <strong>限制：</strong>全局只有一个播放器实例，同一时间只播放一个 <code>video</code>；
-      视频直出层不参与 NanoVG 合成，被 <code>scroll-view</code> 裁剪或完全移出屏幕时暂停绘制
-      （全屏模式例外）。
+      视频直出层不参与常规 NanoVG 合成，被 <code>scroll-view</code> 裁剪或完全移出屏幕时暂停绘制
+      （全屏模式例外）。全屏下只有 <code>data-overlay</code> 子树、toast 与弹窗会显示在画面上层。
     </div>
 
     <h2 id="form-container">form / label / checkbox-group / radio-group / block</h2>

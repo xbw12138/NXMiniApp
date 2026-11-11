@@ -1511,6 +1511,37 @@ bool JsRuntime::dispatchEvent(const std::string& handler, const std::string& typ
     return ok;
 }
 
+bool JsRuntime::dispatchKey(const std::string& key, bool& consumed) {
+    consumed = false;
+    if (!context || !pageRegistered || key.empty()) return false;
+    JSValue fn = JS_GetPropertyStr(context, page, "onKeyDown");
+    if (!JS_IsFunction(context, fn)) {
+        JS_FreeValue(context, fn);
+        return false;
+    }
+    JSValue event = JS_NewObject(context);
+    JS_SetPropertyStr(context, event, "type", JS_NewString(context, "keydown"));
+    JS_SetPropertyStr(context, event, "timeStamp",
+                      JS_NewFloat64(context, nowMilliseconds()));
+    JS_SetPropertyStr(context, event, "key", JS_NewString(context, key.c_str()));
+    JSValue result = JS_Call(context, fn, page, 1, &event);
+    if (JS_IsException(result)) {
+        brls::Logger::error("miniapp js [onKeyDown]: {}", exceptionText());
+        JS_FreeValue(context, result);
+        JS_FreeValue(context, event);
+        JS_FreeValue(context, fn);
+        drainJobs();
+        return true;
+    }
+    int truthy = JS_ToBool(context, result);
+    consumed = truthy > 0;
+    JS_FreeValue(context, result);
+    JS_FreeValue(context, event);
+    JS_FreeValue(context, fn);
+    drainJobs();
+    return true;
+}
+
 bool JsRuntime::callJsFunction(JSValue fn, JSValue thisValue, int argc, JSValue* argv,
                                const std::string& what) {
     if (!context || !JS_IsFunction(context, fn)) return false;

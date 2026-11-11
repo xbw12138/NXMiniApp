@@ -1,10 +1,6 @@
-<view class="page">
+<view class="page search-page">
   <view class="topbar">
     <text class="brand">搜索小程序</text>
-    <view class="spacer"></view>
-    <view class="button" bindtap="onBack">
-      <text class="button-text">返回</text>
-    </view>
   </view>
 
   <view class="searchbar">
@@ -15,17 +11,41 @@
     </view>
   </view>
 
+  <view class="list-head">
+    <text class="list-title">{{mode === 'featured' ? '精选小程序' : '搜索结果'}}</text>
+    <view class="spacer"></view>
+    <text class="list-count">{{status}}</text>
+  </view>
+
   <scroll-view class="results" scroll-y="{{true}}">
-    <view class="app-card" wx:for="{{items}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
-      <image wx:if="{{item.icon_url}}" class="app-icon" src="{{item.icon_url}}" mode="aspectFill"/>
-      <view wx:else class="app-icon app-icon-empty"/>
-      <view class="app-meta">
-        <text class="app-title">{{item.title}}</text>
-        <text class="app-sub">{{item.category}} · {{item.summary}}</text>
+    <!-- 精选：一行两个，正好四行 -->
+    <view wx:if="{{mode === 'featured'}}" class="featured-grid">
+      <view class="featured-row" wx:for="{{featuredRows}}" wx:for-item="row" wx:key="index">
+        <view class="featured-card" wx:for="{{row}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
+          <image wx:if="{{item.icon_url}}" class="featured-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+          <view wx:else class="featured-icon featured-icon-empty"/>
+          <view class="featured-meta">
+            <text class="featured-title">{{item.title}}</text>
+            <text class="featured-sub">{{item.summary}}</text>
+          </view>
+        </view>
       </view>
     </view>
-    <view wx:if="{{items.length === 0}}" class="empty">
-      <text class="empty-text">{{status}}</text>
+
+    <!-- 搜索结果：单列列表，读起来更快 -->
+    <block wx:else>
+      <view class="app-card" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
+        <image wx:if="{{item.icon_url}}" class="app-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+        <view wx:else class="app-icon app-icon-empty"/>
+        <view class="app-meta">
+          <text class="app-title">{{item.title}}</text>
+          <text class="app-sub">{{item.category}} · {{item.summary}}</text>
+        </view>
+      </view>
+    </block>
+
+    <view wx:if="{{list.length === 0}}" class="empty">
+      <text class="empty-text">{{status || '输入关键词开始搜索'}}</text>
     </view>
   </scroll-view>
 </view>

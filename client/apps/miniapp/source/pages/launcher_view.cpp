@@ -30,7 +30,7 @@ namespace miniapp {
 
 namespace {
 
-constexpr size_t kRecentLimit = 8;
+constexpr size_t kRecentLimit = 9;
 
 std::string sizeOf(long long bytes) {
     if (bytes <= 0) return "";
@@ -359,7 +359,7 @@ void LauncherView::embedHome(const MiniAppItem& home) {
         this->homeView = nullptr;
     }
 
-    MiniappView* view = new MiniappView(packages::directory(home.id));
+    MiniappView* view = new MiniappView(packages::directory(home.id), home.title);
     view->setGrow(1);
     this->addView(view);
     this->homeView = view;
@@ -540,8 +540,11 @@ void LauncherView::enter(const MiniAppItem& item) {
     this->touchRecent(item.id);
     this->bumpUsage(item.id);
     miniapp::MiniAppApi::instance().reportOpen(item.id);
-    // 缓存标题，供首页小程序通过 wx.miniapp.listRecent 展示最近使用。
+    // 缓存标题和图标，供首页小程序通过 wx.miniapp.listRecent 展示最近使用。
     nxkit::Config::instance().setValue("miniapp.title." + item.id, item.title);
+    if (!item.iconUrl.empty()) {
+        nxkit::Config::instance().setValue("miniapp.icon." + item.id, item.iconUrl);
+    }
     nxkit::Config::instance().save();
     brls::Application::pushActivity(new MiniappActivity(packages::directory(item.id)));
 }

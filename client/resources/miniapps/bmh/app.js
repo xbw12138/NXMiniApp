@@ -6,8 +6,14 @@ App({
   globalData: {
     sources: [],          // 已配置的数据源
     cache: { movies: {} }, // 按 sourceId 缓存的影片列表
-    smbSessions: {}       // SMB 会话 id 内存缓存（sourceId -> smbId，不持久化）
+    smbSessions: {},      // SMB 会话 id 内存缓存（sourceId -> smbId，不持久化）
+    smbScanAt: {},        // 上次扫描时间，防止每次刷新都重新扫盘
+    smbScanning: {},      // 扫描中的源，避免重复触发
+    smbUpdatedAt: 0       // 扫描完成时间戳，页面据此自动刷新
   },
+
+  // 影片列表落盘上限：SMB 索引可能有上千条，全量写 storage 会阻塞 JS 线程。
+  MOVIE_CACHE_LIMIT: 300,
 
   VIDEO_EXT: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'ts', 'm2ts', 'webm', 'mpg', 'mpeg', 'rmvb', 'rm', '3gp', 'm3u8', 'vob', 'iso'],
   SUB_EXT: ['srt', 'ass', 'ssa', 'vtt', 'sub', 'smi'],
@@ -195,8 +201,11 @@ App({
 
   saveMoviesCache(id, list) {
     if (!list || !list.length) return;
+    var kept = list.length > this.MOVIE_CACHE_LIMIT
+      ? list.slice(0, this.MOVIE_CACHE_LIMIT)
+      : list;
     try {
-      wx.setStorageSync(this.moviesCacheKey(id), { time: Date.now(), list: list });
+      wx.setStorageSync(this.moviesCacheKey(id), { time: Date.now(), list: kept });
     } catch (e) {}
   },
 
@@ -1107,32 +1116,50 @@ App({
     }).catch(function () { return 0; });
   },
 
-  // 原生媒体库路径：有索引立刻返回并后台增量刷新；
-  // 无索引也立刻返回空列表（首页先可用），扫描在后台完成后再写入缓存。
+  // 扫描节流：10 分钟内不重复扫盘；同一数据源不会并发扫描。
+  smbScheduleScan(source, delay) {
+    var self = this;
+    var now = Date.now();
+    var last = self.globalData.smbScanAt[source.id] || 0;
+    // App 实例不跨页共享，扫描时间也落盘，避免每次进入都重新扫盘。
+    try {
+      var stored = wx.getStorageSync('bmh_scan_' + source.id) || 0;
+      if (stored > last) last = stored;
+    } catch (e) {}
+    if (self.globalData.smbScanning[source.id]) return;
+    if (now - last < 10 * 60000) return;
+    self.globalData.smbScanAt[source.id] = now;
+    try { wx.setStorageSync('bmh_scan_' + source.id, now); } catch (e) {}
+    self.globalData.smbScanning[source.id] = true;
+    var run = function () {
+      self.smbNativeScan(source).then(function () {
+        self.globalData.smbScanning[source.id] = false;
+        self.globalData.smbUpdatedAt = Date.now();
+      }, function () {
+        self.globalData.smbScanning[source.id] = false;
+      });
+    };
+    if (delay > 0) setTimeout(run, delay);
+    else run();
+  },
+
+  // 原生媒体库路径：只读索引，不在首屏等待扫描。
+  // 有索引立刻返回并延后增量刷新；无索引立刻返回空列表，后台扫描完成由页面轮询刷新。
   smbLibraryMovies(source) {
     var self = this;
     console.log('media library read source=' + source.id);
     return self.withTimeout(self.smbLibraryPage(source, 0, 0), 3000, { total: 0, list: [] })
       .then(function (res) {
-        if (res.list && res.list.length) {
-          console.log('media library hit source=' + source.id + ' total=' + res.list.length);
-          self.smbNativeScan(source).catch(function () {});
-          return res.list;
+        var files = res.list || [];
+        if (files.length) {
+          console.log('media library hit source=' + source.id + ' total=' + files.length);
+          // 先让首屏渲染完，再启动扫描，避免和布局/图片抢 CPU。
+          self.smbScheduleScan(source, 3000);
+          return self.smbMapMovies(source, files);
         }
-        console.log('media library miss source=' + source.id + ', start background scan');
-        self.smbNativeScan(source).then(function () {
-          return self.smbLibraryPage(source, 0, 0);
-        }).then(function (page) {
-          var list = self.smbMapMovies(source, page.list || []);
-          console.log('media library built source=' + source.id + ' total=' + list.length);
-          // 写入影片列表缓存，下次进入直接命中，不必再等索引。
-          if (list.length) self.saveMoviesCache(source.id, list);
-        }).catch(function (e) {
-          console.log('media library scan error: ' + ((e && e.message) || e));
-        });
+        console.log('media library miss source=' + source.id + ', background scan scheduled');
+        self.smbScheduleScan(source, 300);
         return [];
-      }).then(function (files) {
-        return self.smbMapMovies(source, files);
       });
   },
 

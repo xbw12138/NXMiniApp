@@ -1,74 +1,84 @@
 <view class="page">
-  <view class="topbar">
-    <view class="search" bindtap="onSearch">
-      <text class="search-text">搜索小程序</text>
-    </view>
-  </view>
+  <image wx:if="{{banner.cover_url}}" class="wall" src="{{banner.cover_url}}" mode="aspectFill"/>
+  <view class="scrim"></view>
 
-  <view class="body">
-    <view class="left">
-      <view wx:if="{{banner.cover_url}}" class="banner">
-        <view class="banner-item" data-target="{{banner.id}}" bindtap="onNewsTap">
-          <image class="banner-cover" src="{{banner.cover_url}}" mode="aspectFill"/>
-          <view class="banner-caption">
-            <text class="banner-title">{{banner.title}}</text>
+  <view class="stage">
+    <view class="main">
+      <view class="topbar">
+        <view class="brand-pill">
+          <view class="brand-dot"></view>
+          <text class="brand">Switch 小程序</text>
+        </view>
+        <view class="search" bindtap="onSearch">
+          <text class="search-text">搜索小程序</text>
+        </view>
+        <view class="all-entry" bindtap="onAll">
+          <text class="all-entry-text">全部</text>
+        </view>
+        <view class="spacer"></view>
+      </view>
+
+      <view wx:if="{{banner.title}}" class="feature" data-target="{{banner.id}}" bindtap="onNewsTap">
+        <view class="feature-tag">
+          <view class="tag-pill">
+            <text class="tag-text">今日精选</text>
+          </view>
+          <view class="spacer"></view>
+          <text wx:if="{{status}}" class="status">{{status}}</text>
+          <text wx:else class="feature-hint">按 A 查看详情</text>
+        </view>
+        <view class="feature-title-box">
+          <text class="feature-title">{{banner.title}}</text>
+        </view>
+        <view class="feature-sum-box">
+          <text class="feature-sum">{{banner.summary}}</text>
+        </view>
+        <view wx:if="{{banners.length > 1}}" class="dots">
+          <view class="dot {{index === bannerIndex ? 'dot-on' : ''}}" wx:for="{{banners}}" wx:key="id"/>
+        </view>
+      </view>
+
+      <view class="news">
+        <view class="feed-head">
+          <text class="feed-title">资讯</text>
+          <view class="spacer"></view>
+          <text class="feed-hint">{{newsCount}} 条</text>
+        </view>
+        <view class="news-row">
+          <view class="news-card" wx:for="{{stories}}" wx:key="id" data-target="{{item.id}}" bindtap="onNewsTap">
+            <text class="news-no">{{item.no}}</text>
+            <view class="news-title-box">
+              <text class="news-title">{{item.title}}</text>
+            </view>
+            <view class="news-sum-box">
+              <text class="news-sum">{{item.summary}}</text>
+            </view>
+          </view>
+          <view wx:if="{{stories.length === 0}}" class="empty">
+            <text class="empty-text">暂无资讯，稍后再来看看</text>
           </view>
         </view>
       </view>
 
-      <text class="section-title">推荐小程序</text>
-      <scroll-view class="scroll" scroll-y="{{true}}">
-        <view class="app-grid">
-          <view class="app-col">
-            <view class="feat-card" wx:for="{{featuredLeft}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
-              <image wx:if="{{item.icon_url}}" class="feat-icon" src="{{item.icon_url}}" mode="aspectFill"/>
-              <view wx:else class="feat-icon app-icon-empty"/>
-              <text class="feat-title">{{item.title}}</text>
-              <text class="feat-sub">{{item.category}} · v{{item.version}}</text>
+      <view class="spacer"></view>
+
+      <view class="dock">
+        <view class="dock-row" wx:for="{{dockRows}}" wx:for-item="row">
+          <view class="tile" wx:for="{{row.items}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onDockTap">
+            <view wx:if="{{item.add}}" class="tile-icon tile-icon-fallback">
+              <text class="tile-all">+</text>
+            </view>
+            <image wx:elif="{{item.icon_url}}" class="tile-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+            <view wx:else class="tile-icon tile-icon-fallback">
+              <text class="tile-initial">{{item.initial}}</text>
+            </view>
+            <view class="tile-name-box">
+              <text class="tile-name">{{item.title}}</text>
             </view>
           </view>
-          <view class="app-col">
-            <view class="feat-card" wx:for="{{featuredRight}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
-              <image wx:if="{{item.icon_url}}" class="feat-icon" src="{{item.icon_url}}" mode="aspectFill"/>
-              <view wx:else class="feat-icon app-icon-empty"/>
-              <text class="feat-title">{{item.title}}</text>
-              <text class="feat-sub">{{item.category}} · v{{item.version}}</text>
-            </view>
-          </view>
+          <view class="tile tile-blank" wx:for="{{row.blanks}}" wx:for-item="b"></view>
         </view>
-        <view wx:if="{{featured.length === 0}}" class="empty">
-          <text class="empty-text">服务端还没有推荐小程序</text>
-        </view>
-      </scroll-view>
-    </view>
-
-    <view class="right">
-      <text class="section-title">最近使用</text>
-      <scroll-view class="recent-scroll" scroll-y="{{true}}">
-        <view class="recent-row" wx:for="{{recent}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
-          <text class="recent-title">{{item.title}}</text>
-          <text class="recent-count">用过 {{item.count}} 次</text>
-        </view>
-        <view wx:if="{{recent.length === 0}}" class="empty">
-          <text class="empty-text">还没有使用记录</text>
-        </view>
-      </scroll-view>
-
-      <text class="section-title">最新资讯</text>
-      <scroll-view class="scroll" scroll-y="{{true}}">
-        <view class="news-item" wx:for="{{news}}" wx:key="id" data-target="{{item.id}}" bindtap="onNewsTap">
-          <image wx:if="{{item.cover_url}}" class="news-cover" src="{{item.cover_url}}" mode="aspectFill"/>
-          <view class="news-meta">
-            <text class="news-title">{{item.title}}</text>
-            <text class="news-summary">{{item.summary}}</text>
-          </view>
-        </view>
-        <view wx:if="{{news.length === 0}}" class="empty">
-          <text class="empty-text">暂无资讯</text>
-        </view>
-      </scroll-view>
-
-      <text class="status">{{status}}</text>
+      </view>
     </view>
   </view>
 </view>

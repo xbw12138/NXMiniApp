@@ -1,4 +1,4 @@
-/* 搜索页 */
+/* 搜索 / 收藏 · 海报网格 */
 .searchbar {
   flex-direction: row;
   align-items: center;
@@ -6,71 +6,130 @@
   flex-shrink: 0;
 }
 
+.input-box {
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+}
+
 .input {
   flex: 1;
-  height: 68rpx;
-  border-radius: 34rpx;
-  background-color: #1c2026;
+  height: 64rpx;
+  border-radius: 32rpx;
+  background-color: #191c22;
   color: #eef1f5;
   font-size: 24rpx;
   padding: 0 26rpx;
 }
 
 .go-btn {
-  height: 68rpx;
-  padding: 0 32rpx;
-  border-radius: 34rpx;
+  height: 64rpx;
+  padding: 0 30rpx;
   margin-left: 14rpx;
-}
-
-/* 搜索结果行 */
-.result-item {
-  flex-direction: row;
-  align-items: center;
-  padding: 16rpx;
-  border-radius: 16rpx;
-  background-color: #17191e;
-  margin-bottom: 12rpx;
-}
-
-.result-cover {
-  width: 90rpx;
-  height: 130rpx;
-  border-radius: 10rpx;
-  background-color: #1c2026;
-  margin-right: 18rpx;
-  flex-shrink: 0;
-}
-
-.result-cover-empty {
+  border-radius: 32rpx;
+  background-color: #ff3b30;
   align-items: center;
   justify-content: center;
 }
 
-.result-empty-text {
-  font-size: 18rpx;
-  color: #5d6672;
+.go-text {
+  font-size: 23rpx;
+  font-weight: bold;
+  color: #ffffff;
 }
 
-.result-meta {
+.fav-head {
+  flex-direction: row;
+  align-items: center;
+}
+
+.fav-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.fav-count {
+  font-size: 21rpx;
+  color: #6f7883;
+  margin-left: 12rpx;
+}
+
+.body {
   flex: 1;
+}
+
+.grid {
   flex-direction: column;
 }
 
-.result-title {
-  font-size: 28rpx;
-  font-weight: bold;
-  color: #e6e9ee;
+.poster-row {
+  flex-direction: row;
 }
 
-.result-line {
-  font-size: 21rpx;
-  color: #8b949e;
-  margin-top: 6rpx;
+.poster-card {
+  width: 270rpx;
+  margin: 0 14rpx 26rpx 0;
+  flex-direction: column;
 }
 
-.result-arrow {
-  font-size: 36rpx;
+.poster-box {
+  width: 270rpx;
+  height: 396rpx;
+  border-radius: 14rpx;
+  overflow: hidden;
+  background-color: #171b21;
+}
+
+.poster {
+  width: 270rpx;
+  height: 396rpx;
+}
+
+.poster-empty {
+  align-items: center;
+  justify-content: center;
+  padding: 10rpx;
+}
+
+.poster-empty-text {
+  font-size: 22rpx;
   color: #5d6672;
-  margin-left: 10rpx;
+  text-align: center;
+}
+
+.rating-badge {
+  position: absolute;
+  right: 10rpx;
+  top: 10rpx;
+  height: 34rpx;
+  padding: 0 10rpx;
+  border-radius: 8rpx;
+  background-color: rgba(0, 0, 0, 0.72);
+  align-items: center;
+  justify-content: center;
+}
+
+.rating-text {
+  font-size: 20rpx;
+  font-weight: bold;
+  color: #ffb800;
+}
+
+.poster-title-box {
+  height: 32rpx;
+  overflow: hidden;
+  margin-top: 10rpx;
+}
+
+.poster-title {
+  font-size: 23rpx;
+  font-weight: bold;
+  color: #e9edf2;
+}
+
+.poster-sub {
+  font-size: 19rpx;
+  color: #6f7883;
+  margin-top: 2rpx;
 }

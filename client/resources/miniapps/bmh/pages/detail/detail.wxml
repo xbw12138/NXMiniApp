@@ -1,59 +1,60 @@
 <view class="page" wx:if="{{movie}}">
-  <scroll-view class="scroll" scroll-y="{{true}}" style="height: 100%;">
-    <!-- 头部：海报 + 基本信息 -->
-    <view class="head">
-      <image class="head-poster" src="{{movie.poster}}" mode="aspectFill"/>
-      <view class="head-info">
-        <text class="head-title">{{movie.title}}</text>
-        <view class="head-rating-row">
-          <text class="head-rating">{{movie.rating}}</text>
-          <text class="head-rating-star">★</text>
-          <text class="head-type-tag">{{typeLabel}}</text>
+  <scroll-view class="body" scroll-y="{{true}}" style="height: 100%;">
+    <!-- 顶部大图 + 信息 -->
+    <view class="hero">
+      <image wx:if="{{movie.poster}}" class="hero-bg" src="{{movie.poster}}" mode="aspectFill"/>
+      <view wx:else class="hero-bg hero-bg-empty"></view>
+      <view class="hero-shade"></view>
+      <view class="hero-info">
+        <text class="hero-type">{{typeLabel}}</text>
+        <view class="hero-title-box">
+          <text class="hero-title">{{movie.title}}</text>
         </view>
-        <text class="head-line">{{movie.year}} · {{movie.genre}}</text>
-        <text class="head-line">{{movie.duration}} · {{movie.region}}</text>
-        <text class="head-line">导演：{{movie.director}}</text>
-        <text class="head-line">主演：{{movie.actors}}</text>
-        <text wx:if="{{progressText}}" class="head-progress">{{progressText}}</text>
+        <view class="meta-row">
+          <text wx:if="{{movie.rating}}" class="meta-rating">{{movie.rating}} 分</text>
+          <text wx:if="{{movie.year}}" class="meta-chip">{{movie.year}}</text>
+          <text wx:if="{{movie.genre}}" class="meta-chip">{{movie.genre}}</text>
+          <text wx:if="{{movie.duration}}" class="meta-chip">{{movie.duration}}</text>
+          <text wx:if="{{movie.region}}" class="meta-chip">{{movie.region}}</text>
+        </view>
+        <text wx:if="{{progressText}}" class="hero-progress">{{progressText}}</text>
+        <view class="action-row">
+          <button class="btn btn-play" bindtap="onPlay">{{progressText ? '继续播放' : '立即播放'}}</button>
+          <button class="btn btn-ghost" bindtap="onToggleFav">{{isFav ? '已收藏' : '收藏'}}</button>
+        </view>
       </view>
-    </view>
-
-    <!-- 操作按钮 -->
-    <view class="row action-row">
-      <button class="btn btn-play" bindtap="onPlay">▶ 立即播放</button>
-      <button class="btn btn-ghost btn-fav" bindtap="onToggleFav">
-        {{isFav ? '♥ 已收藏' : '♡ 收藏'}}
-      </button>
     </view>
 
     <!-- 简介 -->
-    <view class="card">
-      <text class="section-title">剧情简介</text>
-      <text class="summary">{{movie.summary}}</text>
+    <view class="block">
+      <text class="block-title">简介</text>
+      <text class="summary">{{movie.summary || '暂无简介'}}</text>
     </view>
 
-    <!-- 选集（电视剧 / 动漫 / 综艺） -->
-    <view wx:if="{{episodes.length > 0}}" class="card">
-      <text class="section-title">选集</text>
-      <view class="ep-grid">
-        <view wx:for="{{episodes}}" wx:key="index"
-              class="ep-btn {{currentEp === item.index ? 'ep-on' : ''}}"
-              data-index="{{item.index}}" bindtap="onPickEp">
-          <text class="ep-text">{{item.label}}</text>
-        </view>
-      </view>
+    <!-- 演职员 -->
+    <view wx:if="{{movie.director || movie.actors}}" class="block">
+      <text class="block-title">演职员</text>
+      <text wx:if="{{movie.director}}" class="line">导演：{{movie.director}}</text>
+      <text wx:if="{{movie.actors}}" class="line">主演：{{movie.actors}}</text>
     </view>
 
     <!-- 同类推荐 -->
-    <view wx:if="{{similar.length > 0}}">
-      <text class="section-title">同类推荐</text>
+    <view wx:if="{{similar.length > 0}}" class="block">
+      <text class="block-title">同类推荐</text>
       <view class="grid">
-        <view wx:for="{{similar}}" wx:key="id"
-              class="poster-card" data-id="{{item.id}}" bindtap="onSimilar">
-          <image class="poster" src="{{item.poster}}" mode="aspectFill"/>
-          <view class="poster-meta">
-            <text class="poster-title">{{item.title}}</text>
-            <text class="poster-sub">{{item.year}} · {{item.rating}}分</text>
+        <view class="poster-row" wx:for="{{similarRows}}" wx:for-item="row" wx:key="index">
+          <view wx:for="{{row}}" wx:for-item="item" wx:key="id"
+                class="poster-card" data-id="{{item.id}}" bindtap="onSimilar">
+            <view class="poster-box">
+              <image wx:if="{{item.poster}}" class="poster" src="{{item.poster}}" mode="aspectFill"/>
+              <view wx:else class="poster poster-empty">
+                <text class="poster-empty-text">{{item.title}}</text>
+              </view>
+            </view>
+            <view class="poster-title-box">
+              <text class="poster-title">{{item.title}}</text>
+            </view>
+            <text class="poster-sub">{{item.year}}{{item.rating ? ' · ' + item.rating + '分' : ''}}</text>
           </view>
         </view>
       </view>

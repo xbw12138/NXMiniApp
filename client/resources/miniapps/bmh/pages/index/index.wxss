@@ -1,61 +1,296 @@
-/* 首页 · 最近播放横滑卡片 */
-.recent-card {
-  width: 200rpx;
-  margin-right: 16rpx;
-  flex-direction: column;
+/* 首页 · TV 版：大图推荐 + 继续观看 + 数据源筛选 + 五列海报墙 */
+.logo {
+  flex-direction: row;
+  align-items: center;
 }
 
-.recent-cover {
-  width: 200rpx;
-  height: 120rpx;
-  border-radius: 12rpx;
-  background-color: #1c2026;
+.logo-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 7rpx;
+  background-color: #ff3b30;
+  margin-right: 10rpx;
 }
 
-.recent-cover-empty {
+.logo-text {
+  font-size: 38rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.nav-btn {
+  height: 56rpx;
+  padding: 0 24rpx;
+  margin-left: 12rpx;
+  border-radius: 28rpx;
+  background-color: #191c22;
   align-items: center;
   justify-content: center;
 }
 
-.recent-empty-text {
+.nav-text {
+  font-size: 22rpx;
+  color: #c3cad4;
+}
+
+.body {
+  flex: 1;
+}
+
+/* 顶部大图 */
+.hero {
+  height: 400rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+  margin-bottom: 18rpx;
+  background-color: #12151a;
+}
+
+.hero-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-bg-empty {
+  background-color: #171b21;
+}
+
+.hero-shade {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(6, 8, 11, 0.72);
+}
+
+.hero-info {
+  flex-direction: column;
+  padding: 36rpx 44rpx;
+}
+
+.hero-kicker {
+  font-size: 22rpx;
+  font-weight: bold;
+  color: #ff6a5c;
+}
+
+.hero-title-box {
+  height: 62rpx;
+  overflow: hidden;
+  margin-top: 10rpx;
+}
+
+.hero-title {
+  font-size: 52rpx;
+  font-weight: bold;
+  line-height: 60rpx;
+  color: #ffffff;
+}
+
+.hero-meta {
+  font-size: 24rpx;
+  color: #b9c2cd;
+  margin-top: 10rpx;
+}
+
+.hero-btn {
+  width: 240rpx;
+  height: 60rpx;
+  margin-top: 26rpx;
+  border-radius: 30rpx;
+  background-color: #ff3b30;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-btn-text {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+/* 继续观看横滑 */
+.hscroll {
+  flex-shrink: 0;
+}
+
+.hrow {
+  flex-direction: row;
+  padding: 2rpx 2rpx 8rpx;
+}
+
+.ep-card {
+  width: 300rpx;
+  margin-right: 16rpx;
+  flex-direction: column;
+}
+
+.ep-cover {
+  width: 300rpx;
+  height: 170rpx;
+  border-radius: 12rpx;
+  background-color: #1c2026;
+}
+
+.ep-cover-empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.ep-empty-text {
   font-size: 20rpx;
   color: #5d6672;
 }
 
-.recent-info {
+.ep-title-box {
+  height: 30rpx;
+  overflow: hidden;
   margin-top: 8rpx;
+}
+
+.ep-title {
+  font-size: 22rpx;
+  color: #eef1f5;
+}
+
+.ep-sub {
+  font-size: 19rpx;
+  color: #7d8693;
+  margin-top: 2rpx;
+}
+
+/* 数据源筛选 */
+.filters {
+  flex-direction: row;
+  margin: 10rpx 0 16rpx;
+}
+
+.chip {
+  height: 52rpx;
+  padding: 0 20rpx;
+  margin-right: 12rpx;
+  border-radius: 26rpx;
+  background-color: #171a20;
+  border: 1rpx solid #22262d;
+  flex-direction: row;
+  align-items: center;
+}
+
+.chip-on {
+  background-color: #ff3b30;
+  border: 1rpx solid #ff3b30;
+}
+
+.chip-text {
+  font-size: 22rpx;
+  color: #c3cad4;
+}
+
+.chip-on .chip-text {
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.chip-count {
+  font-size: 18rpx;
+  color: #6f7883;
+  margin-left: 8rpx;
+}
+
+.chip-on .chip-count {
+  color: #ffd9d4;
+}
+
+/* 分组标题 */
+.section-head {
+  flex-direction: row;
+  align-items: center;
+  margin: 14rpx 4rpx 12rpx;
+}
+
+.section-count {
+  font-size: 20rpx;
+  color: #6f7883;
+  margin-left: 10rpx;
+}
+
+/* 海报墙 */
+.grid {
   flex-direction: column;
 }
 
-.recent-title {
-  font-size: 22rpx;
+.poster-row {
+  flex-direction: row;
+}
+
+.poster-card {
+  width: 270rpx;
+  margin: 0 14rpx 26rpx 0;
+  flex-direction: column;
+}
+
+.poster-box {
+  width: 270rpx;
+  height: 396rpx;
+  border-radius: 14rpx;
+  overflow: hidden;
+  background-color: #171b21;
+}
+
+.poster {
+  width: 270rpx;
+  height: 396rpx;
+}
+
+.rating-badge {
+  position: absolute;
+  right: 10rpx;
+  top: 10rpx;
+  height: 34rpx;
+  padding: 0 10rpx;
+  border-radius: 8rpx;
+  background-color: rgba(0, 0, 0, 0.72);
+  align-items: center;
+  justify-content: center;
+}
+
+.rating-text {
+  font-size: 20rpx;
   font-weight: bold;
-  color: #e6e9ee;
-}
-
-.recent-sub {
-  font-size: 19rpx;
-  color: #7d8693;
-  margin-top: 3rpx;
-}
-
-/* 海报卡片内联评分 */
-.rating-inline {
-  font-size: 22rpx;
   color: #ffb800;
+}
+
+.poster-title-box {
+  height: 32rpx;
+  overflow: hidden;
+  margin-top: 10rpx;
+}
+
+.poster-title {
+  font-size: 23rpx;
   font-weight: bold;
-  margin-left: 8rpx;
+  color: #e9edf2;
+}
+
+.poster-sub {
+  font-size: 19rpx;
+  color: #6f7883;
+  margin-top: 2rpx;
 }
 
 /* 无数据源引导 */
 .empty-big {
-  padding: 80rpx 40rpx;
+  padding: 90rpx 40rpx;
   align-items: center;
   flex-direction: column;
 }
 
 .empty-title {
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: bold;
   color: #e6e9ee;
   margin-bottom: 16rpx;
@@ -64,36 +299,4 @@
 .add-btn {
   margin-top: 30rpx;
   padding: 0 60rpx;
-}
-
-/* 数据源按钮 */
-.src-btn {
-  height: 62rpx;
-  padding: 0 20rpx;
-  margin-left: 14rpx;
-  font-size: 22rpx;
-}
-
-/* 分组标题 */
-.group-head {
-  margin-top: 10rpx;
-}
-
-.group-count {
-  font-size: 20rpx;
-  color: #7d8693;
-  margin-left: 12rpx;
-}
-
-/* 无海报占位 */
-.poster-empty {
-  align-items: center;
-  justify-content: center;
-  padding: 10rpx;
-}
-
-.poster-empty-text {
-  font-size: 20rpx;
-  color: #5d6672;
-  text-align: center;
 }

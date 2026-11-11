@@ -1,9 +1,9 @@
 {
   "title": "Switch 小程序",
-  "summary": "可热更的首页：横幅、资讯、推荐与最近使用",
+  "summary": "沉浸式封面首页：全屏头条 + 资讯栏 + 快捷启动 Dock",
   "description": "服务端下发的默认首页小程序，内容全部来自 /api/v1/miniapp-home。",
   "category": "首页",
   "developer": "xbw12138",
-  "version": "1.0.6",
+  "version": "1.2.1",
   "published": true
 }

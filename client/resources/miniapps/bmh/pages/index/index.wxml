@@ -1,73 +1,112 @@
 <view class="page">
   <view class="topbar">
-    <text class="brand">网易爆<text class="brand-dot">米</text>花</text>
-    <view class="spacer"/>
-    <view class="search-box" bindtap="onSearch">
-      <text class="search-text">搜索影片</text>
+    <view class="logo">
+      <view class="logo-dot"></view>
+      <text class="logo-text">爆米花</text>
     </view>
-    <button class="btn btn-ghost src-btn" bindtap="onSources">源({{sourceCount}})</button>
+    <view class="spacer"></view>
+    <view class="nav-btn" bindtap="onSearch">
+      <text class="nav-text">搜索</text>
+    </view>
+    <view class="nav-btn" bindtap="onFavEntry">
+      <text class="nav-text">收藏 {{favCount}}</text>
+    </view>
+    <view class="nav-btn" bindtap="onSources">
+      <text class="nav-text">数据源 {{sourceCount}}</text>
+    </view>
   </view>
 
-  <scroll-view class="scroll" scroll-y="{{true}}" style="height: 100%;">
+  <scroll-view class="body" scroll-y="{{true}}" style="height: 100%;">
     <!-- 无数据源引导 -->
     <view wx:if="{{sourceCount === 0}}" class="empty-big">
       <text class="empty-title">还没有添加数据源</text>
-      <text class="hint">网易爆米花需要接入你的影视库才能展示影片</text>
-      <text class="hint">支持 Emby / Jellyfin / WebDAV / 阿里云盘 / 百度网盘</text>
+      <text class="hint">接入你的影视库后即可在这里看到全部影片</text>
+      <text class="hint">支持 Emby / Jellyfin / WebDAV / SMB / 阿里云盘 / 百度网盘</text>
       <button class="btn add-btn" bindtap="onSources">去添加数据源</button>
     </view>
 
     <block wx:else>
+      <!-- 顶部大图：优先最近观看 -->
+      <view wx:if="{{hero}}" class="hero" data-id="{{hero.id}}" bindtap="onHeroTap">
+        <image wx:if="{{hero.poster}}" class="hero-bg" src="{{hero.poster}}" mode="aspectFill"/>
+        <view wx:else class="hero-bg hero-bg-empty"></view>
+        <view class="hero-shade"></view>
+        <view class="hero-info">
+          <text class="hero-kicker">{{hero.kicker}}</text>
+          <view class="hero-title-box">
+            <text class="hero-title">{{hero.title}}</text>
+          </view>
+          <text class="hero-meta">{{hero.meta}}</text>
+          <view class="hero-btn">
+            <text class="hero-btn-text">{{hero.action}}</text>
+          </view>
+        </view>
+      </view>
+
       <!-- 继续观看 -->
-      <view wx:if="{{recent.length > 0}}">
+      <view wx:if="{{recent.length > 1}}" class="section">
         <text class="section-title">继续观看</text>
-        <scroll-view scroll-x="{{true}}" style="height: 210rpx; flex-shrink: 0;">
-          <view class="row">
-            <view wx:for="{{recent}}" wx:key="id"
-                  class="recent-card" data-id="{{item.id}}" bindtap="onRecent">
-              <image wx:if="{{item.poster}}" class="recent-cover" src="{{item.poster}}" mode="aspectFill"/>
-              <view wx:else class="recent-cover recent-cover-empty">
-                <text class="recent-empty-text">无海报</text>
+        <scroll-view class="hscroll" scroll-x="{{true}}" style="height: 232rpx;">
+          <view class="hrow">
+            <view class="ep-card" wx:for="{{recent}}" wx:key="id" data-id="{{item.id}}" bindtap="onRecent">
+              <image wx:if="{{item.poster}}" class="ep-cover" src="{{item.poster}}" mode="aspectFill"/>
+              <view wx:else class="ep-cover ep-cover-empty">
+                <text class="ep-empty-text">{{item.title}}</text>
               </view>
-              <view class="recent-info">
-                <text class="recent-title">{{item.title}}</text>
-                <text class="recent-sub">{{item.sourceName}} · {{item.progressText}}</text>
+              <view class="ep-title-box">
+                <text class="ep-title">{{item.title}}</text>
               </view>
+              <text class="ep-sub">{{item.progressText}}</text>
             </view>
           </view>
         </scroll-view>
       </view>
 
-      <!-- 加载中 -->
-      <view wx:if="{{loading}}" class="empty">
-        <text class="empty-text">正在从 {{sourceCount}} 个数据源加载影片…</text>
+      <!-- 数据源筛选 -->
+      <view class="filters">
+        <view class="chip {{activeSource === item.id ? 'chip-on' : ''}}" wx:for="{{chips}}" wx:key="id"
+              data-source="{{item.id}}" bindtap="onFilter">
+          <text class="chip-text">{{item.label}}</text>
+          <text class="chip-count">{{item.count}}</text>
+        </view>
       </view>
 
-      <!-- 按来源分组展示 -->
+      <view wx:if="{{loading}}" class="empty">
+        <text class="empty-text">正在加载影片…</text>
+      </view>
+
+      <!-- 海报墙 -->
       <block wx:for="{{groups}}" wx:key="sourceId" wx:for-item="g">
-        <view class="row group-head">
+        <view wx:if="{{activeSource === ''}}" class="section-head">
           <text class="section-title">{{g.sourceName}}</text>
-          <text class="group-count">{{g.movies.length}} 部</text>
+          <text class="section-count">{{g.total}} 部</text>
         </view>
         <view class="grid">
-          <view wx:for="{{g.movies}}" wx:key="id" wx:for-item="m"
-                class="poster-card" data-id="{{m.id}}" bindtap="onItem">
-            <image wx:if="{{m.poster}}" class="poster" src="{{m.poster}}" mode="aspectFill"/>
-            <view wx:else class="poster poster-empty">
-              <text class="poster-empty-text">{{m.title}}</text>
-            </view>
-            <view class="poster-meta">
-              <view class="row" style="justify-content: center;">
-                <text class="poster-title">{{m.title}}</text>
-                <text wx:if="{{m.rating}}" class="rating-inline">· {{m.rating}}</text>
+          <view class="poster-row" wx:for="{{g.rows}}" wx:for-item="row" wx:key="index">
+            <view class="poster-card" wx:for="{{row}}" wx:for-item="m" wx:key="id"
+                  data-id="{{m.id}}" bindtap="onItem">
+              <view class="poster-box">
+                <image wx:if="{{m.poster}}" class="poster" src="{{m.poster}}" mode="aspectFill"/>
+                <view wx:else class="poster poster-empty">
+                  <text class="poster-empty-text">{{m.title}}</text>
+                </view>
+                <view wx:if="{{m.ratingText}}" class="rating-badge">
+                  <text class="rating-text">{{m.ratingText}}</text>
+                </view>
               </view>
-              <text class="poster-sub">{{m.year}}{{m.genre ? ' · ' + m.genre : ''}}</text>
+              <view class="poster-title-box">
+                <text class="poster-title">{{m.title}}</text>
+              </view>
+              <text wx:if="{{m.metaLine}}" class="poster-sub">{{m.metaLine}}</text>
             </view>
           </view>
         </view>
+        <button wx:if="{{g.hasMore}}" class="btn more-btn" data-source="{{g.sourceId}}" bindtap="onMore">
+          加载更多（{{g.shown}} / {{g.total}}）
+        </button>
       </block>
 
-      <!-- 空结果 -->
+      <!-- 空结果 / 扫描中 -->
       <view wx:if="{{!loading && groups.length === 0}}" class="empty">
         <text class="empty-text">{{errMsg || '未找到影片，请检查数据源配置'}}</text>
       </view>

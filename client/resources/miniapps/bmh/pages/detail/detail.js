@@ -1,3 +1,12 @@
+// 容器的 Yoga 不支持 flex-wrap，推荐位按行切好再渲染。
+function chunkRows(list, cols) {
+  var rows = [];
+  for (var i = 0; i < list.length; i += cols) {
+    rows.push(list.slice(i, i + cols));
+  }
+  return rows;
+}
+
 Page({
   data: {
     gid: '',
@@ -7,6 +16,7 @@ Page({
     typeLabel: '',
     isFav: false,
     similar: [],
+    similarRows: [],
     progressText: '',
     loading: true
   },
@@ -30,13 +40,14 @@ Page({
       var typeLabel = app.sourceTypeLabel(m.sourceType);
       // 同数据源的其他影片作为推荐
       var cache = app.globalData.cache.movies[m.sourceId] || [];
-      var similar = cache.filter(function (x) { return x.id !== m.id; }).slice(0, 6);
+      var similar = cache.filter(function (x) { return x.id !== m.id; }).slice(0, 5);
       var prog = app.getProgress(gid);
       self.setData({
         movie: m,
         typeLabel: typeLabel,
         isFav: app.isFavorite(gid),
         similar: similar,
+        similarRows: chunkRows(similar, 5),
         progressText: prog ? '上次观看到 ' + app.fmtTime(prog.seconds) : '',
         loading: false
       });
@@ -74,6 +85,6 @@ Page({
 
   onSimilar(e) {
     var id = e.currentTarget.dataset.id;
-    wx.redirectTo({ url: '/pages/detail/detail?id=' + encodeURIComponent(id) });
+    wx.redirectTo({ url: '/pages/detail/detail?id=' + id });
   }
 });

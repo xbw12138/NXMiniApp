@@ -66,6 +66,7 @@
     <p>
       <code>data-*</code> 会挂到事件对象的 <code>dataset</code> 上，属性名转为 camelCase：
       <code>data-user-id</code> → <code>dataset.userId</code>。
+      其中 <code>data-overlay="true"</code> 是容器的保留属性：视频全屏时该子树会绘制在画面之上（见组件文档的 <code>video</code> 一节）。
     </p>
 <pre><code>&lt;view data-id="{{item.id}}" bindtap="onPick"&gt;选择&lt;/view&gt;
 

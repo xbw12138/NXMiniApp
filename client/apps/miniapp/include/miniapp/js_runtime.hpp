@@ -134,6 +134,11 @@ public:
                        const std::map<std::string, std::string>& dataset,
                        const JsonValue& detail);
 
+    /// 派发页面级按键事件 onKeyDown；key 为 up/down/left/right/a/b。
+    /// 返回 true 表示页面注册了该事件；consumed 表示脚本返回真值，
+    /// 容器应跳过默认的焦点移动 / 确认 / 返回逻辑。
+    bool dispatchKey(const std::string& key, bool& consumed);
+
     /// 页面当前 data。
     const JsonValue& data() const { return data_; }
 

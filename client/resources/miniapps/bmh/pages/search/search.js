@@ -1,7 +1,28 @@
+// 搜索 / 收藏结果统一成海报卡需要的字段，模板里不再做字符串拼接。
+function toCard(m) {
+  return {
+    id: m.id,
+    title: m.title,
+    poster: m.poster || '',
+    rating: m.rating ? String(m.rating) : '',
+    meta: [m.year, m.genre, m.sourceName].filter(function (x) { return !!x; }).join(' · ')
+  };
+}
+
+// 容器的 Yoga 不支持 flex-wrap，结果海报按行切好再渲染。
+function chunkRows(list, cols) {
+  var rows = [];
+  for (var i = 0; i < list.length; i += cols) {
+    rows.push(list.slice(i, i + cols));
+  }
+  return rows;
+}
+
 Page({
   data: {
     keyword: '',
     results: [],
+    resultRows: [],
     mode: 'search',
     title: '搜索',
     loading: false,
@@ -14,7 +35,17 @@ Page({
     wx.setNavigationBarTitle({ title: this.data.title });
     var app = getApp();
     this.setData({ sourceCount: app.getEnabledSources().length });
-    if (mode === 'fav') this.loadFavorites();
+    if (mode === 'fav') {
+      // App 实例不跨页共享，收藏要用缓存还原影片信息，先聚合一次（命中缓存时几乎瞬时）。
+      var self = this;
+      self.setData({ loading: true });
+      app.aggregateMovies().then(function () {
+        self.loadFavorites();
+        self.setData({ loading: false });
+      }).catch(function () {
+        self.setData({ loading: false });
+      });
+    }
   },
 
   loadFavorites() {
@@ -28,12 +59,12 @@ Page({
       var cache = app.globalData.cache.movies[parsed.source.id] || [];
       for (var i = 0; i < cache.length; i++) {
         if (cache[i].itemId === parsed.itemId) {
-          results.push(cache[i]);
+          results.push(toCard(cache[i]));
           break;
         }
       }
     });
-    this.setData({ results: results });
+    this.setData({ results: results, resultRows: chunkRows(results, 5) });
   },
 
   onInput(e) {
@@ -52,14 +83,15 @@ Page({
 
   doSearch(kw) {
     if (!kw) {
-      this.setData({ results: [] });
+      this.setData({ results: [], resultRows: [] });
       return;
     }
     var self = this;
     var app = getApp();
-    self.setData({ loading: true, results: [] });
+    self.setData({ loading: true, results: [], resultRows: [] });
     app.aggregateSearch(kw).then(function (results) {
-      self.setData({ results: results, loading: false });
+      var cards = results.map(toCard);
+      self.setData({ results: cards, resultRows: chunkRows(cards, 5), loading: false });
     }).catch(function () {
       self.setData({ loading: false });
     });
@@ -67,10 +99,6 @@ Page({
 
   onItem(e) {
     var id = e.currentTarget.dataset.id;
-    wx.navigateTo({ url: '/pages/detail/detail?id=' + encodeURIComponent(id) });
-  },
-
-  onBack() {
-    wx.navigateBack({ delta: 1 });
+    wx.navigateTo({ url: '/pages/detail/detail?id=' + id });
   }
 });

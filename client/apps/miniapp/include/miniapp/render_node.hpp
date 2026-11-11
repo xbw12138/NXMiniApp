@@ -19,7 +19,6 @@ namespace miniapp {
 struct RenderNode {
     std::string tag;
     std::string text;        // text / button 的展示文字
-    std::string imageLabel;  // image 占位文字
     std::vector<std::string> classes;
 
     std::string id;
@@ -94,6 +93,9 @@ struct RenderNode {
     std::string bindSeekComplete;
     std::string bindFullscreenChange;
     bool catchTap = false;
+
+    // data-overlay：全屏视频时该子树绘制在视频上层（普通模式下无特殊行为）。
+    bool overlay = false;
 
     // scroll-view / swiper
     float scrollOffset = 0.0f;

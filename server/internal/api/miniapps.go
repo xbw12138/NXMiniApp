@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,6 +72,14 @@ func (e *Env) ListMiniApps(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
 	category := strings.TrimSpace(c.Query("category"))
 	device := deviceID(c)
+	page := 1
+	pageSize := 0
+	if v, err := strconv.Atoi(c.Query("page")); err == nil && v > 0 {
+		page = v
+	}
+	if v, err := strconv.Atoi(c.Query("page_size")); err == nil && v > 0 {
+		pageSize = v
+	}
 
 	query := e.DB.Model(&models.MiniApp{})
 	if category != "" {
@@ -93,7 +102,30 @@ func (e *Env) ListMiniApps(c *gin.Context) {
 		}
 		items = append(items, MiniAppJSONDevice(e.Cfg, &rows[i], device))
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items, "updated_at": NowMS()})
+	resp := gin.H{"items": items, "updated_at": NowMS()}
+	// 带 page_size 时走分页返回；不带则保持旧行为（全量），兼容老客户端。
+	if pageSize > 0 {
+		total := len(items)
+		totalPages := (total + pageSize - 1) / pageSize
+		if totalPages < 1 {
+			totalPages = 1
+		}
+		start := (page - 1) * pageSize
+		if start > total {
+			start = total
+		}
+		end := start + pageSize
+		if end > total {
+			end = total
+		}
+		resp["items"] = items[start:end]
+		resp["total"] = total
+		resp["page"] = page
+		resp["page_size"] = pageSize
+		resp["total_pages"] = totalPages
+		resp["has_more"] = end < total
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 func (e *Env) MiniAppDetail(c *gin.Context) {

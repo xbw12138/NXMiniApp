@@ -117,6 +117,29 @@ onItem(event) {
   this.setData({ selected: event.currentTarget.dataset.id });
 }</code></pre>
 
+    <h2>页面按键事件</h2>
+    <p>
+      在页面对象上定义 <code>onKeyDown(event)</code> 可以接收 Switch 手柄按键。
+      <code>event.key</code> 取值为 <code>up</code> / <code>down</code> / <code>left</code> /
+      <code>right</code> / <code>a</code> / <code>b</code>。
+      回调返回 <code>true</code> 表示已消费该按键，容器不再执行默认的焦点移动、
+      确认激活或返回逻辑；返回其他值时按原行为处理。
+    </p>
+<pre><code>Page({
+  onKeyDown(event) {
+    if (event.key === 'left' || event.key === 'right') {
+      this.switchChannel(event.key === 'left' ? -1 : 1);
+      return true;   // 方向键不再移动焦点
+    }
+    return false;    // A / B 交给容器默认处理
+  }
+});</code></pre>
+    <div class="warn">
+      <strong>兼容性：</strong>旧容器不会派发该事件。可用
+      <code>wx.getSystemInfoSync().keyEvents</code> 判断，缺失时回退到按钮操作。
+      运行在全屏视频时按键同样会触发，B 键默认仍是退出全屏 / 返回。
+    </div>
+
     <h2>Promise 与异步</h2>
     <p>
       QuickJS 原生支持 <code>async</code> / <code>await</code>、<code>Promise</code> 与

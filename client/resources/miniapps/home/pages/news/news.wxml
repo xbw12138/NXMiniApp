@@ -1,10 +1,6 @@
 <view class="page">
   <view class="topbar">
     <text class="brand">{{title}}</text>
-    <view class="spacer"></view>
-    <view class="button" bindtap="onBack">
-      <text class="button-text">返回</text>
-    </view>
   </view>
 
   <scroll-view class="detail" scroll-y="{{true}}">

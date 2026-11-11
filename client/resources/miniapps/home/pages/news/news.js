@@ -29,9 +29,5 @@ Page({
         this.setData({ status: '无法加载内容' });
       }
     });
-  },
-
-  onBack() {
-    wx.navigateBack();
   }
 });

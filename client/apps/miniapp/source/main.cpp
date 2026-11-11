@@ -14,8 +14,16 @@
 #endif
 #ifdef __SWITCH__
 #include <fstream>
+#include <pthread.h>
 #include <sys/stat.h>
 #endif
+
+#include <chrono>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <thread>
 
 #ifdef __SWITCH__
 #include <malloc.h>
@@ -53,15 +61,95 @@ int probeHeapMB() {
 }
 
 // Switch 上把日志落盘到 SD 卡：真机崩溃后可经 USB 拉取日志定位问题。
+// 启动阶段完全同步写（只有几十行，保证崩溃前一定留痕），也避免在启动路径上
+// 创建线程；运行 2 秒后遇到下一条日志才懒启动写盘线程，之后日志 I/O 不再卡主线程。
+// 线程用 pthread 直接创建：std::thread 在创建失败时会抛异常导致进程 terminate。
+struct LogShared {
+    std::mutex mutex;
+    std::deque<std::string> queue;
+    std::ofstream file;
+    std::chrono::steady_clock::time_point startedAt;
+    // false：主线程同步写盘（启动阶段）；true：由写盘线程接管。
+    bool async = false;
+    bool threadStarted = false;
+};
+
+void* runLogWriter(void* raw) {
+    auto* shared = static_cast<LogShared*>(raw);
+    for (;;) {
+        std::string line;
+        {
+            std::lock_guard<std::mutex> lock(shared->mutex);
+            if (!shared->queue.empty()) {
+                line = std::move(shared->queue.front());
+                shared->queue.pop_front();
+            }
+        }
+        if (line.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+        try {
+            shared->file << line << "\n";
+            shared->file.flush();
+        } catch (...) {
+            // 存储卡写失败不影响主流程。
+        }
+    }
+    return nullptr;
+}
+
+// 调用方需持有 shared->mutex。
+bool startLogThread(LogShared* shared) {
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setstacksize(&attr, 256 * 1024);
+    pthread_t thread;
+    int rc = pthread_create(&thread, &attr, runLogWriter, shared);
+    pthread_attr_destroy(&attr);
+    if (rc != 0) {
+        // 起不了线程就一直同步写：慢一点，但日志不丢。
+        brls::Logger::warning("miniapp: log thread failed rc={}, keep sync logging", rc);
+        return false;
+    }
+    shared->async = true;
+    return true;
+}
+
 void setupFileLog() {
     // ofstream 不会自动建父目录，目录缺失时日志会静默丢失。
     mkdir("sdmc:/switch/miniapp", 0777);
-    static std::ofstream file("sdmc:/switch/miniapp/miniapp.log", std::ios::trunc);
-    if (!file) return;
-    brls::Logger::getLogEvent()->subscribe([](const std::string& line) {
-        file << line << "\n";
-        file.flush();
+    auto* shared = new (std::nothrow) LogShared();
+    if (!shared) return;
+    shared->file.open("sdmc:/switch/miniapp/miniapp.log", std::ios::trunc);
+    if (!shared->file.good()) return;
+    shared->startedAt = std::chrono::steady_clock::now();
+
+    brls::Logger::getLogEvent()->subscribe([shared](const std::string& line) {
+        std::lock_guard<std::mutex> lock(shared->mutex);
+        if (!shared->async) {
+            // 启动 2 秒内：同步写，进程即使立刻崩溃也能拿到日志。
+            if (!shared->threadStarted &&
+                std::chrono::steady_clock::now() - shared->startedAt <
+                    std::chrono::seconds(2)) {
+                shared->file << line << "\n";
+                shared->file.flush();
+                return;
+            }
+            // 启动完成后再懒启动写盘线程（不在启动路径上创建线程）。
+            shared->threadStarted = true;
+            if (!startLogThread(shared)) {
+                shared->file << line << "\n";
+                shared->file.flush();
+                return;
+            }
+        }
+        // 日志线程被存储卡拖住时丢弃旧日志，避免无限占用内存。
+        if (shared->queue.size() > 4096) shared->queue.pop_front();
+        shared->queue.push_back(line);
     });
+
     brls::Logger::info("miniapp: file log ready");
 }
 #else
