@@ -8,6 +8,7 @@
   border-radius: 20rpx;
   overflow: hidden;
   background-color: #12151a;
+  border: 1rpx solid #22262d;
   margin-bottom: 10rpx;
 }
 
@@ -106,11 +107,25 @@
   margin-top: 30rpx;
 }
 
+.block-head {
+  flex-direction: row;
+  align-items: center;
+  margin: 0 4rpx 14rpx;
+}
+
+.block-bar {
+  width: 6rpx;
+  height: 26rpx;
+  border-radius: 3rpx;
+  background-color: #ff3b30;
+  margin-right: 12rpx;
+}
+
 .block-title {
   font-size: 30rpx;
   font-weight: bold;
   color: #ffffff;
-  margin: 0 4rpx 14rpx;
+  margin: 0;
 }
 
 .summary {
@@ -182,4 +197,37 @@
   font-size: 19rpx;
   color: #6f7883;
   margin-top: 2rpx;
+}
+
+/* 加载态：保留可聚焦的返回入口 */
+.loading-card {
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 48rpx 44rpx;
+  border-radius: 20rpx;
+  background-color: #14171c;
+  border: 1rpx solid #22262d;
+  margin-top: 40rpx;
+}
+
+.loading-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #eef1f5;
+}
+
+.loading-back {
+  height: 60rpx;
+  padding: 0 34rpx;
+  margin-top: 34rpx;
+  border-radius: 30rpx;
+  background-color: #ff3b30;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-back-text {
+  font-size: 23rpx;
+  font-weight: bold;
+  color: #ffffff;
 }

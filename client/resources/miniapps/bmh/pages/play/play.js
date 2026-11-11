@@ -89,16 +89,20 @@ Page({
     var cur = Math.floor(e.detail.currentTime || 0);
     var dur = Math.floor(e.detail.duration || 0);
     var app = getApp();
-    this.setData({
-      currentTime: cur,
-      duration: dur,
-      timeText: app.fmtTime(cur) + ' / ' + app.fmtTime(dur)
-    });
+    // 进度按秒落盘，但界面文字每秒刷新一次就够：timeupdate 每秒会触发多次，
+    // 每次都 setData 会重建整棵树，播放时摇杆/按键会明显发涩。
     if (cur > 0 && cur % 5 === 0 && cur !== this._lastSaved) {
       this._lastSaved = cur;
       var gid = this.data.sourceId + ':' + this.data.itemId;
       app.saveProgress(gid, cur);
     }
+    if (cur === this._shownTime) return;
+    this._shownTime = cur;
+    this.setData({
+      currentTime: cur,
+      duration: dur,
+      timeText: app.fmtTime(cur) + ' / ' + app.fmtTime(dur)
+    });
   },
 
   onError(e) {

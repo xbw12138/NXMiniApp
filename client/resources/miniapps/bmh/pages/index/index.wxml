@@ -3,6 +3,7 @@
     <view class="logo">
       <view class="logo-dot"></view>
       <text class="logo-text">爆米花</text>
+      <text wx:if="{{sourceCount > 0}}" class="logo-sub">{{sourceCount}} 个数据源</text>
     </view>
     <view class="spacer"></view>
     <view class="nav-btn" bindtap="onSearch">
@@ -11,7 +12,7 @@
     <view class="nav-btn" bindtap="onFavEntry">
       <text class="nav-text">收藏 {{favCount}}</text>
     </view>
-    <view class="nav-btn" bindtap="onSources">
+    <view class="nav-btn nav-btn-accent" bindtap="onSources">
       <text class="nav-text">数据源 {{sourceCount}}</text>
     </view>
   </view>
@@ -32,7 +33,10 @@
         <view wx:else class="hero-bg hero-bg-empty"></view>
         <view class="hero-shade"></view>
         <view class="hero-info">
-          <text class="hero-kicker">{{hero.kicker}}</text>
+          <view class="hero-kicker-row">
+            <view class="hero-kicker-dot"></view>
+            <text class="hero-kicker">{{hero.kicker}}</text>
+          </view>
           <view class="hero-title-box">
             <text class="hero-title">{{hero.title}}</text>
           </view>
@@ -45,8 +49,12 @@
 
       <!-- 继续观看 -->
       <view wx:if="{{recent.length > 1}}" class="section">
-        <text class="section-title">继续观看</text>
-        <scroll-view class="hscroll" scroll-x="{{true}}" style="height: 232rpx;">
+        <view class="section-head">
+          <view class="section-bar"></view>
+          <text class="section-title">继续观看</text>
+          <text class="section-count">{{recent.length}} 部</text>
+        </view>
+        <scroll-view class="hscroll" scroll-x="{{true}}" style="height: 248rpx;">
           <view class="hrow">
             <view class="ep-card" wx:for="{{recent}}" wx:key="id" data-id="{{item.id}}" bindtap="onRecent">
               <image wx:if="{{item.poster}}" class="ep-cover" src="{{item.poster}}" mode="aspectFill"/>
@@ -62,14 +70,16 @@
         </scroll-view>
       </view>
 
-      <!-- 数据源筛选 -->
-      <view class="filters">
-        <view class="chip {{activeSource === item.id ? 'chip-on' : ''}}" wx:for="{{chips}}" wx:key="id"
-              data-source="{{item.id}}" bindtap="onFilter">
-          <text class="chip-text">{{item.label}}</text>
-          <text class="chip-count">{{item.count}}</text>
+      <!-- 数据源筛选：源多时横向滚动，不会挤出屏幕 -->
+      <scroll-view class="filter-scroll" scroll-x="{{true}}" style="height: 76rpx;">
+        <view class="filters">
+          <view class="chip {{activeSource === item.id ? 'chip-on' : ''}}" wx:for="{{chips}}" wx:key="id"
+                data-source="{{item.id}}" bindtap="onFilter">
+            <text class="chip-text">{{item.label}}</text>
+            <text class="chip-count">{{item.count}}</text>
+          </view>
         </view>
-      </view>
+      </scroll-view>
 
       <view wx:if="{{loading}}" class="empty">
         <text class="empty-text">正在加载影片…</text>
@@ -78,6 +88,7 @@
       <!-- 海报墙 -->
       <block wx:for="{{groups}}" wx:key="sourceId" wx:for-item="g">
         <view wx:if="{{activeSource === ''}}" class="section-head">
+          <view class="section-bar"></view>
           <text class="section-title">{{g.sourceName}}</text>
           <text class="section-count">{{g.total}} 部</text>
         </view>

@@ -31,6 +31,8 @@ Page({
 
   onLoad(query) {
     var mode = query.mode === 'fav' ? 'fav' : 'search';
+    // 输入框内容先记在实例上，逐字 setData 会重建整棵树，输入时摇杆会发飘。
+    this._keyword = '';
     this.setData({ mode: mode, title: mode === 'fav' ? '我的收藏' : '搜索影片' });
     wx.setNavigationBarTitle({ title: this.data.title });
     var app = getApp();
@@ -67,18 +69,20 @@ Page({
     this.setData({ results: results, resultRows: chunkRows(results, 5) });
   },
 
+  // 输入过程中只更新实例变量，不 setData：避免每敲一个字就重建整页。
   onInput(e) {
-    this.setData({ keyword: e.detail.value });
+    this._keyword = e.detail.value || '';
   },
 
   onConfirm(e) {
-    var kw = (e.detail.value || this.data.keyword || '').trim();
+    var kw = (e.detail.value || this._keyword || '').trim();
+    this._keyword = kw;
     this.setData({ keyword: kw });
     this.doSearch(kw);
   },
 
   onSearch() {
-    this.doSearch(this.data.keyword);
+    this.doSearch((this._keyword || this.data.keyword || '').trim());
   },
 
   doSearch(kw) {

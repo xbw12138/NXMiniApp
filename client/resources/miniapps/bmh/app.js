@@ -185,8 +185,37 @@ App({
     });
   },
 
+  // 把一段同步工作挪到下一帧：QuickJS 与输入处理共用主线程，
+  // 连续读盘/建对象之间必须让出一次，否则加载期间摇杆整段无响应。
+  defer(fn) {
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        var value;
+        try {
+          value = fn();
+        } catch (e) {
+          resolve(undefined);
+          return;
+        }
+        resolve(value);
+      }, 0);
+    });
+  },
+
   // 影片列表落盘缓存：首次扫描后保存，下次进入先用缓存秒开，过期再后台刷新。
   moviesCacheKey(id) { return 'bmh_movies_' + id; },
+
+  moviesCountKey(id) { return 'bmh_count_' + id; },
+
+  // 数据源页只需要数量，读一个数字比解析 300 条 JSON 便宜得多。
+  getMoviesCount(id) {
+    try {
+      var n = wx.getStorageSync(this.moviesCountKey(id));
+      if (typeof n === 'number') return n;
+    } catch (e) {}
+    var cache = this.getMoviesCache(id);
+    return cache ? cache.list.length : 0;
+  },
 
   getMoviesCache(id) {
     try {
@@ -217,12 +246,18 @@ App({
 
   saveMoviesCache(id, list) {
     if (!list || !list.length) return;
-    var count = Math.min(list.length, this.MOVIE_CACHE_LIMIT);
-    var kept = [];
-    for (var i = 0; i < count; i++) kept.push(this.slimMovie(list[i]));
-    try {
-      wx.setStorageSync(this.moviesCacheKey(id), { time: Date.now(), list: kept });
-    } catch (e) {}
+    var self = this;
+    // 300 条 JSON 的序列化 + 落盘在主线程要几十毫秒，推迟到首屏渲染之后再写，
+    // 否则加载刚结束时摇杆会顿一下。
+    setTimeout(function () {
+      var count = Math.min(list.length, self.MOVIE_CACHE_LIMIT);
+      var kept = [];
+      for (var i = 0; i < count; i++) kept.push(self.slimMovie(list[i]));
+      try {
+        wx.setStorageSync(self.moviesCacheKey(id), { time: Date.now(), list: kept });
+        wx.setStorageSync(self.moviesCountKey(id), kept.length);
+      } catch (e) {}
+    }, 200);
   },
 
   // ---------- 聚合接口 ----------
@@ -232,33 +267,11 @@ App({
     var sources = self.getEnabledSources();
     if (sources.length === 0) return Promise.resolve([]);
 
+    // 每个数据源错开一帧再读缓存：同步读 300 条 JSON 会阻塞输入，
+    // 串行执行等于把多份阻塞叠在一起，分帧后摇杆始终有响应。
     var tasks = sources.map(function (s) {
-      var started = Date.now();
-      var cached = self.getMoviesCache(s.id);
-      if (cached) {
-        self.globalData.cache.movies[s.id] = cached.list;
-        if (!cached.stale) {
-          console.log('source ' + s.id + ' ' + s.type + ' -> ' + cached.list.length +
-                      ' movies from cache');
-          return Promise.resolve(cached.list);
-        }
-        // 过期缓存：先返回旧列表让页面立刻可用，后台静默刷新并写回。
-        self.withTimeout(self.listMovies(s), 20000, []).then(function (list) {
-          if (list && list.length) {
-            self.saveMoviesCache(s.id, list);
-            self.globalData.cache.movies[s.id] = list;
-          }
-        }).catch(function () {});
-        return Promise.resolve(cached.list);
-      }
-      return self.withTimeout(self.listMovies(s), 10000, []).then(function (list) {
-        console.log('source ' + s.id + ' ' + s.type + ' -> ' + (list || []).length +
-                    ' movies in ' + (Date.now() - started) + 'ms');
-        self.globalData.cache.movies[s.id] = list;
-        if (list && list.length) self.saveMoviesCache(s.id, list);
-        return list;
-      }).catch(function () {
-        return []; // 单个源失败不影响其他
+      return self.defer(function () {
+        return self.loadSourceMovies(s);
       });
     });
 
@@ -266,6 +279,37 @@ App({
       var all = [];
       results.forEach(function (list) { all = all.concat(list || []); });
       return all;
+    });
+  },
+
+  // 单个数据源：优先用落盘缓存，过期则先返回旧列表、后台静默刷新。
+  loadSourceMovies(s) {
+    var self = this;
+    var started = Date.now();
+    var cached = self.getMoviesCache(s.id);
+    if (cached) {
+      self.globalData.cache.movies[s.id] = cached.list;
+      if (!cached.stale) {
+        console.log('source ' + s.id + ' ' + s.type + ' -> ' + cached.list.length +
+                    ' movies from cache');
+        return cached.list;
+      }
+      self.withTimeout(self.listMovies(s), 20000, []).then(function (list) {
+        if (list && list.length) {
+          self.saveMoviesCache(s.id, list);
+          self.globalData.cache.movies[s.id] = list;
+        }
+      }).catch(function () {});
+      return cached.list;
+    }
+    return self.withTimeout(self.listMovies(s), 10000, []).then(function (list) {
+      console.log('source ' + s.id + ' ' + s.type + ' -> ' + (list || []).length +
+                  ' movies in ' + (Date.now() - started) + 'ms');
+      self.globalData.cache.movies[s.id] = list;
+      if (list && list.length) self.saveMoviesCache(s.id, list);
+      return list;
+    }).catch(function () {
+      return []; // 单个源失败不影响其他
     });
   },
 

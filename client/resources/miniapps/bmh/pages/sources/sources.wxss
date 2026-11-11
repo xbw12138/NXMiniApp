@@ -7,6 +7,7 @@
 
 .src-card {
   background-color: #14171c;
+  border: 1rpx solid #22262d;
   border-radius: 16rpx;
   padding: 18rpx 20rpx;
   margin-bottom: 14rpx;
@@ -95,10 +96,13 @@
 }
 
 .link {
-  padding: 6rpx 14rpx;
+  height: 44rpx;
+  padding: 0 16rpx;
   margin-left: 6rpx;
   border-radius: 10rpx;
   background-color: #1c2027;
+  align-items: center;
+  justify-content: center;
 }
 
 .link-text {

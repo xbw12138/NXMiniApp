@@ -26,7 +26,7 @@ Page({
     } else {
       addr = cfg.url || '';
     }
-    var cache = app.getMoviesCache(s.id);
+    var count = app.getMoviesCount(s.id);
     var test = this.tests && this.tests[s.id];
     return {
       id: s.id,
@@ -35,7 +35,7 @@ Page({
       name: s.name || app.sourceTypeLabel(s.type),
       addr: addr || '未填写地址',
       enabled: s.enabled !== false,
-      countText: cache ? (cache.list.length + ' 部影片') : '尚未扫描',
+      countText: count > 0 ? (count + ' 部影片') : '尚未扫描',
       testText: test ? test.text : '',
       testOk: test ? test.ok : false
     };
@@ -96,6 +96,7 @@ Page({
         getApp().removeSource(id);
         delete self.tests[id];
         try { wx.removeStorageSync(getApp().moviesCacheKey(id)); } catch (err) {}
+        try { wx.removeStorageSync(getApp().moviesCountKey(id)); } catch (err) {}
         wx.showToast({ title: '已删除' });
         self.refresh();
       }

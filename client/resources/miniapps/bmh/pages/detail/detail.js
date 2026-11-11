@@ -86,5 +86,9 @@ Page({
   onSimilar(e) {
     var id = e.currentTarget.dataset.id;
     wx.redirectTo({ url: '/pages/detail/detail?id=' + id });
+  },
+
+  onBack() {
+    wx.navigateBack({ delta: 1 });
   }
 });

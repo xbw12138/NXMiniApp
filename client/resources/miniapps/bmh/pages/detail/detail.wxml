@@ -4,7 +4,7 @@
     <view class="hero">
       <image wx:if="{{movie.poster}}" class="hero-bg" src="{{movie.poster}}" mode="aspectFill"/>
       <view wx:else class="hero-bg hero-bg-empty"></view>
-      <view class="hero-shade"></view>
+      <view wx:if="{{movie.poster}}" class="hero-shade"></view>
       <view class="hero-info">
         <text class="hero-type">{{typeLabel}}</text>
         <view class="hero-title-box">
@@ -27,20 +27,29 @@
 
     <!-- 简介 -->
     <view class="block">
-      <text class="block-title">简介</text>
+      <view class="block-head">
+        <view class="block-bar"></view>
+        <text class="block-title">简介</text>
+      </view>
       <text class="summary">{{movie.summary || '暂无简介'}}</text>
     </view>
 
     <!-- 演职员 -->
     <view wx:if="{{movie.director || movie.actors}}" class="block">
-      <text class="block-title">演职员</text>
+      <view class="block-head">
+        <view class="block-bar"></view>
+        <text class="block-title">演职员</text>
+      </view>
       <text wx:if="{{movie.director}}" class="line">导演：{{movie.director}}</text>
       <text wx:if="{{movie.actors}}" class="line">主演：{{movie.actors}}</text>
     </view>
 
     <!-- 同类推荐 -->
     <view wx:if="{{similar.length > 0}}" class="block">
-      <text class="block-title">同类推荐</text>
+      <view class="block-head">
+        <view class="block-bar"></view>
+        <text class="block-title">同类推荐</text>
+      </view>
       <view class="grid">
         <view class="poster-row" wx:for="{{similarRows}}" wx:for-item="row" wx:key="index">
           <view wx:for="{{row}}" wx:for-item="item" wx:key="id"
@@ -60,4 +69,15 @@
       </view>
     </view>
   </scroll-view>
+</view>
+
+<view wx:else class="page">
+  <!-- 加载中页面也要有可聚焦节点，否则整页没有焦点项，摇杆完全没反应 -->
+  <view class="loading-card">
+    <text class="loading-title">正在加载影片信息…</text>
+    <text class="hint">网络慢时可能需要几秒</text>
+    <view class="loading-back" bindtap="onBack">
+      <text class="loading-back-text">返回上一页</text>
+    </view>
+  </view>
 </view>
