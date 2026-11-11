@@ -4,6 +4,6 @@
   "description": "对齐网易爆米花 TV 版的影视库小程序。支持接入 Emby / Jellyfin / WebDAV / SMB / 阿里云盘 / 百度网盘等数据源，自动聚合展示所有来源影片。阿里云盘、百度网盘支持扫码登录，无需手动填写 token。首页为大图推荐 + 继续观看 + 数据源筛选 + 五列海报墙，首屏分批渲染保证响应速度。Emby/Jellyfin 自带刮削（海报、评分、简介），SMB 走容器内置 libsmb2 直接播放局域网共享。支持影片详情、在线播放、播放进度记忆、跨源搜索与收藏。视频由容器 MPV 播放。",
   "category": "娱乐",
   "developer": "NXMiniApp Demo",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "published": true
 }

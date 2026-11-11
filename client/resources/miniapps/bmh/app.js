@@ -470,6 +470,7 @@ App({
         method: opts.method || 'GET',
         data: opts.data,
         header: opts.header || {},
+        timeout: opts.timeout || 0,
         success: function (res) { resolve(res); },
         fail: function (err) { reject(err); }
       });
@@ -1305,7 +1306,8 @@ App({
     var self = this;
     return self.http({
       url: 'https://passport.aliyun.com/newlogin/qrcode/generate.do?appName=aliyun_drive&fromSite=0',
-      header: self.aliyunQrHeaders()
+      header: self.aliyunQrHeaders(),
+      timeout: 12000
     }).then(function (res) {
       var body = self.jsonOf(res) || {};
       var d = (body.content && body.content.data) || {};
@@ -1325,7 +1327,8 @@ App({
       url: 'https://passport.aliyun.com/newlogin/qrcode/query.do?appName=aliyun_drive&fromSite=0',
       method: 'POST',
       header: header,
-      data: payload
+      data: payload,
+      timeout: 10000
     }).then(function (res) {
       var body = self.jsonOf(res) || {};
       var data = (body.content && body.content.data) || {};
@@ -1373,7 +1376,8 @@ App({
     var gid = String(Math.floor(Math.random() * 90000000) + 10000000);
     return self.http({
       url: 'https://passport.baidu.com/v2/api/getqrcode?lp=pc&qrloginfrom=pc&gid=' + gid,
-      header: self.baiduQrHeaders()
+      header: self.baiduQrHeaders(),
+      timeout: 12000
     }).then(function (res) {
       var d = self.jsonOf(res) || {};
       if (!d.sign || !d.imgurl) throw new Error('百度网盘二维码获取失败');
@@ -1390,7 +1394,7 @@ App({
     var self = this;
     var url = 'https://passport.baidu.com/channel/unicast?channel_id=' +
               encodeURIComponent(session.sign) + '&tpl=netdisk&callback=&_=' + Date.now();
-    return self.http({ url: url, header: self.baiduQrHeaders() }).then(function (res) {
+    return self.http({ url: url, header: self.baiduQrHeaders(), timeout: 10000 }).then(function (res) {
       var body = self.jsonOf(res) || {};
       var errno = body.errno;
       if (errno === 1) return { status: 'SCANED' };

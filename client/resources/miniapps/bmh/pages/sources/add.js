@@ -50,7 +50,6 @@ Page({
     qrState: 'idle',      // idle | loading | ready | scaned | confirmed | expired | error
     qrStatus: '',
     qrRows: [],
-    qrMod: 6,
     qrSize: 0,
     refreshToken: '',
     // baidu 旧版 access_token（只用于兼容已有数据源）
@@ -265,6 +264,12 @@ Page({
   onQrLogin() {
     var type = this.data.type;
     if (type !== 'aliyun' && type !== 'baidu') return;
+    // 同一个按钮兼做「收起」：面板打开时再点一次就关掉，
+    // 按钮节点始终存在，容器重建后焦点不会跳到别处。
+    if (this.data.qrOpen) {
+      this.onCloseQr();
+      return;
+    }
     this.setData({ qrOpen: true, loginName: '', errText: '' });
     if (type === 'aliyun') this.startAliyunQr();
     else this.startBaiduQr();
@@ -292,10 +297,12 @@ Page({
     this._qrBusy = false;
   },
 
-  // 二维码矩阵按行压成黑块区间，WXML 只渲染黑块，减少节点数。
+  // 二维码矩阵按行压成黑块区间，WXML 只渲染黑块。
+  // 容器的每个 {{}} 求值都会把整页 data 深拷贝一份再转成 JS 对象，
+  // 所以这里把每块的样式提前拼成一个字符串，渲染时一个节点只求值一次。
   qrRowsOf(text) {
     var m = getApp().qrMatrix(text);
-    var mod = Math.max(2, Math.floor(280 / m.size));
+    var MOD = 6;
     var rows = [];
     for (var r = 0; r < m.size; r++) {
       var runs = [];
@@ -305,7 +312,9 @@ Page({
         if (m.modules[r][c]) {
           var start = c;
           while (c < m.size && m.modules[r][c]) c++;
-          runs.push({ g: (start - pos) * mod, w: (c - start) * mod });
+          runs.push({
+            s: 'margin-left:' + (start - pos) * MOD + 'rpx;width:' + (c - start) * MOD + 'rpx'
+          });
           pos = c;
         } else {
           c++;
@@ -313,7 +322,7 @@ Page({
       }
       rows.push(runs);
     }
-    return { rows: rows, mod: mod, size: mod * m.size };
+    return { rows: rows, size: MOD * m.size };
   },
 
   startAliyunQr() {
@@ -334,7 +343,6 @@ Page({
         qrState: 'ready',
         qrStatus: '打开阿里云盘 App 扫码',
         qrRows: qr.rows,
-        qrMod: qr.mod,
         qrSize: qr.size
       });
       self.pollAliyunQr();
@@ -365,7 +373,9 @@ Page({
           });
           return;
         }
-        self.setData({ qrStatus: r.status === 'SCANED' ? '已扫码，请在手机上确认' : '打开阿里云盘 App 扫码' });
+        // 状态文案没变就不 setData：每次 setData 都会整页重建二维码节点。
+        var text = r.status === 'SCANED' ? '已扫码，请在手机上确认' : '打开阿里云盘 App 扫码';
+        if (text !== self.data.qrStatus) self.setData({ qrStatus: text });
         self.pollAliyunQr();
       }).catch(function () {
         // 网络抖动，下一拍继续
@@ -392,7 +402,6 @@ Page({
         qrState: 'ready',
         qrStatus: '打开百度网盘 App 扫码',
         qrRows: qr.rows,
-        qrMod: qr.mod,
         qrSize: qr.size
       });
       self.pollBaiduQr();
@@ -422,7 +431,8 @@ Page({
           });
           return;
         }
-        self.setData({ qrStatus: r.status === 'SCANED' ? '已扫码，请在手机上确认' : '打开百度网盘 App 扫码' });
+        var text = r.status === 'SCANED' ? '已扫码，请在手机上确认' : '打开百度网盘 App 扫码';
+        if (text !== self.data.qrStatus) self.setData({ qrStatus: text });
         self.pollBaiduQr();
       }).catch(function () {
         self.pollBaiduQr();

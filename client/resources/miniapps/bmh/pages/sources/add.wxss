@@ -337,11 +337,14 @@
   background-color: #ffffff;
 }
 
+/* 二维码按 6rpx 一个模块画，行列高度固定，避免每个节点都求值一次高度 */
 .qr-row {
   flex-direction: row;
+  height: 6rpx;
 }
 
 .qr-black {
+  height: 6rpx;
   background-color: #111111;
 }
 
