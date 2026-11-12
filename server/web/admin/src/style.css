@@ -203,6 +203,32 @@ input:focus, textarea:focus {
   border-bottom-color: var(--accent);
 }
 
+.tab-badge {
+  display: inline-block;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 9px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  vertical-align: 1px;
+}
+
+.tag-pending {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #fff4e5;
+  color: #b25e09;
+  font-size: 11px;
+  vertical-align: 1px;
+}
+
 /* login */
 .login-page {
   min-height: 100vh;

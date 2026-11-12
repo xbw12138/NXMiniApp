@@ -31,6 +31,7 @@ func Register(r *gin.Engine, e *api.Env) {
 	auth := g.Group("", authMiddleware(e))
 	auth.GET("/session", sessionStatus)
 	auth.GET("/stats", stats(e))
+	auth.GET("/notifications", notifications(e))
 	auth.GET("/apps", listApps(e))
 	auth.POST("/apps", createApp(e))
 	auth.GET("/apps/:id", getApp(e))
@@ -138,6 +139,18 @@ func stats(e *api.Env) gin.HandlerFunc {
 			"storage_bytes": storage,
 			"recent":        items,
 		})
+	}
+}
+
+// notifications 提供给后台顶栏轮询的轻量待办计数。
+func notifications(e *api.Env) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var pending int64
+		if err := e.DB.Model(&models.MiniApp{}).Where("published = ?", false).Count(&pending).Error; err != nil {
+			api.Abort(c, http.StatusInternalServerError, "读取待审数量失败")
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"pending_miniapps": pending})
 	}
 }
 

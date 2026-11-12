@@ -30,7 +30,7 @@
               <img v-if="m.icon_url" :src="m.icon_url" class="icon" alt="" />
               <div v-else class="icon placeholder">{{ (m.title || '?').slice(0, 1) }}</div>
             </td>
-            <td>{{ m.title }}</td>
+            <td>{{ m.title }}<span v-if="!m.published" class="tag-pending">待审</span></td>
             <td class="mono">{{ m.id }}</td>
             <td class="mono">
               {{ m.version }}
