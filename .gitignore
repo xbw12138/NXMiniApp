@@ -20,3 +20,6 @@ data/
 # Switch NSP forwarder keys & artifacts
 scripts/switch-forwarder/prod.keys
 client/resources/nsp_forwarder.nsp
+
+# Trae HTML 分享包产物
+.trae-html-share-packages/
