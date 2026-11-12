@@ -19,7 +19,8 @@ services:
       context: .
       dockerfile: server/Dockerfile
     ports:
-      - "80:8080"
+      # 只监听本机，由宿主机 nginx 终止 TLS 后反代
+      - "127.0.0.1:8080:8080"
     environment:
       DB_DSN: nxkit:nxkit@tcp(mysql:3306)/nxkit_store?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci
       # 线上 token 由部署机的 .env 提供（.env 已 gitignore）；缺失时直接报错，避免回落到弱默认值。
