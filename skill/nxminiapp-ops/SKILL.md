@@ -302,6 +302,7 @@ ssh root@ecfun.cc \
 - **凭据不落盘、不进命令、不进对话**：用 SSH 密钥登录（`~/.ssh/config` 里配 `Host ecfun` 即可 `ssh ecfun ...`）。若必须用密码，用 `sshpass -e`（从 `SSHPASS` 环境变量读取）而不是 `-p`，避免密码留在 shell 历史与进程列表。
 - 后台前端（Vue/Vite）**只在 Docker 构建阶段编译**，本地没有 npm，不要尝试本地构建前端。
 - 部署后用 `curl -s https://ecfun.cc/api/v1/health` 确认，并检查容器已 Started。
+- 线上 80/443 由宿主机 nginx 终止 TLS 后反代到 `127.0.0.1:8080`（compose 里的端口映射也为 `127.0.0.1:8080:8080`）；站点配置模板见 `deploy/nginx/nxminiapp.conf`，证书由 acme.sh（Let's Encrypt，HTTP-01 webroot `/var/www/acme`）自动续期。
 - 数据库迁移靠 GORM `AutoMigrate`，加字段/加表只需改 `server/internal/models` 与 `database.go`，重启即生效。
 
 ## 已知坑
