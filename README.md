@@ -125,3 +125,39 @@ cmake --build build_switch --target miniapp.nro -j 8
 <div align="center">
   <img src="docs/assets/qq-group.jpg" alt="QQ群二维码：1001582565" width="280">
 </div>
+
+## 开源许可
+
+本项目以 [GNU General Public License v3.0](LICENSE) 发布。
+
+- 可自由使用、修改、分发，包括商业用途
+- 分发修改版或编译产物时，必须同样以 GPL-3.0 开放对应源码并保留原作者署名
+- 本项目不提供任何形式的担保
+
+## 免责声明
+
+- 本项目是个人开源的**非官方**项目，与 Nintendo 及其关联公司**没有任何关系**，未获得其授权、认可或赞助。
+- Nintendo Switch、Nintendo 及相关名称、商标、标识归 Nintendo 所有，本项目仅在描述兼容性时提及。
+- 本项目**不包含也不提供**任何游戏 ROM、系统固件、密钥或其它受版权保护的官方内容，亦不协助获取上述内容。
+- 请仅在你**合法拥有的主机**上使用。使用前请自行评估风险，包括但不限于主机封禁、数据丢失、硬件损坏；**由此产生的一切后果由使用者自行承担**。
+- 商店中的小程序由第三方开发者上传，其内容与合法性由上传者负责，本项目不对其安全性、合法性或可用性作任何担保。
+- 本项目按「现状」提供，不附带任何明示或默示的担保。
+
+## 第三方组件
+
+`client/library` 下的依赖各自遵循其原始许可，不因本项目而改变：
+
+| 组件 | 许可 |
+| --- | --- |
+| borealis | Apache-2.0 |
+| OpenCC | Apache-2.0 |
+| quickjs | MIT |
+| yoga | MIT |
+| lunasvg | MIT |
+| cpr | MIT |
+| pystring | BSD |
+| QR-Code-generator | MIT |
+| libsmb2 | LGPL-2.1 |
+| mongoose | GPL-2.0 或商业授权（二选一） |
+
+注意：客户端 `miniapp` / `updater` 静态链接了 mongoose，其 GPL-2.0 义务适用于据此构建的二进制产物；如需闭源分发，请自行向 Cesanta 购买 mongoose 商业授权。

@@ -307,6 +307,11 @@ tbody tr:nth-child(even) td { background: #fcfcfd; }
 }
 .site-foot a { color: var(--text-3); }
 .site-foot a:hover { color: var(--accent); }
+.site-foot .disc {
+  margin: 10px auto 0;
+  max-width: 720px;
+  line-height: 1.7;
+}
 
 @media (max-width: 900px) {
   .layout { display: block; padding: 0 18px 60px; }
