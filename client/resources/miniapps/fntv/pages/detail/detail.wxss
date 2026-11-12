@@ -1,0 +1,155 @@
+.hero {
+  height: 420rpx;
+  border-radius: 18rpx;
+  overflow: hidden;
+  margin-bottom: 10rpx;
+  background-color: #12151a;
+}
+
+.hero-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-bg-empty {
+  background-color: #171b21;
+}
+
+.hero-shade {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(6, 8, 11, 0.7);
+}
+
+.hero-info {
+  flex-direction: column;
+  padding: 34rpx 40rpx;
+}
+
+.hero-type {
+  font-size: 19rpx;
+  font-weight: bold;
+  color: #8db6ff;
+  letter-spacing: 2rpx;
+}
+
+.hero-title-box {
+  height: 66rpx;
+  overflow: hidden;
+  margin-top: 6rpx;
+}
+
+.hero-title {
+  font-size: 50rpx;
+  font-weight: bold;
+  line-height: 64rpx;
+  color: #ffffff;
+}
+
+.meta-row {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 10rpx;
+}
+
+.meta-rating {
+  font-size: 22rpx;
+  font-weight: bold;
+  color: #ffb800;
+  margin-right: 12rpx;
+}
+
+.meta-chip {
+  font-size: 21rpx;
+  color: #c3cad4;
+  margin-right: 16rpx;
+}
+
+.hero-genre {
+  font-size: 21rpx;
+  color: #9aa4b1;
+  margin-top: 8rpx;
+}
+
+.hero-progress {
+  font-size: 21rpx;
+  color: #8db6ff;
+  margin-top: 8rpx;
+}
+
+.action-row {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 22rpx;
+}
+
+.btn-play {
+  height: 66rpx;
+  padding: 0 36rpx;
+}
+
+/* 剧集列表 */
+.ep-btn {
+  width: 100%;
+  height: 78rpx;
+  margin-bottom: 10rpx;
+  padding: 0 22rpx;
+  border-radius: 12rpx;
+  background-color: #151920;
+  border: 1rpx solid #1e2229;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.ep-label {
+  font-size: 22rpx;
+  font-weight: bold;
+  color: #8db6ff;
+  width: 116rpx;
+}
+
+.ep-name {
+  font-size: 22rpx;
+  color: #e6e9ee;
+  flex: 1;
+}
+
+.ep-progress {
+  font-size: 19rpx;
+  color: #6f7883;
+}
+
+/* 信息块 */
+.block {
+  margin-top: 18rpx;
+}
+
+.block-head {
+  flex-direction: row;
+  align-items: center;
+  margin: 0 4rpx 10rpx;
+}
+
+.summary {
+  font-size: 23rpx;
+  line-height: 38rpx;
+  color: #aab3bf;
+}
+
+.line {
+  font-size: 22rpx;
+  color: #aab3bf;
+  margin-top: 6rpx;
+}
+
+.line-dim {
+  color: #6f7883;
+  font-size: 20rpx;
+}

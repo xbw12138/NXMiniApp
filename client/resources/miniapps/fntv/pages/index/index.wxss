@@ -1,0 +1,161 @@
+.row {
+  flex-direction: row;
+  align-items: center;
+}
+
+/* 顶部大图 */
+.hero {
+  height: 360rpx;
+  border-radius: 18rpx;
+  overflow: hidden;
+  margin-bottom: 20rpx;
+  background-color: #12151a;
+}
+
+.hero-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-bg-empty {
+  background-color: #171b21;
+}
+
+.hero-shade {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(6, 8, 11, 0.66);
+}
+
+.hero-info {
+  flex-direction: column;
+  padding: 30rpx 40rpx;
+}
+
+.hero-kicker-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.hero-kicker-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 5rpx;
+  background-color: #2f7bff;
+  margin-right: 10rpx;
+}
+
+.hero-kicker {
+  font-size: 21rpx;
+  font-weight: bold;
+  color: #8db6ff;
+}
+
+.hero-title-box {
+  height: 62rpx;
+  overflow: hidden;
+  margin-top: 8rpx;
+}
+
+.hero-title {
+  font-size: 50rpx;
+  font-weight: bold;
+  line-height: 60rpx;
+  color: #ffffff;
+}
+
+.hero-sub {
+  font-size: 23rpx;
+  color: #b9c2ce;
+  margin-top: 4rpx;
+}
+
+.hero-meta {
+  font-size: 22rpx;
+  color: #9aa4b1;
+  margin-top: 8rpx;
+}
+
+.hero-progress {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 12rpx;
+}
+
+.hero-progress-track {
+  width: 300rpx;
+  height: 8rpx;
+  border-radius: 4rpx;
+  background-color: rgba(255, 255, 255, 0.22);
+}
+
+.hero-progress-fill {
+  height: 8rpx;
+  border-radius: 4rpx;
+  background-color: #2f7bff;
+}
+
+.hero-progress-text {
+  font-size: 20rpx;
+  color: #c3cad4;
+  margin-left: 14rpx;
+}
+
+.hero-btn-row {
+  flex-direction: row;
+  margin-top: 18rpx;
+}
+
+.hero-btn {
+  height: 60rpx;
+  padding: 0 32rpx;
+  border-radius: 30rpx;
+  background-color: #2f7bff;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-btn-text {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+/* 媒体库卡片 */
+.lib-grid {
+  flex-direction: column;
+}
+
+.lib-row {
+  flex-direction: row;
+}
+
+.lib-card {
+  width: 460rpx;
+  height: 110rpx;
+  margin: 0 20rpx 16rpx 0;
+  padding: 0 26rpx;
+  border-radius: 14rpx;
+  background-color: #14171c;
+  border: 1rpx solid #1e2229;
+  flex-direction: row;
+  align-items: center;
+}
+
+.lib-name {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #e6e9ee;
+}
+
+.lib-sub {
+  font-size: 19rpx;
+  color: #6f7883;
+  margin-left: 14rpx;
+}

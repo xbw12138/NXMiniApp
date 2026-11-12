@@ -1,0 +1,70 @@
+<view class="page">
+  <view class="topbar">
+    <view class="brand">
+      <view class="brand-dot"></view>
+      <text class="brand-text">{{name}}</text>
+      <text class="brand-sub">{{total}} 部</text>
+      <view class="nav-btn" bindtap="onRefresh">
+        <text class="nav-text">刷新</text>
+      </view>
+    </view>
+    <view class="spacer"></view>
+  </view>
+
+  <view class="chips" style="margin-bottom: 14rpx;">
+    <view wx:for="{{sorts}}" wx:key="key" class="chip {{sortIndex === index ? 'chip-on' : ''}}"
+          data-index="{{index}}" bindtap="onSort">
+      <text class="chip-text">{{item.label}}</text>
+    </view>
+  </view>
+
+  <scroll-view class="body" scroll-y="{{true}}" style="height: 100%;">
+    <view wx:if="{{loading && items.length === 0}}" class="loading-card">
+      <text class="loading-title">正在加载影片…</text>
+      <text class="hint">影片较多时首次加载需要一点时间</text>
+    </view>
+
+    <view wx:if="{{errMsg}}" class="card">
+      <text class="card-title">加载失败</text>
+      <text class="error">{{errMsg}}</text>
+      <view class="row" style="margin-top: 20rpx;">
+        <button class="btn" bindtap="onRefresh"><text class="btn-text">重试</text></button>
+        <button class="btn btn-ghost" bindtap="goLogin"><text class="btn-text">重新登录</text></button>
+      </view>
+    </view>
+
+    <view class="grid">
+      <view class="poster-row" wx:for="{{rows}}" wx:for-item="row" wx:key="index">
+        <view class="poster-card" wx:for="{{row}}" wx:for-item="m" wx:key="id"
+              data-id="{{m.id}}" bindtap="onItemTap">
+          <view class="poster-box">
+            <image wx:if="{{m.poster}}" class="poster" src="{{m.poster}}" mode="aspectFill"/>
+            <view wx:else class="poster poster-empty">
+              <text class="poster-empty-text">{{m.title}}</text>
+            </view>
+            <view wx:if="{{m.rating}}" class="rating-badge">
+              <text class="rating-text">{{m.rating}}</text>
+            </view>
+            <view wx:if="{{m.progressPercent > 0}}" class="progress-track poster-progress">
+              <view class="progress-fill" style="width: {{m.progressPercent}}%;"></view>
+            </view>
+          </view>
+          <view class="poster-title-box">
+            <text class="poster-title">{{m.title}}</text>
+          </view>
+          <text class="poster-sub">{{m.metaLine}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{!loading && !errMsg && items.length === 0}}" class="empty">
+      <text class="empty-text">这个媒体库里还没有影片</text>
+    </view>
+
+    <view wx:if="{{pageCount > 1}}" class="pager">
+      <button class="btn btn-ghost" bindtap="prevPage"><text class="btn-text">上一页</text></button>
+      <text class="pager-text">第 {{page}} / {{pageCount}} 页</text>
+      <button class="btn btn-ghost" bindtap="nextPage"><text class="btn-text">下一页</text></button>
+    </view>
+  </scroll-view>
+</view>

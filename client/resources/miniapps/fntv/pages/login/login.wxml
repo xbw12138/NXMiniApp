@@ -12,6 +12,7 @@
   </view>
 
   <scroll-view class="body" scroll-y="{{true}}" style="height: 100%;">
+    <view class="center-col">
     <view wx:if="{{connected}}" class="card">
       <text class="card-title">已连接</text>
       <text class="card-sub">{{connectedServer}}</text>
@@ -81,6 +82,7 @@
       <text class="hint">2. 确认 Switch 与 NAS 在同一局域网，或已配置可访问的域名</text>
       <text class="hint">3. 默认使用飞牛影视的 Jellyfin 兼容接口，端口 8005</text>
       <text class="hint">4. 账号信息只保存在本机，不会上传到任何第三方服务器</text>
+    </view>
     </view>
   </scroll-view>
 </view>

@@ -1,0 +1,132 @@
+<view class="page" wx:if="{{movie}}">
+  <scroll-view class="body" scroll-y="{{true}}" style="height: 100%;">
+    <view class="hero">
+      <image wx:if="{{movie.backdrop}}" class="hero-bg" src="{{movie.backdrop}}" mode="aspectFill"/>
+      <view wx:else class="hero-bg hero-bg-empty"></view>
+      <view class="hero-shade"></view>
+      <view class="hero-info">
+        <text class="hero-type">{{typeLabel}}</text>
+        <view class="hero-title-box">
+          <text class="hero-title">{{movie.title}}</text>
+        </view>
+        <view class="meta-row">
+          <text wx:if="{{movie.rating}}" class="meta-rating">{{movie.rating}} 分</text>
+          <text wx:if="{{movie.year}}" class="meta-chip">{{movie.year}}</text>
+          <text wx:if="{{movie.duration}}" class="meta-chip">{{movie.duration}}</text>
+        </view>
+        <text wx:if="{{movie.genre}}" class="hero-genre">{{movie.genre}}</text>
+        <text wx:if="{{movie.progressText}}" class="hero-progress">{{movie.progressText}}</text>
+        <view class="action-row">
+          <button class="btn btn-play" bindtap="play">
+            <text class="btn-text">{{playLabel}}</text>
+          </button>
+          <button class="btn btn-ghost" bindtap="onToggleFav">
+            <text class="btn-text">{{isFav ? '已收藏' : '收藏'}}</text>
+          </button>
+        </view>
+      </view>
+    </view>
+
+    <block wx:if="{{isSeries}}">
+      <view wx:if="{{seasons.length > 1}}" class="section-head">
+        <view class="section-bar"></view>
+        <text class="section-title">选集</text>
+        <text class="section-count">{{seasons.length}} 季</text>
+      </view>
+      <scroll-view wx:if="{{seasons.length > 1}}" class="hscroll" scroll-x="{{true}}" style="height: 76rpx;">
+        <view class="chips">
+          <view class="chip {{seasonIndex === index ? 'chip-on' : ''}}" wx:for="{{seasons}}" wx:key="id"
+                data-index="{{index}}" bindtap="onSeasonTap">
+            <text class="chip-text">{{item.name}}</text>
+          </view>
+        </view>
+      </scroll-view>
+
+      <view wx:if="{{episodesLoading}}" class="empty">
+        <text class="empty-text">正在加载选集…</text>
+      </view>
+      <view wx:else>
+        <view class="section-head">
+          <view class="section-bar"></view>
+          <text class="section-title">{{activeSeasonName}}</text>
+          <text class="section-count">{{episodes.length}} 集</text>
+        </view>
+        <button wx:for="{{episodes}}" wx:key="id" class="ep-btn"
+                data-id="{{item.id}}" data-name="{{item.name}}" data-label="{{item.label}}"
+                data-position="{{item.positionSeconds}}" bindtap="onEpisodeTap">
+          <text class="ep-label">{{item.label}}</text>
+          <text class="ep-name">{{item.name}}</text>
+          <text wx:if="{{item.progressText}}" class="ep-progress">{{item.progressText}}</text>
+        </button>
+        <view wx:if="{{episodes.length === 0}}" class="empty">
+          <text class="empty-text">这一季还没有可播放的剧集</text>
+        </view>
+      </view>
+    </block>
+
+    <view class="block">
+      <view class="block-head">
+        <view class="section-bar"></view>
+        <text class="section-title">简介</text>
+      </view>
+      <text class="summary">{{movie.summary || '暂无简介'}}</text>
+    </view>
+
+    <view wx:if="{{movie.streamsText || movie.filePath}}" class="block">
+      <view class="block-head">
+        <view class="section-bar"></view>
+        <text class="section-title">播放信息</text>
+      </view>
+      <text wx:if="{{movie.streamsText}}" class="line">{{movie.streamsText}}</text>
+      <text wx:if="{{movie.filePath}}" class="line line-dim">{{movie.filePath}}</text>
+    </view>
+
+    <view wx:if="{{movie.director || movie.actors}}" class="block">
+      <view class="block-head">
+        <view class="section-bar"></view>
+        <text class="section-title">演职员</text>
+      </view>
+      <text wx:if="{{movie.director}}" class="line">导演：{{movie.director}}</text>
+      <text wx:if="{{movie.actors}}" class="line">主演：{{movie.actors}}</text>
+    </view>
+
+    <view wx:if="{{similar.length > 0}}" class="block">
+      <view class="block-head">
+        <view class="section-bar"></view>
+        <text class="section-title">相关推荐</text>
+      </view>
+      <view class="grid">
+        <view class="poster-row" wx:for="{{similarRows}}" wx:for-item="row" wx:key="index">
+          <view class="poster-card" wx:for="{{row}}" wx:for-item="m" wx:key="id"
+                data-id="{{m.id}}" bindtap="onSimilarTap">
+            <view class="poster-box">
+              <image wx:if="{{m.poster}}" class="poster" src="{{m.poster}}" mode="aspectFill"/>
+              <view wx:else class="poster poster-empty">
+                <text class="poster-empty-text">{{m.title}}</text>
+              </view>
+            </view>
+            <view class="poster-title-box">
+              <text class="poster-title">{{m.title}}</text>
+            </view>
+            <text class="poster-sub">{{m.metaLine}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view style="height: 40rpx;"></view>
+  </scroll-view>
+</view>
+
+<view wx:else class="page">
+  <view class="loading-card">
+    <text class="loading-title">{{errMsg || '正在加载影片信息…'}}</text>
+    <text wx:if="{{!errMsg}}" class="hint">网络慢时可能需要几秒</text>
+    <view class="loading-back" bindtap="onBack">
+      <text class="loading-back-text">{{errMsg ? '返回上一页' : '取消'}}</text>
+    </view>
+    <view wx:if="{{errMsg}}" class="loading-back" bindtap="load" style="margin-top: 14rpx;">
+      <text class="loading-back-text">重试</text>
+    </view>
+  </view>
+</view>

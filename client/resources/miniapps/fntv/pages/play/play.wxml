@@ -1,0 +1,37 @@
+<view class="play-page">
+  <video wx:if="{{videoSrc}}" id="player" class="player" src="{{videoSrc}}"
+         controls="{{false}}" autoplay="{{true}}"
+         object-fit="contain"
+         bindplay="onPlay" bindpause="onPause" bindended="onEnded"
+         bindtimeupdate="onTime" binderror="onError"/>
+
+  <view wx:if="{{videoSrc}}" class="hud">
+    <view class="hud-title-box">
+      <text class="hud-title">{{title}}</text>
+    </view>
+    <text class="hud-time">{{timeText}}</text>
+  </view>
+
+  <view wx:if="{{videoSrc}}" class="controls">
+    <view class="ctrl-btn" data-delta="-10" bindtap="onSeek">
+      <text class="ctrl-text">快退 10 秒</text>
+    </view>
+    <view class="ctrl-btn ctrl-main" bindtap="onToggle">
+      <text class="ctrl-text ctrl-text-main">{{playing ? '暂停' : '播放'}}</text>
+    </view>
+    <view class="ctrl-btn" data-delta="10" bindtap="onSeek">
+      <text class="ctrl-text">快进 10 秒</text>
+    </view>
+    <view class="ctrl-btn" bindtap="onBack">
+      <text class="ctrl-text">返回</text>
+    </view>
+  </view>
+
+  <view wx:else class="loading-box">
+    <text class="loading-text">{{statusText || '正在获取播放地址…'}}</text>
+    <view wx:if="{{!loading}}" class="loading-actions">
+      <button class="btn" bindtap="onRetry"><text class="btn-text">重试</text></button>
+      <button class="btn btn-ghost" bindtap="onBack"><text class="btn-text">返回</text></button>
+    </view>
+  </view>
+</view>

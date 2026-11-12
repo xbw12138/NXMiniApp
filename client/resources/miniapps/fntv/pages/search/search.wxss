@@ -1,0 +1,15 @@
+.row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.search-bar {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 14rpx;
+}
+
+.search-input {
+  flex: 1;
+  margin-right: 14rpx;
+}

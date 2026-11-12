@@ -1,0 +1,50 @@
+<view class="page">
+  <view class="topbar">
+    <view class="brand">
+      <view class="brand-dot"></view>
+      <text class="brand-text">设置</text>
+    </view>
+    <view class="spacer"></view>
+    <view class="nav-btn" bindtap="goHome">
+      <text class="nav-text">返回首页</text>
+    </view>
+  </view>
+
+  <scroll-view class="body" scroll-y="{{true}}" style="height: 100%;">
+    <view class="card">
+      <text class="card-title">服务器连接</text>
+      <view class="kv">
+        <text class="kv-label">服务器</text>
+        <text class="kv-value">{{server}}</text>
+      </view>
+      <view class="kv">
+        <text class="kv-label">账号</text>
+        <text class="kv-value">{{userName}}</text>
+      </view>
+      <view class="kv">
+        <text class="kv-label">登录方式</text>
+        <text class="kv-value">{{authModeText}}</text>
+      </view>
+      <text wx:if="{{resultText}}" class="hint">{{resultText}}</text>
+      <view class="row actions">
+        <button class="btn" bindtap="onTest"><text class="btn-text">{{testing ? '测试中…' : '测试连接'}}</text></button>
+        <button class="btn btn-ghost" bindtap="onReconnect"><text class="btn-text">重新连接</text></button>
+        <button class="btn btn-ghost" bindtap="onDisconnect"><text class="btn-text">断开连接</text></button>
+      </view>
+    </view>
+
+    <view class="card">
+      <text class="card-title">关于飞牛影视</text>
+      <text class="hint">版本 1.0.0 · Switch 电视端</text>
+      <text class="hint">通过飞牛影视自带的 Jellyfin 兼容接口（默认 8005 端口）读取媒体库、海报与剧集信息，播放由 Switch 本地解码完成。</text>
+      <text class="hint">账号与服务器地址只保存在本机存储中，不会上传到任何第三方服务器。</text>
+    </view>
+
+    <view class="card">
+      <text class="card-title">常见问题</text>
+      <text class="hint">连接失败：确认 NAS 地址与端口，Switch 与 NAS 需在同一网络，或已配置可远程访问的地址。</text>
+      <text class="hint">播放失败：部分高码率 4K 原盘可能超出设备解码能力，可先在飞牛影视中准备 H.264 版本。</text>
+      <text class="hint">看不到媒体库：请先在飞牛影视中创建媒体库并完成刮削。</text>
+    </view>
+  </scroll-view>
+</view>

@@ -1,0 +1,66 @@
+<view class="page">
+  <view class="topbar">
+    <view class="brand">
+      <view class="brand-dot"></view>
+      <text class="brand-text">搜索</text>
+      <text class="brand-sub">全库影片</text>
+    </view>
+    <view class="spacer"></view>
+    <view class="nav-btn" bindtap="onBack">
+      <text class="nav-text">返回</text>
+    </view>
+  </view>
+
+  <view class="search-bar">
+    <input class="input search-input" placeholder="输入影片 / 剧集名称" value="{{keyword}}"
+           confirm-type="search" bindinput="onInput" bindconfirm="onSearch"/>
+    <button class="btn" bindtap="onSearch">
+      <text class="btn-text">{{loading ? '搜索中…' : '搜索'}}</text>
+    </button>
+  </view>
+
+  <scroll-view class="body" scroll-y="{{true}}" style="height: 100%;">
+    <view wx:if="{{errMsg}}" class="card">
+      <text class="card-title">搜索失败</text>
+      <text class="error">{{errMsg}}</text>
+      <view class="row" style="margin-top: 20rpx;">
+        <button class="btn" bindtap="onSearch"><text class="btn-text">重试</text></button>
+      </view>
+    </view>
+
+    <view wx:if="{{loading && results.length === 0}}" class="loading-card">
+      <text class="loading-title">正在搜索…</text>
+    </view>
+
+    <view class="grid">
+      <view class="poster-row" wx:for="{{rows}}" wx:for-item="row" wx:key="index">
+        <view class="poster-card" wx:for="{{row}}" wx:for-item="m" wx:key="id"
+              data-id="{{m.id}}" bindtap="onItemTap">
+          <view class="poster-box">
+            <image wx:if="{{m.poster}}" class="poster" src="{{m.poster}}" mode="aspectFill"/>
+            <view wx:else class="poster poster-empty">
+              <text class="poster-empty-text">{{m.title}}</text>
+            </view>
+            <view wx:if="{{m.rating}}" class="rating-badge">
+              <text class="rating-text">{{m.rating}}</text>
+            </view>
+          </view>
+          <view class="poster-title-box">
+            <text class="poster-title">{{m.title}}</text>
+          </view>
+          <text class="poster-sub">{{m.metaLine}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{searched && !loading && results.length === 0 && !errMsg}}" class="empty">
+      <text class="empty-text">没有找到与「{{keyword}}」相关的影片</text>
+    </view>
+
+    <view wx:if="{{!searched && !loading}}" class="empty">
+      <text class="empty-text">输入片名后按 A 搜索，支持电影与剧集</text>
+    </view>
+
+    <view style="height: 40rpx;"></view>
+  </scroll-view>
+</view>

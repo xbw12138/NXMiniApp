@@ -1,0 +1,30 @@
+.row {
+  flex-direction: row;
+  align-items: center;
+}
+
+/* 按钮撑满一行，保证从右上角「返回首页」向下能进入操作区。 */
+.actions {
+  margin-top: 24rpx;
+}
+
+.actions .btn {
+  flex: 1;
+}
+
+.kv {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 12rpx;
+}
+
+.kv-label {
+  width: 140rpx;
+  font-size: 22rpx;
+  color: #7f8792;
+}
+
+.kv-value {
+  font-size: 23rpx;
+  color: #e6e9ee;
+}

@@ -62,7 +62,8 @@ App({
   },
 
   // 输入 192.168.1.10 → http://192.168.1.10:8005
-  // 输入 http://nas.example.com 则原样保留（走反向代理时端口由用户自己决定）
+  // 输入 http://192.168.1.10 → http://192.168.1.10:8005
+  // 输入 https://nas.example.com 则原样保留（走 HTTPS 反向代理）
   normalizeServer(raw) {
     var s = String(raw || '').trim();
     if (!s) return '';
@@ -74,7 +75,8 @@ App({
     var origin = m[0];
     var rest = s.slice(origin.length);
     var host = origin.replace(/^https?:\/\//i, '');
-    if (!/:\d+$/.test(host) && !hadScheme) origin += ':8005';
+    var isHttps = /^https:\/\//i.test(origin);
+    if (!/:\d+$/.test(host) && !isHttps) origin += ':8005';
     return origin + rest;
   },
 
@@ -361,16 +363,18 @@ App({
       var streams = (source && source.MediaStreams) || it.MediaStreams || [];
       var subtitleCount = 0;
       var audioCount = 0;
-      var videoInfo = '';
+      var audioInfo = '';
       for (var i = 0; i < streams.length; i++) {
-        if (streams[i].Type === 'Subtitle') subtitleCount++;
-        else if (streams[i].Type === 'Audio') {
+        if (streams[i].Type === 'Subtitle') {
+          subtitleCount++;
+        } else if (streams[i].Type === 'Audio') {
+          if (!audioInfo && streams[i].DisplayTitle) audioInfo = streams[i].DisplayTitle;
           audioCount++;
-          if (!audioCount && streams[i].DisplayTitle) videoInfo = streams[i].DisplayTitle;
         }
       }
       movie.subtitleCount = subtitleCount;
       movie.audioCount = audioCount;
+      movie.isFavorite = !!(it.UserData && it.UserData.IsFavorite);
       movie.filePath = (source && source.Path) || '';
       movie.people = (it.People || []).map(function (p) { return p.Name; });
       movie.director = (it.People || []).filter(function (p) {
@@ -380,7 +384,7 @@ App({
         return p.Type === 'Actor';
       }).map(function (p) { return p.Name; }).slice(0, 8).join(' / ');
       movie.streamsText = [];
-      if (videoInfo) movie.streamsText.push(videoInfo);
+      if (audioInfo) movie.streamsText.push(audioInfo);
       if (audioCount > 0) movie.streamsText.push(audioCount + ' 条音轨');
       if (subtitleCount > 0) movie.streamsText.push(subtitleCount + ' 条字幕');
       movie.streamsText = movie.streamsText.join(' · ');
@@ -473,6 +477,10 @@ App({
   getPlayUrl(itemId) {
     var cfg = this.getConfig();
     var self = this;
+    var directUrl = cfg.server + '/Videos/' + itemId + '/stream?Static=true' +
+      '&MediaSourceId=' + encodeURIComponent(itemId) +
+      '&DeviceId=nxminiapp-fntv' +
+      '&api_key=' + encodeURIComponent(cfg.token);
     return this.post('/Items/' + itemId + '/PlaybackInfo', {
       UserId: cfg.userId,
       AutoOpenLiveStream: true,
@@ -488,14 +496,15 @@ App({
         }
         if (ms.SupportsDirectPlay || ms.SupportsDirectStream) {
           return cfg.server + '/Videos/' + itemId + '/stream?Static=true' +
-            '&MediaSourceId=' + encodeURIComponent(ms.Id || '') +
+            '&MediaSourceId=' + encodeURIComponent(ms.Id || itemId) +
             '&DeviceId=nxminiapp-fntv' +
             '&api_key=' + encodeURIComponent(cfg.token);
         }
       }
-      // 部分服务端不返回 MediaSources，直接走静态流
-      return cfg.server + '/Videos/' + itemId + '/stream?Static=true' +
-        '&DeviceId=nxminiapp-fntv&api_key=' + encodeURIComponent(cfg.token);
+      return directUrl;
+    }).catch(function () {
+      // 部分服务端未实现 PlaybackInfo，直接按静态流播放。
+      return directUrl;
     });
   },
 
