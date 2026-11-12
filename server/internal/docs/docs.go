@@ -55,12 +55,12 @@ const pageShell = `<!doctype html>
 
   <main class="content">%s
     <footer class="site-foot">
-      <a href="/api/v1/docs/export" title="下载离线文档 zip">下载离线文档</a>
-      <span class="dot">·</span>
-      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">鲁ICP备16004009号-2</a>
       <p class="disc">
         本站为非官方个人开源项目，与 Nintendo 及其关联公司无关，未获其授权、认可或赞助。请在你自己合法拥有的主机上使用。
       </p>
+      <a href="/api/v1/docs/export" title="下载离线文档 zip">下载离线文档</a>
+      <span class="dot">·</span>
+      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">鲁ICP备16004009号-2</a>
     </footer>
   </main>
 </div>
