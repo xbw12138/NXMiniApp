@@ -1,0 +1,9 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "backgroundColor": "#f6f2e9",
+    "navigationBarTitleText": "成语词典"
+  }
+}

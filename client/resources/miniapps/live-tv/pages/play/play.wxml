@@ -1,0 +1,42 @@
+<view class="page play-page">
+  <view class="pbar">
+    <view class="btn" bindtap="onBack">‹ 返回</view>
+    <view class="ptitle column">
+      <text class="pname">{{name || '直播电视'}}</text>
+      <text class="psub">{{subtitle}}</text>
+    </view>
+    <view class="spacer"></view>
+    <view class="btn {{fav ? 'btn-accent' : ''}}" bindtap="onFav">{{fav ? '★ 已收藏' : '☆ 收藏'}}</view>
+    <view class="btn" bindtap="onSwitchLine">换线路</view>
+    <view class="btn" bindtap="onFullscreen">全屏</view>
+  </view>
+
+  <video wx:if="{{src}}" id="player" class="stage" src="{{src}}"
+         controls="{{true}}" autoplay="{{true}}" object-fit="contain"
+         bindplay="onPlay" bindwaiting="onWaiting" bindended="onEnded"
+         binderror="onVideoError" />
+
+  <view wx:else class="stage stage-empty column">
+    <text class="empty-title">{{error || '正在准备直播流…'}}</text>
+    <text wx:if="{{!error}}" class="empty-sub">直播源连接一般需要 2-5 秒</text>
+  </view>
+
+  <view class="panel">
+    <view class="status-row">
+      <text wx:if="{{status}}" class="status-text">{{status}}</text>
+      <text wx:if="{{error}}" class="error-text">{{error}}</text>
+    </view>
+
+    <view class="line-row">
+      <text class="line-label">线路</text>
+      <view wx:for="{{lines}}" class="btn btn-small {{item.on ? 'btn-accent' : ''}}" data-index="{{item.index}}" bindtap="onPickLine">{{item.label}}</view>
+    </view>
+
+    <view class="nav-row">
+      <view class="btn nav-btn" bindtap="onPrev">‹ {{prevName}}</view>
+      <view class="btn nav-btn" bindtap="onNext">{{nextName}} ›</view>
+    </view>
+
+    <text class="hint">同一频道有多条线路时，播放失败会自动往下切；收藏的频道会出现在首页“我的收藏”</text>
+  </view>
+</view>

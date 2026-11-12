@@ -1,0 +1,217 @@
+/* 频道首页 */
+.side {
+  width: 252rpx;
+  height: 100%;
+  flex-shrink: 0;
+  margin-right: 20rpx;
+  padding: 16rpx 12rpx;
+  border-radius: 20rpx;
+  background-color: #0c1119;
+  border: 2rpx solid #161f2b;
+}
+
+.brand {
+  padding: 10rpx 10rpx 14rpx;
+}
+
+.brand-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.live-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 6rpx;
+  background-color: #ff4d6d;
+  margin-right: 10rpx;
+}
+
+.brand-name {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #f2f7fd;
+}
+
+.brand-sub {
+  font-size: 17rpx;
+  color: #6e7c8d;
+  margin-top: 8rpx;
+}
+
+.nav {
+  flex: 1;
+  height: 100%;
+}
+
+.nav-item {
+  height: 62rpx;
+  padding: 0 16rpx;
+  border-radius: 12rpx;
+  margin-bottom: 6rpx;
+  flex-direction: row;
+  align-items: center;
+  background-color: #0c1119;
+}
+
+.nav-on {
+  background-color: #16222e;
+}
+
+.nav-label {
+  flex: 1;
+  font-size: 22rpx;
+  color: #97a5b7;
+}
+
+.nav-on .nav-label {
+  color: #22d3ee;
+  font-weight: bold;
+}
+
+.nav-count {
+  font-size: 17rpx;
+  color: #5d6a7a;
+}
+
+.nav-on .nav-count {
+  color: #22d3ee;
+}
+
+.side-foot {
+  padding-top: 12rpx;
+}
+
+.side-btn {
+  margin-left: 0;
+  width: 100%;
+}
+
+.side-tip {
+  font-size: 16rpx;
+  color: #56626f;
+  margin-top: 10rpx;
+  text-align: center;
+}
+
+.main {
+  flex: 1;
+  height: 100%;
+}
+
+.topbar {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 14rpx;
+}
+
+.title {
+  font-size: 24rpx;
+  color: #cfdae7;
+  flex-shrink: 0;
+}
+
+.search {
+  width: 330rpx;
+  height: 60rpx;
+  border-radius: 30rpx;
+}
+
+.grid-scroll {
+  flex: 1;
+  height: 100%;
+}
+
+.grid-row {
+  width: 100%;
+  flex-direction: row;
+  margin-bottom: 12rpx;
+}
+
+.card {
+  flex: 1;
+  height: 164rpx;
+  margin-right: 12rpx;
+  border-radius: 16rpx;
+  background-color: #10161f;
+  border: 2rpx solid #1c2632;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8rpx;
+}
+
+.card-blank {
+  background-color: #080a0f;
+  border: 2rpx solid #080a0f;
+}
+
+.logo {
+  width: 62rpx;
+  height: 62rpx;
+  margin-bottom: 8rpx;
+}
+
+.logo-badge {
+  width: 62rpx;
+  height: 62rpx;
+  border-radius: 31rpx;
+  background-color: #1b2a38;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8rpx;
+}
+
+.logo-text {
+  font-size: 26rpx;
+  color: #7fe3f5;
+  font-weight: bold;
+}
+
+.card-name {
+  font-size: 21rpx;
+  color: #e2eaf5;
+  text-align: center;
+}
+
+.card-meta {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 4rpx;
+}
+
+.card-star {
+  font-size: 16rpx;
+  color: #ffd166;
+  margin-right: 6rpx;
+}
+
+.card-lines {
+  font-size: 16rpx;
+  color: #6d7b8c;
+}
+
+.more-btn {
+  margin-left: 0;
+  width: 100%;
+  height: 60rpx;
+  margin-bottom: 16rpx;
+}
+
+.foot-row {
+  flex-direction: row;
+  align-items: center;
+  padding: 8rpx 6rpx;
+}
+
+.foot-text {
+  font-size: 18rpx;
+  color: #586473;
+}
+
+.foot-link {
+  font-size: 18rpx;
+  color: #22d3ee;
+  margin-left: 16rpx;
+}

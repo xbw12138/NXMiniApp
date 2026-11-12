@@ -1,0 +1,7 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "backgroundColor": "#070a0f",
+    "navigationBarTitleText": "客厅时钟"
+  }
+}

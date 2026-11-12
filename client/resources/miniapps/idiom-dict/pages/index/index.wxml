@@ -1,0 +1,62 @@
+<view class="page">
+  <view class="top">
+    <view class="brand">
+      <text class="title">成语词典</text>
+      <text class="subtitle">150+ 成语 · 收藏常看常新</text>
+    </view>
+    <view class="tabs">
+      <button class="tab {{tab === 'all' ? 'tab-on' : ''}}" data-tab="all" bindtap="onTab">全部</button>
+      <button class="tab {{tab === 'fav' ? 'tab-on' : ''}}" data-tab="fav" bindtap="onTab">收藏 {{favCount}}</button>
+    </view>
+  </view>
+
+  <view class="body">
+    <view class="left">
+      <view class="card">
+        <view class="card-top">
+          <view class="tag">
+            <text class="tag-text">{{isFav ? '已收藏' : '今日一成语'}}</text>
+          </view>
+        </view>
+
+        <text class="word">{{current.w}}</text>
+        <view class="divider"/>
+        <text class="meaning">{{current.m}}</text>
+
+        <view class="actions">
+          <button class="act {{isFav ? 'act-on' : ''}}" bindtap="onFav">{{isFav ? '取消收藏' : '收藏'}}</button>
+          <button class="act" bindtap="onCopy">复制</button>
+          <button class="act act-main" bindtap="onRandom">换一个</button>
+        </view>
+      </view>
+    </view>
+
+    <view class="right">
+      <view class="search-row">
+        <input class="search" placeholder="搜成语或释义关键字" value="{{keyword}}"
+               bindinput="onSearch" bindconfirm="onSearch"/>
+        <button class="clear-btn" bindtap="onClear">清空</button>
+      </view>
+
+      <text class="count">{{countText}}</text>
+
+      <scroll-view class="list" scroll-y="{{true}}" style="height: 100%;">
+        <view wx:for="{{list}}" wx:key="w"
+              class="item {{item.active ? 'item-on' : ''}}" data-w="{{item.w}}" bindtap="onPick">
+          <view class="item-main">
+            <text class="item-word">{{item.w}}</text>
+            <text class="item-mean">{{item.m}}</text>
+          </view>
+          <button class="fav-btn {{item.fav ? 'fav-on' : ''}}" data-w="{{item.w}}" catchtap="onFavItem">
+            {{item.fav ? '★' : '☆'}}
+          </button>
+        </view>
+
+        <view wx:if="{{list.length === 0}}" class="empty">
+          <text class="empty-text">没有找到相关成语</text>
+          <text class="empty-text">换个关键词试试，或点「换一个」</text>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

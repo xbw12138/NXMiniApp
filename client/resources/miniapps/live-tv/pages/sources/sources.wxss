@@ -1,0 +1,109 @@
+/* 直播源管理 */
+.sources-page {
+  flex-direction: column;
+  padding: 20rpx 26rpx;
+}
+
+.sbar {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 16rpx;
+}
+
+.stitle {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #f2f7fd;
+}
+
+.ssub {
+  font-size: 18rpx;
+  color: #6e7c8d;
+  margin-left: 14rpx;
+}
+
+.slist {
+  flex: 1;
+  height: 100%;
+}
+
+.src-card {
+  flex-direction: column;
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background-color: #10161f;
+  border: 2rpx solid #1c2632;
+  margin-bottom: 12rpx;
+}
+
+.src-head {
+  flex-direction: row;
+  align-items: center;
+}
+
+.src-name {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #e6eef8;
+  margin-right: 10rpx;
+}
+
+.src-url {
+  font-size: 17rpx;
+  color: #63708a;
+  margin-top: 6rpx;
+}
+
+.src-err {
+  font-size: 17rpx;
+  color: #ff8ba1;
+  margin-top: 6rpx;
+}
+
+.add-card {
+  flex-direction: column;
+  padding: 18rpx;
+  border-radius: 16rpx;
+  background-color: #0c1119;
+  border: 2rpx solid #161f2b;
+  margin-bottom: 14rpx;
+}
+
+.add-title {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #d8e4f2;
+}
+
+.add-sub {
+  font-size: 17rpx;
+  color: #66738a;
+  margin-top: 6rpx;
+  margin-bottom: 12rpx;
+}
+
+.add-input {
+  width: 100%;
+  margin-bottom: 10rpx;
+  border-radius: 12rpx;
+}
+
+.add-row {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 4rpx;
+}
+
+.add-msg {
+  flex: 1;
+  font-size: 18rpx;
+  color: #8fb6c8;
+  margin-left: 14rpx;
+}
+
+.foot-text {
+  font-size: 17rpx;
+  color: #56626f;
+  padding: 6rpx 4rpx 20rpx;
+}

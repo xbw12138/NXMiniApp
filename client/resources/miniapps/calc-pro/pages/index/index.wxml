@@ -1,0 +1,33 @@
+<view class="page">
+  <view class="left">
+    <view class="title-row">
+      <text class="title">科学计算器</text>
+      <text class="subtitle">支持三角函数 / 幂 / 对数</text>
+    </view>
+
+    <view class="display">
+      <view class="display-top">
+        <view class="angle">
+          <text class="angle-text">{{deg ? 'DEG 角度' : 'RAD 弧度'}}</text>
+        </view>
+        <text class="prev">{{prev}}</text>
+      </view>
+
+      <view class="expr-wrap">
+        <text class="expr">{{expr}}</text>
+      </view>
+
+      <view class="result-wrap">
+        <text class="{{isError ? 'result result-err' : 'result'}}">{{result}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="right">
+    <view wx:for="{{rows}}" wx:for-item="row" wx:key="{{index}}" class="key-row">
+      <button wx:for="{{row}}" wx:for-item="k" wx:key="label"
+              class="{{k.cls}}" data-act="{{k.act}}" data-val="{{k.val}}" bindtap="onKey">{{k.label}}</button>
+    </view>
+    <text class="tip">点 = 计算，⌫ 删除一位，C 清空</text>
+  </view>
+</view>

@@ -1,0 +1,7 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "backgroundColor": "#14100c",
+    "navigationBarTitleText": "中国象棋"
+  }
+}

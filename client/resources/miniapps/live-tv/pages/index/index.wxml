@@ -1,0 +1,79 @@
+<view class="page">
+  <!-- 左侧：频道分组 -->
+  <view class="side column">
+    <view class="brand">
+      <view class="brand-row">
+        <view class="live-dot"></view>
+        <text class="brand-name">直播电视</text>
+      </view>
+      <text class="brand-sub">{{total}} 个频道 · {{updatedText}}</text>
+    </view>
+
+    <scroll-view class="nav" scroll-y="true">
+      <view wx:for="{{nav}}" class="nav-item {{item.id === active ? 'nav-on' : ''}}" data-id="{{item.id}}" bindtap="onNavTap">
+        <text class="nav-label">{{item.label}}</text>
+        <text class="nav-count">{{item.count}}</text>
+      </view>
+    </scroll-view>
+
+    <view class="side-foot">
+      <view class="btn side-btn" bindtap="onSources">直播源管理</view>
+      <text class="side-tip">支持添加自己的 M3U 直播源</text>
+    </view>
+  </view>
+
+  <!-- 右侧：频道墙 -->
+  <view class="main column">
+    <view class="topbar">
+      <text class="title">{{scopeLabel}}</text>
+      <view class="spacer"></view>
+      <input class="input search" value="{{keyword}}" placeholder="搜索频道或分组" bindinput="onSearch" />
+      <view wx:if="{{keyword}}" class="btn btn-small" bindtap="onSearchClear">清除</view>
+      <view class="btn" bindtap="onRefresh">刷新</view>
+    </view>
+
+    <view wx:if="{{loading}}" class="center-box">
+      <text class="empty-title">正在拉取直播源…</text>
+      <text class="empty-sub">首次使用需要几秒，之后会走本地缓存秒开</text>
+    </view>
+
+    <view wx:elif="{{errMsg}}" class="center-box">
+      <text class="empty-title">直播源加载失败</text>
+      <text class="empty-sub">{{errMsg}}</text>
+      <view class="btn btn-accent" bindtap="onRefresh">重新加载</view>
+    </view>
+
+    <view wx:elif="{{rows.length === 0}}" class="center-box">
+      <text class="empty-title">这里是空的</text>
+      <text class="empty-sub">{{keyword ? '没有匹配的频道，换个关键词试试' : '这个分组还没有频道，去收藏几个吧'}}</text>
+      <view wx:if="{{keyword}}" class="btn" bindtap="onSearchClear">清除搜索</view>
+    </view>
+
+    <scroll-view wx:else class="grid-scroll" scroll-y="true">
+      <view wx:for="{{rows}}" wx:for-item="row" class="grid-row">
+        <view wx:for="{{row}}" wx:for-item="c" class="card {{c.ghost ? 'card-blank' : ''}}" data-key="{{c.key}}" bindtap="onPlay">
+          <image wx:if="{{c.logo}}" class="logo" src="{{c.logo}}" mode="aspectFit" data-key="{{c.key}}" binderror="onLogoErr" />
+          <view wx:if="{{!c.logo && !c.ghost}}" class="logo-badge">
+            <text class="logo-text">{{c.initial}}</text>
+          </view>
+          <text wx:if="{{!c.ghost}}" class="card-name">{{c.name}}</text>
+          <view wx:if="{{!c.ghost}}" class="card-meta">
+            <text wx:if="{{c.fav}}" class="card-star">★</text>
+            <text class="card-lines">{{c.lines}} 线路</text>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{more}}" class="btn more-btn" bindtap="onMore">加载更多（{{visibleCount}} / {{listCount}}）</view>
+
+      <view wx:if="{{active === 'recent'}}" class="foot-row">
+        <text class="foot-text">最近观看最多保留 24 个频道</text>
+        <text class="foot-link" bindtap="onClearRecent">清空记录</text>
+      </view>
+
+      <view class="foot-row">
+        <text class="foot-text">移动光标选台，按 A 播放；收藏与换线路在播放页操作</text>
+      </view>
+    </scroll-view>
+  </view>
+</view>

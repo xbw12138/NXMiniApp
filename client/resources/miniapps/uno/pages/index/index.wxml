@@ -1,0 +1,88 @@
+<view class="page">
+  <view class="topbar">
+    <text class="title">UNO</text>
+    <text class="turn">{{turnText}}</text>
+    <view class="spacer"></view>
+    <text class="chip">{{directionText}}</text>
+    <text class="chip">牌堆 {{deckCount}}</text>
+  </view>
+
+  <view class="opponents">
+    <view class="{{p.cls}}" wx:for="{{opponents}}" wx:key="id">
+      <text class="opp-name">{{p.name}}</text>
+      <text class="opp-count">{{p.count}} 张</text>
+    </view>
+  </view>
+
+  <view class="table">
+    <view class="pile">
+      <view class="{{discard.cls}}">
+        <text class="{{discard.textCls}}">{{discard.label}}</text>
+      </view>
+      <text class="pile-label">桌面</text>
+    </view>
+    <view class="center-info">
+      <view class="color-row">
+        <view class="color-dot {{colorDot}}"></view>
+        <text class="color-name">当前颜色 · {{colorName}}</text>
+      </view>
+      <text class="message">{{message}}</text>
+    </view>
+    <view class="pile">
+      <view class="deck">
+        <text class="deck-label">{{deckCount}}</text>
+      </view>
+      <text class="pile-label">牌堆</text>
+    </view>
+  </view>
+
+  <view class="hand">
+    <view class="hand-row" wx:for="{{handRows}}" wx:for-item="row" wx:for-index="ri">
+      <view class="{{card.cls}}" wx:for="{{row}}" wx:for-item="card" wx:key="id" bindtap="onCard" data-id="{{card.id}}">
+        <text class="{{card.textCls}}">{{card.label}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="actions">
+    <button class="btn" bindtap="onDraw">抽一张</button>
+    <button class="btn" bindtap="onPass">过牌</button>
+    <button class="btn btn-warn" bindtap="onMenu">重开</button>
+  </view>
+
+  <view wx:if="{{phase === 'menu'}}" class="mask">
+    <view class="panel">
+      <text class="panel-title">UNO 牌局</text>
+      <text class="panel-sub">你和电脑对战，先出完手牌的人获胜。手牌里的白色描边表示当前可以出。</text>
+      <view class="panel-row">
+        <button class="btn btn-main" bindtap="onStart" data-count="2">2 人</button>
+        <button class="btn btn-main" bindtap="onStart" data-count="3">3 人</button>
+        <button class="btn btn-main" bindtap="onStart" data-count="4">4 人</button>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{phase === 'color'}}" class="mask">
+    <view class="panel">
+      <text class="panel-title">选择颜色</text>
+      <text class="panel-sub">万能牌打出后，由你决定接下来的颜色。</text>
+      <view class="panel-row">
+        <view class="color-btn c-r" bindtap="onColor" data-color="r"></view>
+        <view class="color-btn c-y" bindtap="onColor" data-color="y"></view>
+        <view class="color-btn c-g" bindtap="onColor" data-color="g"></view>
+        <view class="color-btn c-b" bindtap="onColor" data-color="b"></view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{phase === 'over'}}" class="mask">
+    <view class="panel">
+      <text class="panel-title">{{winnerText}}</text>
+      <text class="panel-sub">{{overText}}</text>
+      <view class="panel-row">
+        <button class="btn btn-main" bindtap="onStart" data-count="{{playerCount}}">再来一局</button>
+        <button class="btn" bindtap="onMenu">换人数</button>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,75 @@
+<view class="page">
+  <!-- 悬浮控制条：全屏播放时叠在画面上层（data-overlay），空闲几秒后自动收起。 -->
+  <view class="deck" wx:if="{{hud && !panel}}" data-overlay="true">
+    <view class="brand">
+      <view class="dot {{live ? 'dot-on' : ''}}"></view>
+      <text class="brand-name">有线电视</text>
+    </view>
+    <view class="now">
+      <text class="chno">{{chno}}</text>
+      <view class="now-text">
+        <text class="chname">{{name}}</text>
+        <text class="chsub">{{sub}} · {{status}}</text>
+      </view>
+    </view>
+    <view class="hint" wx:if="{{keys}}">
+      <text class="hint-text">方向键换台 · A 频道表</text>
+    </view>
+    <view class="acts">
+      <view class="act act-main" bindtap="onList">
+        <text class="act-text act-text-main">频道表</text>
+      </view>
+      <view class="act" bindtap="onPrev">
+        <text class="act-text">‹ 上一台</text>
+      </view>
+      <view class="act" bindtap="onNext">
+        <text class="act-text">下一台 ›</text>
+      </view>
+      <view class="act act-ghost" bindtap="onToggleFullscreen">
+        <text class="act-text act-text-ghost">全屏</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{!panel}}" class="stage">
+    <video wx:if="{{src}}" id="player" class="screen" src="{{src}}"
+           controls="{{false}}" autoplay="{{true}}" object-fit="contain"
+           bindplay="onPlay" bindpause="onPause" bindwaiting="onWaiting"
+           bindended="onEnded" binderror="onVideoError"
+           bindfullscreenchange="onFsChange" />
+  </view>
+
+  <view wx:if="{{panel}}" class="panel">
+    <view class="phead">
+      <text class="ptitle">频道表</text>
+      <view class="tabs">
+        <view class="tab {{tab === 'all' ? 'tab-on' : ''}}" data-tab="all" bindtap="onTab">
+          <text class="tab-text {{tab === 'all' ? 'tab-text-on' : ''}}">全部 52</text>
+        </view>
+        <view class="tab {{tab === 'cctv' ? 'tab-on' : ''}}" data-tab="cctv" bindtap="onTab">
+          <text class="tab-text {{tab === 'cctv' ? 'tab-text-on' : ''}}">央视 18</text>
+        </view>
+        <view class="tab {{tab === 'ws' ? 'tab-on' : ''}}" data-tab="ws" bindtap="onTab">
+          <text class="tab-text {{tab === 'ws' ? 'tab-text-on' : ''}}">卫视 34</text>
+        </view>
+      </view>
+      <view class="back" bindtap="onClose">
+        <text class="back-text">返回直播</text>
+      </view>
+    </view>
+
+    <scroll-view class="plist">
+      <view class="prow" wx:for="{{rows}}" wx:for-item="row">
+        <view class="ch {{cell.on ? 'ch-on' : ''}} {{cell.blank ? 'ch-blank' : ''}}"
+              wx:for="{{row}}" wx:for-item="cell" data-id="{{cell.id}}" bindtap="onPick">
+          <text class="ch-no">{{cell.no}}</text>
+          <text class="ch-name">{{cell.name}}</text>
+        </view>
+      </view>
+      <view class="pfoot">
+        <text class="pfoot-text" wx:if="{{keys}}">方向键浏览 · A 播放 · B 返回直播</text>
+        <text class="pfoot-text" wx:else>上下键浏览 · A 键播放 · 返回直播继续看当前频道</text>
+      </view>
+    </scroll-view>
+  </view>
+</view>

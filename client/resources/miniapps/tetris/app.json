@@ -1,0 +1,7 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "backgroundColor": "#0a0d12",
+    "navigationBarTitleText": "俄罗斯方块"
+  }
+}

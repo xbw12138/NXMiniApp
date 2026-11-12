@@ -1,0 +1,7 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "backgroundColor": "#0b0d12",
+    "navigationBarTitleText": "UNO"
+  }
+}

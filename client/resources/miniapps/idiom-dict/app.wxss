@@ -1,0 +1,269 @@
+/* 成语词典 —— 纸感书卷主题 */
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background-color: #f6f2e9;
+  padding: 32rpx 44rpx;
+  color: #2f2a22;
+}
+
+.top {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-shrink: 0;
+  margin-bottom: 22rpx;
+}
+
+.brand {
+  flex-direction: row;
+  align-items: flex-end;
+}
+
+.title {
+  font-size: 54rpx;
+  font-weight: bold;
+  color: #2b2620;
+  line-height: 1;
+}
+
+.subtitle {
+  font-size: 22rpx;
+  color: #8a7f6e;
+  margin-left: 16rpx;
+  margin-bottom: 4rpx;
+}
+
+.tabs {
+  flex-direction: row;
+}
+
+.tab {
+  width: 132rpx;
+  height: 60rpx;
+  margin-left: 12rpx;
+  border-radius: 30rpx;
+  background-color: #efe7d8;
+  border: 2rpx solid #e0d3bc;
+  color: #7a6a53;
+  font-size: 23rpx;
+  padding: 0;
+  line-height: 56rpx;
+  text-align: center;
+}
+
+.tab-on {
+  background-color: #b8763c;
+  border-color: #b8763c;
+  color: #fff8ee;
+  font-weight: bold;
+}
+
+.body {
+  flex-direction: row;
+  flex: 1;
+}
+
+.left {
+  flex: 1;
+  flex-direction: column;
+}
+
+.card {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  border-radius: 24rpx;
+  background-color: #fffdf8;
+  border: 2rpx solid #e6ddcc;
+  padding: 40rpx 44rpx;
+}
+
+.card-top {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tag {
+  height: 44rpx;
+  padding: 0 18rpx;
+  border-radius: 22rpx;
+  background-color: #efe6d3;
+  align-items: center;
+  justify-content: center;
+}
+
+.tag-text {
+  font-size: 20rpx;
+  color: #8a7250;
+}
+
+.word {
+  font-size: 78rpx;
+  font-weight: bold;
+  color: #2b2620;
+  letter-spacing: 6rpx;
+  margin-top: 26rpx;
+  line-height: 1.25;
+}
+
+.divider {
+  height: 2rpx;
+  background-color: #ece2cf;
+  margin: 28rpx 0;
+}
+
+.meaning {
+  font-size: 30rpx;
+  color: #4a4034;
+  line-height: 1.85;
+}
+
+.actions {
+  flex-direction: row;
+  margin-top: 32rpx;
+}
+
+.act {
+  flex: 1;
+  height: 76rpx;
+  margin-right: 12rpx;
+  border-radius: 16rpx;
+  background-color: #f3ebdc;
+  border: 2rpx solid #e3d6bf;
+  color: #6b5a41;
+  font-size: 24rpx;
+  padding: 0;
+  line-height: 72rpx;
+  text-align: center;
+}
+
+.act-main {
+  background-color: #b8763c;
+  border-color: #b8763c;
+  color: #fff8ee;
+  font-weight: bold;
+}
+
+.act-on {
+  background-color: #f7e2c9;
+  border-color: #d9a76b;
+  color: #8a5220;
+}
+
+.right {
+  width: 540rpx;
+  margin-left: 36rpx;
+  flex-direction: column;
+}
+
+.search-row {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 14rpx;
+}
+
+.search {
+  flex: 1;
+  height: 72rpx;
+  padding: 0 22rpx;
+  border-radius: 14rpx;
+  background-color: #fffdf8;
+  border: 2rpx solid #e2d7c4;
+  color: #3a332a;
+  font-size: 24rpx;
+}
+
+.clear-btn {
+  width: 90rpx;
+  height: 72rpx;
+  margin-left: 10rpx;
+  border-radius: 14rpx;
+  background-color: #f1e9da;
+  border: 2rpx solid #e0d3bc;
+  color: #7a6a53;
+  font-size: 22rpx;
+  padding: 0;
+  line-height: 68rpx;
+  text-align: center;
+}
+
+.count {
+  font-size: 21rpx;
+  color: #8a7f6e;
+  margin-bottom: 10rpx;
+  flex-shrink: 0;
+}
+
+.list {
+  flex: 1;
+  height: 100%;
+}
+
+.item {
+  flex-direction: row;
+  align-items: center;
+  padding: 16rpx 18rpx;
+  margin-bottom: 10rpx;
+  border-radius: 14rpx;
+  background-color: #fffdf8;
+  border: 2rpx solid #e8dfcf;
+}
+
+.item-on {
+  background-color: #fbf1e2;
+  border-color: #d9a76b;
+}
+
+.item-main {
+  flex: 1;
+  flex-direction: column;
+}
+
+.item-word {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #382f25;
+}
+
+.item-mean {
+  font-size: 20rpx;
+  color: #8a7f6e;
+  margin-top: 4rpx;
+  line-height: 1.5;
+}
+
+.fav-btn {
+  width: 60rpx;
+  height: 52rpx;
+  margin-left: 10rpx;
+  border-radius: 10rpx;
+  background-color: #f5eee1;
+  border: 2rpx solid #e5d8c4;
+  color: #b8a67f;
+  font-size: 24rpx;
+  padding: 0;
+  line-height: 48rpx;
+  text-align: center;
+}
+
+.fav-on {
+  background-color: #fbe6c8;
+  border-color: #d9a76b;
+  color: #b8763c;
+}
+
+.empty {
+  padding: 60rpx 10rpx;
+  align-items: center;
+}
+
+.empty-text {
+  font-size: 22rpx;
+  color: #9a8f7d;
+  line-height: 1.7;
+  text-align: center;
+}

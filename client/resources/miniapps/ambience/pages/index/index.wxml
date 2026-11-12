@@ -1,0 +1,80 @@
+<view class="page">
+  <view class="main">
+    <view class="left">
+      <view class="clock-wrap {{shift}}">
+        <view class="time-row">
+          <text class="time">{{time}}</text>
+          <text class="sec">{{sec}}</text>
+        </view>
+        <view class="date-row">
+          <text class="date">{{dateText}}</text>
+          <text class="weekday">{{weekday}}</text>
+        </view>
+        <text class="lunar">{{lunarText}}</text>
+        <text class="term">{{termText}}</text>
+      </view>
+    </view>
+
+    <view class="right">
+      <view class="card">
+        <view class="card-head">
+          <text class="card-title">天气</text>
+          <text class="city" bindtap="onPickCity">{{city}} ›</text>
+        </view>
+        <view wx:if="{{hasWeather}}">
+          <view class="temp-row">
+            <text class="temp">{{temp}}</text>
+            <text class="unit">°C</text>
+          </view>
+          <text class="cond">{{cond}}</text>
+          <view class="detail-row">
+            <text class="detail">体感 {{feels}}°</text>
+            <text class="detail">湿度 {{humidity}}%</text>
+            <text class="detail">风速 {{wind}} km/h</text>
+          </view>
+          <view class="forecast">
+            <view class="fc" wx:for="{{forecast}}" wx:key="day">
+              <text class="fc-day">{{item.day}}</text>
+              <text class="fc-temp">{{item.hi}}° / {{item.lo}}°</text>
+              <text class="fc-cond">{{item.cond}}</text>
+            </view>
+          </view>
+        </view>
+        <view wx:else>
+          <text class="cond">正在获取天气…</text>
+          <text wx:if="{{weatherErr}}" class="err">{{weatherErr}}</text>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="card-head">
+          <text class="card-title">倒计时</text>
+          <text class="card-title">{{updated}}</text>
+        </view>
+        <view class="cd-row" wx:for="{{countdowns}}" wx:key="label">
+          <text class="cd-label">{{item.label}}</text>
+          <view class="detail-row">
+            <text class="cd-days">{{item.days}}</text>
+            <text class="cd-value">天</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="footer">
+    <text class="footer-text">方向键移动 · A 确认 · 天气每 30 分钟自动刷新</text>
+    <text class="footer-text">{{status}}</text>
+  </view>
+
+  <view wx:if="{{picking}}" class="mask">
+    <view class="mask-head">
+      <text class="mask-title">选择城市</text>
+      <button class="city-btn" bindtap="onClosePick">返回</button>
+    </view>
+    <view class="city-row" wx:for="{{cityRows}}" wx:for-item="row" wx:for-index="ri">
+      <button class="city-btn {{c === city ? 'city-on' : ''}}" wx:for="{{row}}" wx:for-item="c" bindtap="onChooseCity" data-name="{{c}}">{{c}}</button>
+    </view>
+    <input class="city-input" placeholder="或输入城市名，回车确认" bindconfirm="onCustomCity" />
+  </view>
+</view>

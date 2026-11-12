@@ -1,0 +1,9 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "backgroundColor": "#101319",
+    "navigationBarTitleText": "五子棋"
+  }
+}

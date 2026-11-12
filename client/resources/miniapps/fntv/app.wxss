@@ -1,0 +1,445 @@
+/* 飞牛影视 · 全局样式（深色电视端主题） */
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background-color: #0a0b0e;
+  color: #eef1f5;
+  padding: 24rpx;
+}
+
+.body {
+  flex: 1;
+  height: 100%;
+}
+
+/* 顶部栏 */
+.topbar {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 18rpx;
+}
+
+.brand {
+  flex-direction: row;
+  align-items: center;
+}
+
+.brand-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 7rpx;
+  background-color: #2f7bff;
+  margin-right: 10rpx;
+}
+
+.brand-text {
+  font-size: 38rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.brand-sub {
+  font-size: 20rpx;
+  color: #6f7883;
+  margin-left: 14rpx;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.nav-btn {
+  height: 56rpx;
+  padding: 0 24rpx;
+  margin-left: 12rpx;
+  border-radius: 28rpx;
+  background-color: #191c22;
+  border: 1rpx solid #22262d;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-btn-accent {
+  background-color: #1b2a4a;
+  border: 1rpx solid #2f4f8f;
+}
+
+.nav-text {
+  font-size: 22rpx;
+  color: #c3cad4;
+}
+
+.nav-text-accent {
+  font-size: 22rpx;
+  color: #8db6ff;
+}
+
+/* 分区标题 */
+.section-head {
+  flex-direction: row;
+  align-items: center;
+  margin: 18rpx 4rpx 14rpx;
+  flex-shrink: 0;
+}
+
+.section-bar {
+  width: 6rpx;
+  height: 26rpx;
+  border-radius: 3rpx;
+  background-color: #2f7bff;
+  margin-right: 12rpx;
+}
+
+.section-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #eef1f5;
+}
+
+.section-count {
+  font-size: 20rpx;
+  color: #6f7883;
+  margin-left: 12rpx;
+}
+
+.section-more {
+  flex: 1;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.section-more-text {
+  font-size: 21rpx;
+  color: #7f8792;
+}
+
+/* 卡片 */
+.card {
+  background-color: #14171c;
+  border-radius: 16rpx;
+  padding: 22rpx;
+  margin-bottom: 16rpx;
+  flex-direction: column;
+}
+
+.card-title {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #e6e9ee;
+}
+
+.card-sub {
+  font-size: 22rpx;
+  color: #8b949e;
+  margin-top: 6rpx;
+}
+
+.hint {
+  font-size: 22rpx;
+  color: #7f8792;
+  margin-top: 10rpx;
+}
+
+.error {
+  font-size: 22rpx;
+  color: #ff6b6b;
+  margin-top: 12rpx;
+}
+
+/* 按钮 */
+.btn {
+  height: 64rpx;
+  padding: 0 28rpx;
+  border-radius: 14rpx;
+  background-color: #2f7bff;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: bold;
+  align-items: center;
+  justify-content: center;
+  margin-right: 14rpx;
+}
+
+.btn-ghost {
+  background-color: #22262d;
+  color: #e8eaee;
+}
+
+.btn-on {
+  background-color: #2f7bff;
+}
+
+.btn-text {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.btn-ghost .btn-text {
+  color: #e8eaee;
+}
+
+/* 表单 */
+.field {
+  flex-direction: column;
+  margin-top: 20rpx;
+}
+
+.field-label {
+  font-size: 22rpx;
+  color: #8b949e;
+  margin-bottom: 10rpx;
+}
+
+.input {
+  height: 76rpx;
+  width: 100%;
+  padding: 0 22rpx;
+  border-radius: 12rpx;
+  background-color: #101318;
+  border: 1rpx solid #22262d;
+  color: #eef1f5;
+  font-size: 24rpx;
+}
+
+.input-on {
+  border: 1rpx solid #2f7bff;
+}
+
+/* 海报墙：4 列 */
+.grid {
+  flex-direction: column;
+}
+
+.poster-row {
+  flex-direction: row;
+}
+
+.poster-card {
+  width: 155rpx;
+  margin: 0 20rpx 24rpx 0;
+  flex-direction: column;
+}
+
+.poster-box {
+  width: 155rpx;
+  height: 232rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+  background-color: #171b21;
+}
+
+.poster {
+  width: 155rpx;
+  height: 232rpx;
+}
+
+.poster-empty {
+  align-items: center;
+  justify-content: center;
+  padding: 8rpx;
+}
+
+.poster-empty-text {
+  font-size: 19rpx;
+  color: #5d6672;
+  text-align: center;
+}
+
+.rating-badge {
+  position: absolute;
+  right: 8rpx;
+  top: 8rpx;
+  height: 32rpx;
+  padding: 0 9rpx;
+  border-radius: 8rpx;
+  background-color: rgba(0, 0, 0, 0.72);
+  align-items: center;
+  justify-content: center;
+}
+
+.rating-text {
+  font-size: 19rpx;
+  font-weight: bold;
+  color: #ffb800;
+}
+
+.poster-title-box {
+  height: 30rpx;
+  overflow: hidden;
+  margin-top: 8rpx;
+}
+
+.poster-title {
+  font-size: 22rpx;
+  font-weight: bold;
+  color: #e9edf2;
+}
+
+.poster-sub {
+  font-size: 19rpx;
+  color: #6f7883;
+  margin-top: 2rpx;
+}
+
+/* 横向滚动 */
+.hscroll {
+  flex-shrink: 0;
+}
+
+.hrow {
+  flex-direction: row;
+  padding: 2rpx 2rpx 6rpx;
+}
+
+.rail-card {
+  width: 210rpx;
+  margin-right: 18rpx;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.rail-box {
+  width: 210rpx;
+  height: 300rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+  background-color: #171b21;
+}
+
+.rail-img {
+  width: 210rpx;
+  height: 300rpx;
+}
+
+.rail-empty {
+  align-items: center;
+  justify-content: center;
+  padding: 10rpx;
+}
+
+.rail-empty-text {
+  font-size: 20rpx;
+  color: #5d6672;
+  text-align: center;
+}
+
+.rail-title-box {
+  height: 30rpx;
+  overflow: hidden;
+  margin-top: 8rpx;
+}
+
+.rail-title {
+  font-size: 21rpx;
+  color: #eef1f5;
+}
+
+.rail-sub {
+  font-size: 19rpx;
+  color: #7d8693;
+  margin-top: 2rpx;
+}
+
+/* 进度条 */
+.progress-track {
+  height: 6rpx;
+  width: 100%;
+  border-radius: 3rpx;
+  background-color: #262b33;
+  margin-top: 8rpx;
+}
+
+.progress-fill {
+  height: 6rpx;
+  border-radius: 3rpx;
+  background-color: #2f7bff;
+}
+
+/* 空态 / 加载 */
+.empty {
+  padding: 60rpx 0;
+  align-items: center;
+}
+
+.empty-text {
+  font-size: 24rpx;
+  color: #6b7481;
+}
+
+.loading-card {
+  margin-top: 80rpx;
+  padding: 60rpx 30rpx;
+  border-radius: 16rpx;
+  background-color: #12151a;
+  align-items: center;
+  flex-direction: column;
+}
+
+.loading-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #e6e9ee;
+}
+
+.loading-back {
+  margin-top: 30rpx;
+  padding: 14rpx 40rpx;
+  border-radius: 14rpx;
+  background-color: #22262d;
+}
+
+.loading-back-text {
+  font-size: 24rpx;
+  color: #e8eaee;
+}
+
+/* 标签 */
+.chips {
+  flex-direction: row;
+  align-items: center;
+  padding: 2rpx;
+}
+
+.chip {
+  height: 52rpx;
+  padding: 0 22rpx;
+  margin-right: 12rpx;
+  border-radius: 26rpx;
+  background-color: #171a20;
+  border: 1rpx solid #22262d;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chip-on {
+  background-color: #2f7bff;
+  border: 1rpx solid #2f7bff;
+}
+
+.chip-text {
+  font-size: 22rpx;
+  color: #c3cad4;
+}
+
+.chip-on .chip-text {
+  font-weight: bold;
+  color: #ffffff;
+}
+
+/* 底部分页 */
+.pager {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  margin: 10rpx 0 30rpx;
+}
+
+.pager-text {
+  font-size: 22rpx;
+  color: #7f8792;
+  margin: 0 24rpx;
+}

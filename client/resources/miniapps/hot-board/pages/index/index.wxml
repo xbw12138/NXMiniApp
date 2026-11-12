@@ -1,0 +1,48 @@
+<view class="page">
+  <view class="side">
+    <text class="brand-name">今日热榜</text>
+    <text class="brand-sub">给电视看的热榜与行情</text>
+    <text class="clock">{{clock}}</text>
+    <text class="date">{{dateText}}</text>
+
+    <view class="modes">
+      <button class="mode {{mode === 'hot' ? 'mode-on' : ''}}" bindtap="onModeHot">热榜</button>
+      <button class="mode {{mode === 'quote' ? 'mode-on' : ''}}" bindtap="onModeQuote">行情</button>
+    </view>
+
+    <view wx:if="{{mode === 'hot'}}" class="sources">
+      <button class="source {{source === item.key ? 'source-on' : ''}}" wx:for="{{sources}}" wx:key="key" bindtap="onSource" data-key="{{item.key}}">{{item.name}}</button>
+    </view>
+
+    <view wx:else class="custom">
+      <input class="code-input" placeholder="输入代码回车加自选" bindconfirm="onAddCode" />
+      <button class="source" bindtap="onClearCodes">清空自选股</button>
+      <text class="tip">A 股填 6 位代码，港股填 5 位代码；行情来自东方财富，仅供浏览。</text>
+    </view>
+
+    <view class="spacer"></view>
+    <text class="status">{{status}}</text>
+  </view>
+
+  <view class="content">
+    <view class="content-head">
+      <text class="head-title">{{headTitle}}</text>
+      <text class="head-sub">{{headSub}}</text>
+    </view>
+
+    <view class="list">
+      <view class="row" wx:for="{{rows}}" wx:key="key" bindtap="onRow" data-url="{{item.url}}" data-code="{{item.code}}" data-name="{{item.name}}">
+        <text class="{{item.top ? 'rank rank-hot' : 'rank'}}">{{item.rank}}</text>
+        <text class="row-title">{{item.title}}</text>
+        <text class="{{item.valueCls}}">{{item.value}}</text>
+      </view>
+    </view>
+
+    <view class="pager">
+      <button class="pbtn" bindtap="onPrev">上一页</button>
+      <text class="page-info">{{pageText}}</text>
+      <button class="pbtn" bindtap="onNext">下一页</button>
+      <button class="{{auto ? 'pbtn pbtn-on' : 'pbtn'}}" bindtap="onToggleAuto">自动翻页 {{auto ? '开' : '关'}}</button>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,89 @@
+/* 直播播放页 */
+.play-page {
+  flex-direction: column;
+  padding: 18rpx 24rpx;
+}
+
+.pbar {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 14rpx;
+}
+
+.ptitle {
+  margin-left: 16rpx;
+}
+
+.pname {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #f2f7fd;
+}
+
+.psub {
+  font-size: 18rpx;
+  color: #7c8a9b;
+  margin-top: 2rpx;
+}
+
+.stage {
+  width: 100%;
+  height: 470rpx;
+  flex-shrink: 0;
+  background-color: #000000;
+  border-radius: 14rpx;
+}
+
+.stage-empty {
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid #1c2632;
+}
+
+.panel {
+  flex: 1;
+  flex-direction: column;
+  padding-top: 14rpx;
+}
+
+.status-row {
+  flex-direction: row;
+  align-items: center;
+  min-height: 30rpx;
+  margin-bottom: 8rpx;
+}
+
+.status-text {
+  font-size: 19rpx;
+  color: #22d3ee;
+}
+
+.line-row {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.line-label {
+  font-size: 19rpx;
+  color: #6f7c8d;
+  margin-right: 10rpx;
+}
+
+.nav-row {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.nav-btn {
+  flex: 1;
+  margin-left: 0;
+  margin-right: 12rpx;
+}
+
+.hint {
+  font-size: 18rpx;
+  color: #586473;
+}

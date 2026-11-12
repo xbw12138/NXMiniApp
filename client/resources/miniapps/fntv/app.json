@@ -1,0 +1,15 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/login/login",
+    "pages/library/library",
+    "pages/detail/detail",
+    "pages/search/search",
+    "pages/play/play",
+    "pages/settings/settings"
+  ],
+  "window": {
+    "backgroundColor": "#0a0b0e",
+    "navigationBarTitleText": "飞牛影视"
+  }
+}

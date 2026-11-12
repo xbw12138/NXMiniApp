@@ -1,0 +1,86 @@
+<view class="page">
+  <view class="topbar">
+    <view class="brand">
+      <view class="brand-dot"></view>
+      <text class="brand-text">飞牛影视</text>
+      <text class="brand-sub">Switch 电视端</text>
+    </view>
+    <view class="spacer"></view>
+    <view class="nav-btn" bindtap="goHome">
+      <text class="nav-text">返回首页</text>
+    </view>
+  </view>
+
+  <scroll-view class="body" scroll-y="{{true}}" style="height: 100%;">
+    <view wx:if="{{connected}}" class="card">
+      <text class="card-title">已连接</text>
+      <text class="card-sub">{{connectedServer}}</text>
+      <text class="card-sub">当前账号：{{connectedUser}}</text>
+      <view class="row" style="margin-top: 24rpx;">
+        <button class="btn" bindtap="goHome">
+          <text class="btn-text">进入媒体库</text>
+        </button>
+        <button class="btn btn-ghost" bindtap="onDisconnect">
+          <text class="btn-text">断开连接</text>
+        </button>
+      </view>
+    </view>
+
+    <view class="card">
+      <text class="card-title">{{connected ? '更换服务器' : '连接飞牛影视'}}</text>
+      <text class="hint">飞牛影视服务默认端口 8005，填写 NAS 地址即可，例如 192.168.1.10:8005</text>
+
+      <view class="field">
+        <text class="field-label">服务器地址</text>
+        <input class="input" placeholder="192.168.1.10:8005" value="{{server}}"
+               data-field="server" bindinput="onInput" bindconfirm="onConnect"/>
+      </view>
+
+      <view class="chips" style="margin-top: 20rpx;">
+        <view class="chip {{mode === 'password' ? 'chip-on' : ''}}" data-mode="password" bindtap="onMode">
+          <text class="chip-text">账号密码</text>
+        </view>
+        <view class="chip {{mode === 'apikey' ? 'chip-on' : ''}}" data-mode="apikey" bindtap="onMode">
+          <text class="chip-text">API 密钥</text>
+        </view>
+      </view>
+
+      <block wx:if="{{mode === 'password'}}">
+        <view class="field">
+          <text class="field-label">账号</text>
+          <input class="input" placeholder="飞牛影视账号" value="{{username}}"
+                 data-field="username" bindinput="onInput"/>
+        </view>
+        <view class="field">
+          <text class="field-label">密码</text>
+          <input class="input" placeholder="飞牛影视密码" password="{{true}}" value="{{password}}"
+                 data-field="password" bindinput="onInput" bindconfirm="onConnect"/>
+        </view>
+      </block>
+
+      <block wx:else>
+        <view class="field">
+          <text class="field-label">API 密钥</text>
+          <input class="input" placeholder="粘贴飞牛影视 API 密钥" value="{{apiKey}}"
+                 data-field="apiKey" bindinput="onInput" bindconfirm="onConnect"/>
+          <text class="hint">API 密钥登录会使用该密钥所属的用户，适合不方便输入密码的场景。</text>
+        </view>
+      </block>
+
+      <view class="row" style="margin-top: 28rpx;">
+        <button class="btn" bindtap="onConnect">
+          <text class="btn-text">{{loading ? '正在连接…' : '连接服务器'}}</text>
+        </button>
+      </view>
+      <text wx:if="{{errMsg}}" class="error">{{errMsg}}</text>
+    </view>
+
+    <view class="card">
+      <text class="card-title">连接说明</text>
+      <text class="hint">1. 在飞牛 NAS 应用中心安装并初始化「飞牛影视」</text>
+      <text class="hint">2. 确认 Switch 与 NAS 在同一局域网，或已配置可访问的域名</text>
+      <text class="hint">3. 默认使用飞牛影视的 Jellyfin 兼容接口，端口 8005</text>
+      <text class="hint">4. 账号信息只保存在本机，不会上传到任何第三方服务器</text>
+    </view>
+  </scroll-view>
+</view>

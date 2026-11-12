@@ -1,0 +1,7 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "backgroundColor": "#080a0f",
+    "navigationBarTitleText": "今日热榜"
+  }
+}

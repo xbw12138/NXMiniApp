@@ -1,0 +1,46 @@
+<view class="page sources-page">
+  <view class="sbar">
+    <text class="stitle">直播源</text>
+    <text class="ssub">内置采集源 + 你自己的 M3U 播放列表</text>
+    <view class="spacer"></view>
+    <view class="btn" bindtap="onBack">返回频道墙</view>
+  </view>
+
+  <scroll-view class="slist" scroll-y="true">
+    <view wx:for="{{sources}}" class="src-card">
+      <view class="src-head">
+        <text class="src-name">{{item.name}}</text>
+        <view wx:if="{{item.builtin}}" class="pill">
+          <text class="pill-text">内置</text>
+        </view>
+        <view wx:if="{{item.count}}" class="pill">
+          <text class="pill-text">{{item.count}} 频道</text>
+        </view>
+        <view class="spacer"></view>
+        <view class="btn btn-small {{item.enabled ? 'btn-accent' : ''}}" data-id="{{item.id}}" bindtap="onToggle">{{item.enabled ? '已启用' : '已停用'}}</view>
+        <view wx:if="{{!item.builtin}}" class="btn btn-small btn-danger" data-id="{{item.id}}" bindtap="onDelete">删除</view>
+      </view>
+      <text class="src-url">{{item.url}}</text>
+      <text wx:if="{{item.error}}" class="src-err">{{item.error}}</text>
+    </view>
+
+    <view wx:if="{{sources.length === 0}}" class="center-box">
+      <text class="empty-title">没有启用中的直播源</text>
+      <text class="empty-sub">恢复默认源，或添加自己的 M3U 地址</text>
+    </view>
+
+    <view class="add-card">
+      <text class="add-title">添加自己的直播源</text>
+      <text class="add-sub">填 M3U / M3U8 播放列表地址，添加时会先检测能否读取</text>
+      <input class="input add-input" value="{{name}}" placeholder="源名称，例如 我的直播源" bindinput="onName" />
+      <input class="input add-input" value="{{url}}" placeholder="https://example.com/live.m3u" bindinput="onUrl" />
+      <view class="add-row">
+        <view class="btn btn-accent" bindtap="onAdd">{{adding ? '正在检测…' : '添加并检测'}}</view>
+        <view class="btn" bindtap="onReset">恢复默认源</view>
+        <text wx:if="{{addMsg}}" class="add-msg">{{addMsg}}</text>
+      </view>
+    </view>
+
+    <text class="foot-text">内置源来自公开的 iptv-org / iptv-api 项目，频道由上游采集，可能随时失效；直播源内容版权归源提供方所有。</text>
+  </scroll-view>
+</view>

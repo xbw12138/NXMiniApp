@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/play/play",
+    "pages/sources/sources"
+  ],
+  "window": {
+    "backgroundColor": "#080a0f",
+    "navigationBarTitleText": "直播电视"
+  }
+}

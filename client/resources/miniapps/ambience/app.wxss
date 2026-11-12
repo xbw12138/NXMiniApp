@@ -1,0 +1,286 @@
+/* 客厅时钟 —— 深色环境屏主题 */
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background-color: #070a0f;
+  color: #e8eef7;
+  padding: 34rpx 46rpx 26rpx 46rpx;
+}
+
+.main {
+  flex-direction: row;
+  flex: 1;
+  align-items: stretch;
+}
+
+.left {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.right {
+  width: 430rpx;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.clock-wrap {
+  flex-direction: column;
+}
+
+/* 防烧屏：每分钟把内容整体挪一点 */
+.s0 { margin-left: 0; margin-top: 0; }
+.s1 { margin-left: 14rpx; margin-top: 10rpx; }
+.s2 { margin-left: 26rpx; margin-top: 0; }
+.s3 { margin-left: 10rpx; margin-top: 18rpx; }
+
+.time-row {
+  flex-direction: row;
+  align-items: flex-end;
+}
+
+.time {
+  font-size: 196rpx;
+  font-weight: bold;
+  color: #f4f8ff;
+  line-height: 0.92;
+}
+
+.sec {
+  font-size: 52rpx;
+  color: #38bdf8;
+  margin-left: 14rpx;
+  margin-bottom: 22rpx;
+  line-height: 1;
+}
+
+.date-row {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 18rpx;
+}
+
+.date {
+  font-size: 34rpx;
+  color: #9fb0c6;
+}
+
+.weekday {
+  font-size: 26rpx;
+  color: #0b1220;
+  background-color: #38bdf8;
+  border-radius: 8rpx;
+  padding: 3rpx 12rpx;
+  margin-left: 14rpx;
+}
+
+.lunar {
+  font-size: 32rpx;
+  color: #fbbf24;
+  margin-top: 16rpx;
+}
+
+.term {
+  font-size: 25rpx;
+  color: #7b8ba0;
+  margin-top: 10rpx;
+}
+
+.card {
+  background-color: #0e141d;
+  border: 2rpx solid #18202c;
+  border-radius: 20rpx;
+  padding: 20rpx 22rpx;
+  margin-bottom: 18rpx;
+  flex-direction: column;
+}
+
+.card-head {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-size: 20rpx;
+  color: #68788d;
+}
+
+.city {
+  font-size: 24rpx;
+  color: #38bdf8;
+  padding: 4rpx 2rpx 4rpx 14rpx;
+}
+
+.temp-row {
+  flex-direction: row;
+  align-items: flex-end;
+  margin-top: 4rpx;
+}
+
+.temp {
+  font-size: 92rpx;
+  font-weight: bold;
+  color: #f4f8ff;
+  line-height: 1;
+}
+
+.unit {
+  font-size: 30rpx;
+  color: #7b8ba0;
+  margin-left: 6rpx;
+  margin-bottom: 14rpx;
+}
+
+.cond {
+  font-size: 27rpx;
+  color: #cfe0f2;
+  margin-top: 8rpx;
+}
+
+.detail-row {
+  flex-direction: row;
+  margin-top: 10rpx;
+}
+
+.detail {
+  font-size: 21rpx;
+  color: #77879c;
+  margin-right: 18rpx;
+}
+
+.forecast {
+  flex-direction: row;
+  margin-top: 16rpx;
+  border-top: 2rpx solid #18202c;
+  padding-top: 14rpx;
+}
+
+.fc {
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+}
+
+.fc-day {
+  font-size: 20rpx;
+  color: #77879c;
+}
+
+.fc-temp {
+  font-size: 24rpx;
+  color: #dce8f6;
+  margin-top: 6rpx;
+}
+
+.fc-cond {
+  font-size: 18rpx;
+  color: #68788d;
+  margin-top: 4rpx;
+}
+
+.err {
+  font-size: 22rpx;
+  color: #fca5a5;
+  margin-top: 8rpx;
+}
+
+.cd-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 52rpx;
+}
+
+.cd-label {
+  font-size: 24rpx;
+  color: #93a3b8;
+}
+
+.cd-value {
+  font-size: 26rpx;
+  color: #f4f8ff;
+}
+
+.cd-days {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #38bdf8;
+  margin-right: 4rpx;
+}
+
+.footer {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 40rpx;
+  flex-shrink: 0;
+}
+
+.footer-text {
+  font-size: 19rpx;
+  color: #4f5d70;
+}
+
+/* 城市选择 */
+.mask {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(4, 7, 12, 0.94);
+  flex-direction: column;
+  padding: 40rpx 50rpx;
+}
+
+.mask-head {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.mask-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #f4f8ff;
+}
+
+.city-row {
+  flex-direction: row;
+  margin-bottom: 14rpx;
+}
+
+.city-btn {
+  width: 168rpx;
+  height: 82rpx;
+  margin-right: 14rpx;
+  border-radius: 14rpx;
+  background-color: #111a25;
+  border: 2rpx solid #1e2a3a;
+  color: #cfe0f2;
+  font-size: 24rpx;
+  padding: 0;
+  line-height: 78rpx;
+  text-align: center;
+}
+
+.city-on {
+  background-color: #0b3550;
+  border-color: #38bdf8;
+  color: #e0f2fe;
+}
+
+.city-input {
+  height: 78rpx;
+  border-radius: 14rpx;
+  background-color: #111a25;
+  border: 2rpx solid #1e2a3a;
+  color: #e8eef7;
+  font-size: 24rpx;
+  padding: 0 22rpx;
+  margin-top: 6rpx;
+}

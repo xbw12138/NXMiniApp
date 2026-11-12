@@ -1,0 +1,130 @@
+/* 直播电视 · 全局样式（深色电视墙主题） */
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: row;
+  background-color: #080a0f;
+  color: #e9eff7;
+  padding: 22rpx 24rpx;
+}
+
+.column {
+  flex-direction: column;
+}
+
+.row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.muted {
+  color: #7f8b9b;
+  font-size: 20rpx;
+}
+
+/* 按钮 */
+.btn {
+  height: 64rpx;
+  padding: 0 24rpx;
+  border-radius: 14rpx;
+  background-color: #17202b;
+  border: 2rpx solid #263243;
+  color: #c8d6e5;
+  font-size: 22rpx;
+  align-items: center;
+  justify-content: center;
+  margin-left: 12rpx;
+}
+
+.btn-accent {
+  background-color: #22d3ee;
+  border: 2rpx solid #22d3ee;
+  color: #04232b;
+  font-weight: bold;
+}
+
+.btn-danger {
+  background-color: #2a1720;
+  border: 2rpx solid #4a2331;
+  color: #ff9bb0;
+}
+
+.btn-small {
+  height: 52rpx;
+  padding: 0 18rpx;
+  font-size: 20rpx;
+}
+
+/* 输入框 */
+.input {
+  height: 64rpx;
+  padding: 0 24rpx;
+  border-radius: 32rpx;
+  background-color: #101620;
+  border: 2rpx solid #222c3a;
+  color: #eef4fb;
+  font-size: 22rpx;
+}
+
+/* 标签 */
+.pill {
+  height: 36rpx;
+  padding: 0 14rpx;
+  border-radius: 10rpx;
+  background-color: #17202b;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10rpx;
+}
+
+.pill-text {
+  font-size: 18rpx;
+  color: #8fa1b5;
+}
+
+.pill-live {
+  background-color: #3a1119;
+}
+
+.pill-live .pill-text {
+  color: #ff7c92;
+  font-weight: bold;
+}
+
+/* 状态 */
+.center-box {
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 40rpx;
+}
+
+.empty-title {
+  font-size: 26rpx;
+  color: #b9c6d6;
+  margin-bottom: 10rpx;
+}
+
+.empty-sub {
+  font-size: 21rpx;
+  color: #6f7c8d;
+  text-align: center;
+  margin-bottom: 24rpx;
+}
+
+.error-text {
+  font-size: 21rpx;
+  color: #ff8ba1;
+  margin-top: 10rpx;
+}
+
+.divider {
+  height: 2rpx;
+  background-color: #1b2430;
+  margin: 14rpx 0;
+}

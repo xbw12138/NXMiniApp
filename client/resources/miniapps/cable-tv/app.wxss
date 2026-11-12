@@ -1,0 +1,276 @@
+/* 有线电视 —— 深色机顶盒主题 */
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background-color: #05070a;
+  padding: 12rpx 20rpx 14rpx 20rpx;
+  color: #e8eef7;
+}
+
+/* 悬浮控制条：全屏时叠在画面上层，空闲 4 秒自动收起 */
+.deck {
+  height: 92rpx;
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 10rpx;
+  padding: 0 16rpx;
+  border-radius: 14rpx;
+  background-color: rgba(5, 7, 10, 0.86);
+  border: 2rpx solid rgba(34, 211, 238, 0.14);
+}
+
+.brand {
+  flex-direction: row;
+  align-items: center;
+  height: 48rpx;
+  padding-right: 20rpx;
+  margin-right: 20rpx;
+  border-right: 2rpx solid #141d27;
+}
+
+.dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 6rpx;
+  background-color: #3a4652;
+  margin-right: 10rpx;
+}
+
+.dot-on {
+  background-color: #ff4d6d;
+}
+
+.brand-name {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #f2f7fd;
+  letter-spacing: 1rpx;
+}
+
+.now {
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+}
+
+.chno {
+  width: 108rpx;
+  font-size: 42rpx;
+  font-weight: bold;
+  color: #22d3ee;
+  line-height: 1;
+}
+
+.now-text {
+  flex-direction: column;
+}
+
+.chname {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #f2f7fd;
+  line-height: 1.2;
+}
+
+.chsub {
+  font-size: 17rpx;
+  color: #6f7d8b;
+  margin-top: 4rpx;
+}
+
+.hint {
+  margin-right: 8rpx;
+}
+
+.hint-text {
+  font-size: 17rpx;
+  color: #4d5a67;
+}
+
+.acts {
+  flex-direction: row;
+  align-items: center;
+}
+
+.act {
+  height: 58rpx;
+  padding: 0 20rpx;
+  margin-left: 10rpx;
+  border-radius: 12rpx;
+  background-color: #101822;
+  border: 2rpx solid #1b2632;
+  align-items: center;
+  justify-content: center;
+}
+
+.act-main {
+  background-color: #0f2b35;
+  border: 2rpx solid #1d5563;
+}
+
+.act-ghost {
+  background-color: #0b1119;
+  border: 2rpx solid #151e28;
+}
+
+.act-text {
+  font-size: 22rpx;
+  color: #c9d5e2;
+}
+
+.act-text-main {
+  color: #67e8f9;
+}
+
+.act-text-ghost {
+  color: #8b98a6;
+}
+
+/* 画面 */
+.stage {
+  flex: 1;
+  background-color: #000000;
+  align-items: center;
+  justify-content: center;
+}
+
+.screen {
+  width: 100%;
+  height: 100%;
+}
+
+/* 频道表 */
+.panel {
+  flex: 1;
+  flex-direction: column;
+  padding: 12rpx 14rpx 8rpx 14rpx;
+  border-radius: 14rpx;
+  background-color: #080d13;
+  border: 2rpx solid #141d27;
+}
+
+.phead {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 12rpx;
+}
+
+.ptitle {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #f2f7fd;
+  margin-right: 20rpx;
+}
+
+.tabs {
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+}
+
+.tab {
+  height: 50rpx;
+  padding: 0 22rpx;
+  margin-right: 10rpx;
+  border-radius: 25rpx;
+  background-color: #0e1620;
+  border: 2rpx solid #17212c;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-on {
+  background-color: #12303c;
+  border: 2rpx solid #1f5c6d;
+}
+
+.tab-text {
+  font-size: 20rpx;
+  color: #8b98a6;
+}
+
+.tab-text-on {
+  color: #7fe9f8;
+  font-weight: bold;
+}
+
+.back {
+  height: 50rpx;
+  padding: 0 22rpx;
+  border-radius: 25rpx;
+  background-color: #182430;
+  border: 2rpx solid #24333f;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-text {
+  font-size: 20rpx;
+  color: #cfe6f0;
+}
+
+.plist {
+  flex: 1;
+  height: 100%;
+}
+
+.prow {
+  width: 100%;
+  flex-direction: row;
+  margin-bottom: 8rpx;
+}
+
+.ch {
+  flex: 1;
+  height: 76rpx;
+  margin-right: 8rpx;
+  padding: 0 12rpx;
+  border-radius: 10rpx;
+  background-color: #0c141d;
+  border: 2rpx solid #16202b;
+  flex-direction: row;
+  align-items: center;
+}
+
+.ch-on {
+  background-color: #0f2b35;
+  border: 2rpx solid #22d3ee;
+}
+
+.ch-blank {
+  background-color: #080d13;
+  border: 2rpx solid #080d13;
+}
+
+.ch-no {
+  width: 66rpx;
+  font-size: 18rpx;
+  color: #5d6b7a;
+}
+
+.ch-name {
+  flex: 1;
+  font-size: 21rpx;
+  color: #d7e2ee;
+}
+
+.ch-on .ch-no {
+  color: #4fc9dc;
+}
+
+.ch-on .ch-name {
+  color: #a5f3fc;
+  font-weight: bold;
+}
+
+.pfoot {
+  padding: 10rpx 4rpx 6rpx 4rpx;
+}
+
+.pfoot-text {
+  font-size: 17rpx;
+  color: #4d5a67;
+}
