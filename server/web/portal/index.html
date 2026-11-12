@@ -317,6 +317,33 @@ a { color: var(--accent); text-decoration: none; }
   .skill .code { flex-basis: auto; }
 }
 
+/* 社区交流 */
+.community {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 26px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+.community .qr {
+  flex: 0 0 190px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.community .qr img { display: block; width: 100%; height: auto; }
+.community .txt h3 { margin: 0 0 6px; font-size: 18px; }
+.community .txt p { margin: 0 0 10px; color: var(--text-2); font-size: 14px; }
+.community .txt strong { color: var(--text); }
+@media (max-width: 900px) {
+  .community { flex-direction: column; padding: 20px; }
+  .community .qr { flex: 0 0 auto; width: 190px; }
+}
+
 /* CTA 横幅 */
 .banner {
   margin-top: 72px;
@@ -520,6 +547,22 @@ unzip nxminiapp-dev.zip -d \
   </div>
 </section>
 
+<section class="section">
+  <h2>社区交流</h2>
+  <p class="sub">反馈问题、交流小程序开发，欢迎加入 QQ 群</p>
+  <div class="community">
+    <a class="qr" href="https://qm.qq.com/q/NZe1VLTuI8" target="_blank" rel="noopener">
+      <img src="/docs/assets/qq-group.jpg" alt="QQ 群二维码：Switch小程序 1001582565">
+    </a>
+    <div class="txt">
+      <h3>Switch小程序</h3>
+      <p>群号：<strong>1001582565</strong></p>
+      <p>手机 QQ 扫码即可加入，开发者和管理员都在群里答疑。</p>
+      <a class="btn primary" href="https://qm.qq.com/q/NZe1VLTuI8" target="_blank" rel="noopener">加入 QQ 群</a>
+    </div>
+  </div>
+</section>
+
 <section class="section" style="padding-top:0">
   <div class="banner">
     <h2>准备好你的小程序了吗？</h2>
@@ -537,6 +580,7 @@ unzip nxminiapp-dev.zip -d \
       <a href="/docs/guide/structure.html">目录结构</a>
       <a href="/docs/reference/store.html">商店规范</a>
       <a href="/admin">管理后台</a>
+      <a href="https://qm.qq.com/q/NZe1VLTuI8" target="_blank" rel="noopener">QQ群</a>
       <a href="https://github.com/xbw12138/NXMiniApp" target="_blank" rel="noopener">GitHub</a>
     </span>
   </div>
