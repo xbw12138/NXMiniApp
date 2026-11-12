@@ -104,6 +104,19 @@ cmake --build build_switch --target miniapp.nro -j 8
 
 把 `build_switch/apps/miniapp/miniapp.nro` 放到 `sdmc:/switch/`，服务器地址写进 `sdmc:/switch/nxkit/config.json`。
 
+## Switch 应用商店（updater.nro）
+
+独立于容器的启动器：原生卡片墙商店 + 容器更新，首次推送后全程免插线。
+
+<div align="center">
+  <img src="docs/assets/updater-desktop.png" alt="Switch 应用商店启动器界面" width="760">
+</div>
+
+- 下载：[updater.nro](https://ecfun.cc/downloads/updater.nro)（约 14 MB），放到 `sdmc:/switch/` 后从 hbmenu 启动
+- 源码：[client/apps/updater](client/apps/updater)
+- 支持分类筛选、详情面板、一键安装；容器更新多段并行下载，先备份再替换，失败自动回滚
+- 桌面预览：`cmake --build build_desktop --target updater -j 8 && ./build_desktop/apps/updater/updater`
+
 ## 社区交流
 
 - 官网：[ecfun.cc](https://ecfun.cc)
