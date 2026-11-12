@@ -234,6 +234,32 @@ a { color: var(--accent); text-decoration: none; }
   font-size: 12.5px;
 }
 
+/* 应用商店启动器 */
+.launcher {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 24px;
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.launcher .shot { flex: 1 1 58%; min-width: 0; }
+.launcher .shot img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.launcher .txt { flex: 1 1 42%; min-width: 0; }
+.launcher .txt h3 { margin: 0 0 8px; font-size: 16px; }
+.launcher .txt p { margin: 0 0 14px; color: var(--text-2); font-size: 14px; line-height: 1.7; }
+.launcher .meta { margin-top: 10px; color: var(--text-3); font-size: 12.5px; }
+@media (max-width: 760px) {
+  .launcher { flex-direction: column; align-items: stretch; }
+}
+
 /* ---------- 页脚 ---------- */
 .site-foot {
   margin-top: 56px;
@@ -293,6 +319,20 @@ a { color: var(--accent); text-decoration: none; }
       <li>通过 Homebrew 菜单启动，容器会自动连接商店检查小程序更新。</li>
       <li>下载后可对照页面上展示的 SHA-256 校验文件完整性。</li>
     </ol>
+  </div>
+
+  <div class="launcher">
+    <div class="shot">
+      <img src="/docs/assets/updater-desktop.png" alt="Switch 应用商店启动器界面截图" loading="lazy">
+    </div>
+    <div class="txt">
+      <h3>Switch 应用商店启动器</h3>
+      <p>
+        独立 updater.nro：原生卡片墙商店 + 容器一键更新。装一次之后，容器更新全程在机内完成，不需要再插线。
+      </p>
+      <a class="btn" href="/downloads/updater.nro" download="updater.nro">下载 updater.nro</a>
+      <div class="meta">约 14 MB · 放到 <code style="padding:1px 5px;border-radius:4px;background:var(--code-bg);color:#b3195b;font-family:ui-monospace,Consolas,monospace;font-size:12.5px">/switch/</code> · 与容器共用 <code style="padding:1px 5px;border-radius:4px;background:var(--code-bg);color:#b3195b;font-family:ui-monospace,Consolas,monospace;font-size:12.5px">sdmc:/switch/nxkit/config.json</code></div>
+    </div>
   </div>
 
   <footer class="site-foot">
