@@ -8,6 +8,7 @@
 #include "miniapp/hardware.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -64,7 +65,9 @@ struct HardwareManager::Impl {
 
 #ifdef __SWITCH__
     bool motionStarted = false;
+    std::atomic<bool> motionWanted{false};
     HidSixAxisSensorHandle handles[2] = {};
+    bool handleActive[2] = {false, false};
     int handleCount = 0;
 
     bool irActive = false;
@@ -128,7 +131,7 @@ void HardwareManager::tick(double nowMs) {
     impl->lastTick = nowMs;
     if (delta < 0.0 || delta > 200.0) delta = 0.0;
 
-    impl->pollMotion();
+    if (impl->motionWanted) impl->pollMotion();
     if (impl->rumbleActive) {
         if (impl->rumbleRemainingMs > 0.0) {
             impl->rumbleRemainingMs -= delta;
@@ -145,6 +148,12 @@ void HardwareManager::tick(double nowMs) {
 JsonValue HardwareManager::motionState() const {
     std::lock_guard<std::mutex> lock(impl->mutex);
     return impl->motionState;
+}
+
+void HardwareManager::requestMotion() {
+#ifdef __SWITCH__
+    impl->motionWanted = true;
+#endif
 }
 
 void HardwareManager::rumble(double lowFreq, double highFreq, double lowAmp, double highAmp,
@@ -318,27 +327,39 @@ void HardwareManager::Impl::ensureMotion() {
     if (motionStarted) return;
 
     HidNpadIdType id = HidNpadIdType_Handheld;
-    u32 style = hidGetNpadStyleSet(id);
+    HidNpadStyleTag style = static_cast<HidNpadStyleTag>(hidGetNpadStyleSet(id));
     if ((style & HidNpadStyleTag_NpadHandheld) == 0) {
         id = HidNpadIdType_No1;
-        style = hidGetNpadStyleSet(id);
+        style = static_cast<HidNpadStyleTag>(hidGetNpadStyleSet(id));
     }
     if (style == 0) return;
 
-    handleCount = static_cast<int>(hidGetSixAxisSensorHandles(
-        handles, 2, id, static_cast<HidNpadStyleTag>(style)));
-    if (handleCount <= 0) {
-        handleCount = 0;
+    // hidGetSixAxisSensorHandles 返回 Result 而不是句柄数量，句柄由调用方数组接收。
+    // JoyDual 会给出左右两个句柄，其余样式只有一个。
+    const int total = (style & HidNpadStyleTag_NpadJoyDual) != 0 ? 2 : 1;
+    const Result rc = hidGetSixAxisSensorHandles(handles, total, id, style);
+    if (R_FAILED(rc)) {
+        brls::Logger::warning("miniapp motion: hidGetSixAxisSensorHandles failed {}",
+                              resultText(rc));
         return;
     }
-    for (int i = 0; i < handleCount; ++i) {
-        const Result rc = hidStartSixAxisSensor(handles[i]);
-        if (R_FAILED(rc)) {
+
+    handleCount = total;
+    int active = 0;
+    for (int i = 0; i < total; ++i) {
+        const Result started = hidStartSixAxisSensor(handles[i]);
+        if (R_FAILED(started)) {
             brls::Logger::warning("miniapp motion: hidStartSixAxisSensor failed {}",
-                                  resultText(rc));
+                                  resultText(started));
+            continue;
         }
+        handleActive[i] = true;
+        ++active;
     }
+    if (active == 0) return;
+
     motionStarted = true;
+    brls::Logger::info("miniapp motion: started {} sixaxis sensor(s)", active);
 }
 
 void HardwareManager::Impl::pollMotion() {
@@ -346,7 +367,7 @@ void HardwareManager::Impl::pollMotion() {
 
     JsonValue state = JsonValue::object();
     state.setMember("supported", JsonValue::boolean(true));
-    state.setMember("connected", JsonValue::boolean(handleCount > 0));
+    state.setMember("connected", JsonValue::boolean(motionStarted));
 
     std::vector<JsonValue> controllers;
     JsonValue firstGyro = JsonValue::array({JsonValue::number(0), JsonValue::number(0),
@@ -355,6 +376,7 @@ void HardwareManager::Impl::pollMotion() {
     JsonValue firstAngle = firstGyro;
 
     for (int i = 0; motionStarted && i < handleCount; ++i) {
+        if (!handleActive[i]) continue;
         HidSixAxisSensorState raw{};
         if (hidGetSixAxisSensorStates(handles[i], &raw, 1) == 0) continue;
         if ((raw.attributes & HidSixAxisSensorAttribute_IsConnected) == 0) continue;
@@ -387,7 +409,11 @@ void HardwareManager::Impl::pollMotion() {
 
 void HardwareManager::Impl::stopMotion() {
     if (!motionStarted) return;
-    for (int i = 0; i < handleCount; ++i) hidStopSixAxisSensor(handles[i]);
+    for (int i = 0; i < handleCount; ++i) {
+        if (!handleActive[i]) continue;
+        hidStopSixAxisSensor(handles[i]);
+        handleActive[i] = false;
+    }
     handleCount = 0;
     motionStarted = false;
 }

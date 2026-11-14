@@ -4395,7 +4395,9 @@ JsonValue MiniappView::gamepadState() {
 }
 
 JsonValue MiniappView::motionState() {
-    return hardware ? hardware->motionState() : JsonValue::object();
+    if (!hardware) return JsonValue::object();
+    hardware->requestMotion();
+    return hardware->motionState();
 }
 
 void MiniappView::rumblePlay(double lowFreq, double highFreq, double lowAmp, double highAmp,

@@ -29,6 +29,8 @@ public:
     void tick(double nowMs);
 
     // ---- 六轴体感 ----
+    /// 脚本首次读取六轴状态时调用：下一帧才真正开启传感器，避免无谓占用 HID。
+    void requestMotion();
     JsonValue motionState() const;
 
     // ---- HD 震动 ----
