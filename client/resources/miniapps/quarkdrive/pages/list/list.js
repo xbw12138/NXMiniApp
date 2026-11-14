@@ -7,7 +7,9 @@ Page({
     total: 0,
     pages: 1,
     loading: false,
-    errMsg: ''
+    errMsg: '',
+    subtitle: '',
+    pageText: ''
   },
 
   onLoad(query) {
@@ -18,14 +20,14 @@ Page({
     } catch (e) {
       name = query.name || name;
     }
-    this.setData({ fid: fid, name: name });
+    this.setData({ fid: fid, name: name, subtitle: '正在加载…' });
     wx.setNavigationBarTitle({ title: name });
     this.load(1);
   },
 
   load(page) {
     var self = this;
-    self.setData({ loading: true, errMsg: '' });
+    self.setData({ loading: true, errMsg: '', subtitle: '正在加载…' });
     wx.showLoading({ title: '加载中…' });
     getApp().listFiles(self.data.fid, page).then(function (body) {
       wx.hideLoading();
@@ -34,17 +36,20 @@ Page({
       var size = getApp().globalData.pageSize;
       var items = [];
       list.forEach(function (f) { items.push(getApp().fileModel(f)); });
+      var pages = Math.max(1, Math.ceil(total / size));
       self.setData({
         loading: false,
         page: page,
         total: total,
-        pages: Math.max(1, Math.ceil(total / size)),
-        items: items
+        pages: pages,
+        items: items,
+        subtitle: items.length + ' 个项目 · 第 ' + page + '/' + pages + ' 页',
+        pageText: '第 ' + page + ' / ' + pages + ' 页'
       });
     }).catch(function (err) {
       wx.hideLoading();
       var msg = (err && err.message) || '加载失败';
-      self.setData({ loading: false, errMsg: msg });
+      self.setData({ loading: false, errMsg: msg, subtitle: '加载失败' });
       if (msg.indexOf('Cookie') >= 0 || msg.indexOf('登录') >= 0) {
         try { wx.removeStorageSync('quark_cookie'); } catch (e) {}
         wx.showToast({ title: msg });
@@ -54,6 +59,7 @@ Page({
   },
 
   onRefresh() { this.load(this.data.page); },
+  onBack() { wx.navigateBack({ delta: 1 }); },
   prevPage() { if (this.data.page > 1) this.load(this.data.page - 1); },
   nextPage() { if (this.data.page < this.data.pages) this.load(this.data.page + 1); },
   goSearch() { wx.navigateTo({ url: '/pages/search/search' }); },

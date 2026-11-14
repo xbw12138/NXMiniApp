@@ -9,6 +9,7 @@ App({
     smbSessions: {},      // SMB 会话 id 内存缓存（sourceId -> smbId，不持久化）
     smbScanAt: {},        // 上次扫描时间，防止每次刷新都重新扫盘
     smbScanning: {},      // 扫描中的源，避免重复触发
+    smbScanError: {},     // 最近一次扫描失败的原因（sourceId -> 文案）
     smbUpdatedAt: 0       // 扫描完成时间戳，页面据此自动刷新
   },
 
@@ -714,6 +715,26 @@ App({
         finished = true;
         reject(new Error('连接超时，请检查地址与网络'));
       }, 15000);
+      // SMB：直接跑一次扫描，根目录打不开/子目录选错时能把真实原因显示出来
+      // （只读媒体库索引的话永远只会是 0 个视频）。
+      if (source.type === 'smb') {
+        // 新建数据源还没保存时没有 id，用一个临时 id 建会话/索引，避免写到 undefined。
+        var probe = source.id ? source
+                              : { id: 'probe', type: source.type, name: source.name,
+                                  config: source.config, enabled: true };
+        self.smbNativeScan(probe).then(function (count) {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          resolve({ ok: true, count: count || 0 });
+        }, function (err) {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          reject(err || new Error('连接失败'));
+        });
+        return;
+      }
       self.listMovies(source).then(function (list) {
         if (finished) return;
         finished = true;
@@ -1694,12 +1715,20 @@ App({
   },
 
   // 原生媒体库：读本地索引（秒出，不需要 SMB 连接）。
+  // root 要和扫描时一致：换了子目录后旧索引属于别的目录，容器会返回空等重扫。
   smbLibraryPage(source, offset, limit) {
+    var self = this;
     return new Promise(function (resolve) {
       wx.media.library({
-        sourceId: source.id, offset: offset, limit: limit,
+        sourceId: source.id, root: self.smbRootPath(source), offset: offset, limit: limit,
         success: function (res) { resolve(res || { total: 0, list: [] }); },
-        fail: function () { resolve({ total: 0, list: [] }); }
+        fail: function (err) {
+          // 根目录和索引不一致时容器会返回这个错误（等重扫），打日志便于排查。
+          console.log('media library read failed source=' + source.id +
+                      ' root=' + self.smbRootPath(source) + ' err=' +
+                      ((err && err.errMsg) || 'unknown'));
+          resolve({ total: 0, list: [] });
+        }
       });
     });
   },
@@ -1708,7 +1737,7 @@ App({
   smbNativeScan(source, maxDepth, maxFiles) {
     var self = this;
     return self.smbEnsureId(source).then(function (smbId) {
-      return new Promise(function (resolve) {
+      return new Promise(function (resolve, reject) {
         var started = Date.now();
         wx.media.scan({
           sourceId: source.id, id: smbId, root: self.smbRootPath(source),
@@ -1719,38 +1748,54 @@ App({
             resolve((res && res.total) || 0);
           },
           fail: function (err) {
-            console.log('media scan source=' + source.id + ' failed: ' +
-                        ((err && err.errMsg) || 'unknown'));
-            resolve(0);
+            var msg = ((err && err.errMsg) || 'unknown').replace(/^media\.scan:fail\s*/, '');
+            console.log('media scan source=' + source.id + ' failed: ' + msg);
+            // 把真实原因抛给调用方（测试连接会显示出来），不要吞成 0。
+            reject(new Error(msg));
           }
         });
       });
-    }).catch(function () { return 0; });
+    });
   },
 
   // 扫描节流：30 分钟内不重复扫盘；同一数据源不会并发扫描。
   // 扫盘要走 SMB 网络遍历，在硬件羸弱的 Switch 上很吃 CPU/网络，
   // 而片库变化很慢，没必要每次进首页都扫一遍。
-  smbScheduleScan(source, delay) {
+  // force：索引读不到内容（例如刚换了根目录）时缩短节流窗口，尽快重扫；
+  // 空库也不会每次进首页都扫盘。
+  smbScheduleScan(source, delay, force) {
     var self = this;
     var now = Date.now();
-    var last = self.globalData.smbScanAt[source.id] || 0;
-    // App 实例不跨页共享，扫描时间也落盘，避免每次进入都重新扫盘。
+    var root = self.smbRootPath(source);
+    // 节流以落盘时间戳为准：页面各持有独立 App 实例，内存里的时间戳
+    // 在用户改完根目录返回首页时可能是旧值，会让本该重扫的库一直空着。
+    var last = 0;
+    var scannedRoot = '';
     try {
-      var stored = wx.getStorageSync('bmh_scan_' + source.id) || 0;
-      if (stored > last) last = stored;
+      last = wx.getStorageSync('bmh_scan_' + source.id) || 0;
+      // 上次扫描用的根目录：换了子目录后旧索引属于别的目录，必须立刻重扫。
+      scannedRoot = wx.getStorageSync('bmh_scan_root_' + source.id) || '';
     } catch (e) {}
+    if (!scannedRoot) scannedRoot = '/';
+    if (scannedRoot !== root) last = 0;
     if (self.globalData.smbScanning[source.id]) return;
-    if (now - last < 30 * 60000) return;
+    if (now - last < (force ? 5 : 30) * 60000) return;
     self.globalData.smbScanAt[source.id] = now;
-    try { wx.setStorageSync('bmh_scan_' + source.id, now); } catch (e) {}
+    try {
+      wx.setStorageSync('bmh_scan_' + source.id, now);
+      wx.setStorageSync('bmh_scan_root_' + source.id, root);
+    } catch (e) {}
     self.globalData.smbScanning[source.id] = true;
     var run = function () {
       self.smbNativeScan(source).then(function () {
         self.globalData.smbScanning[source.id] = false;
+        delete self.globalData.smbScanError[source.id];
         self.globalData.smbUpdatedAt = Date.now();
-      }, function () {
+      }, function (err) {
         self.globalData.smbScanning[source.id] = false;
+        // 扫描失败的原因要留给界面显示，否则首页只会一直停在“扫描中”。
+        self.globalData.smbScanError[source.id] = (err && err.message) || '扫描失败';
+        self.globalData.smbUpdatedAt = Date.now();
       });
     };
     if (delay > 0) setTimeout(run, delay);
@@ -1775,21 +1820,36 @@ App({
                       ' loaded=' + files.length);
           // 先让首屏渲染完，再启动扫描，避免和布局/图片抢 CPU。
           self.smbScheduleScan(source, 3000);
-          return self.smbMapMovies(source, files);
+          return self.smbPosterContext(source, files).then(function (smbId) {
+            return self.smbMapMovies(source, files, smbId);
+          });
         }
         console.log('media library miss source=' + source.id + ', background scan scheduled');
-        self.smbScheduleScan(source, 300);
+        self.smbScheduleScan(source, 300, true);
         return [];
       });
   },
 
-  smbMapMovies(source, files) {
+  // 封面图要走本地 HTTP 流代理，URL 里需要 SMB 会话 id。
+  // 整库没有封面图时不建立连接，避免为了空封面拖慢首屏。
+  smbPosterContext(source, files) {
+    var hasPoster = (files || []).some(function (f) { return !!f.poster; });
+    if (!hasPoster) return Promise.resolve('');
+    return this.smbEnsureId(source).then(function (id) {
+      return id;
+    }, function () {
+      return '';
+    });
+  },
+
+  smbMapMovies(source, files, smbId) {
     var self = this;
     return (files || []).map(function (f) {
       var name = f.name.split('/').pop().replace(/\.[^.]+$/, '');
       return self.makeMovie(source, f.name, {
         title: name,
-        poster: '',
+        // 索引里带的是 SMB 上的图片路径，交给容器转成本地流代理地址。
+        poster: (f.poster && smbId) ? ('smb://' + smbId + f.poster) : '',
         year: '',
         genre: '',
         duration: self.fmtSize(f.size),
@@ -1830,8 +1890,11 @@ App({
 
   smbGetPlayUrl(source, itemId) {
     var self = this;
+    console.log('smb play: connect source=' + source.id + ' item=' + itemId);
     return self.smbEnsureId(source).then(function (smbId) {
+      console.log('smb play: session=' + smbId);
       var url = wx.smb.streamUrl({ id: smbId, path: itemId });
+      console.log('smb play: url=' + url);
       if (!url) throw new Error('生成播放地址失败');
       return url;
     });

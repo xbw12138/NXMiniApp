@@ -558,10 +558,13 @@ Page({
         try { wx.removeStorageSync(app.moviesCacheKey(old.id)); } catch (e) {}
         try { wx.removeStorageSync(app.moviesCountKey(old.id)); } catch (e) {}
         try { wx.removeStorageSync('bmh_scan_' + old.id); } catch (e) {}
+        try { wx.removeStorageSync('bmh_scan_root_' + old.id); } catch (e) {}
       }
     } else {
       app.addSource(source);
     }
+    // 通知首页：数据源变了，回去要立刻重新聚合，不要等下一次启动。
+    try { wx.setStorageSync('bmh_dirty_at', Date.now()); } catch (e) {}
     wx.showToast({ title: editing ? '已保存' : '已添加' });
     setTimeout(function () { wx.navigateBack({ delta: 1 }); }, 500);
   }

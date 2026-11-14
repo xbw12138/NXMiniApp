@@ -1,82 +1,131 @@
 <view class="page">
-  <image wx:if="{{banner.cover_url}}" class="wall" src="{{banner.cover_url}}" mode="aspectFill"/>
-  <view class="scrim"></view>
+  <view class="topbar">
+    <view class="brand">
+      <text class="brand-name">Switch小程序</text>
+    </view>
 
-  <view class="stage">
-    <view class="main">
-      <view class="topbar">
-        <view class="brand-pill">
-          <view class="brand-dot"></view>
-          <text class="brand">Switch 小程序</text>
+    <view class="topnav">
+      <view class="nav nav-on" bindtap="onToday">
+        <text class="nav-text nav-text-on">今日</text>
+      </view>
+      <view class="nav" bindtap="onAll">
+        <text class="nav-text">全部</text>
+      </view>
+      <view class="nav" bindtap="onSearch">
+        <text class="nav-text">搜索</text>
+      </view>
+    </view>
+
+    <text class="date-text">{{dateText}}</text>
+    <text wx:if="{{status}}" class="status">{{status}}</text>
+    <view class="spacer"></view>
+  </view>
+
+  <view class="body">
+    <view class="left">
+      <!-- 今日精选：整块封面卡片，标题压在图上 -->
+      <view class="hero-wrap">
+        <image wx:if="{{hero.cover_url}}" class="hero-bg" src="{{hero.cover_url}}" mode="aspectFill"/>
+        <view class="hero-scrim"></view>
+        <view class="hero" bindtap="onHeroTap">
+          <view class="hero-head">
+            <text class="hero-eyebrow">今日精选</text>
+          </view>
+
+          <view class="spacer"></view>
+
+          <view class="hero-title-box">
+            <text class="hero-title">{{hero.title}}</text>
+          </view>
+          <view class="hero-sum-box">
+            <text class="hero-sum">{{hero.summary}}</text>
+          </view>
+          <view class="hero-foot">
+            <view class="dots">
+              <view class="dot {{index === bannerIndex ? 'dot-on' : ''}}" wx:for="{{banners}}" wx:key="id"/>
+            </view>
+            <view class="spacer"></view>
+            <text class="hero-more">阅读全文</text>
+          </view>
         </view>
-        <view class="search" bindtap="onSearch">
-          <text class="search-text">搜索小程序</text>
-        </view>
-        <view class="all-entry" bindtap="onAll">
-          <text class="all-entry-text">全部</text>
-        </view>
-        <view class="spacer"></view>
       </view>
 
-      <view wx:if="{{banner.title}}" class="feature" data-target="{{banner.id}}" bindtap="onNewsTap">
-        <view class="feature-tag">
-          <view class="tag-pill">
-            <text class="tag-text">今日精选</text>
-          </view>
+      <!-- 资讯：横向三张编辑推荐卡（封面大图 + 压字） -->
+      <view class="section">
+        <view class="section-head">
+          <text class="section-title">资讯</text>
+          <text class="section-sub">编辑推荐</text>
           <view class="spacer"></view>
-          <text wx:if="{{status}}" class="status">{{status}}</text>
-          <text wx:else class="feature-hint">按 A 查看详情</text>
+          <text class="section-meta">{{newsCount}} 篇</text>
         </view>
-        <view class="feature-title-box">
-          <text class="feature-title">{{banner.title}}</text>
-        </view>
-        <view class="feature-sum-box">
-          <text class="feature-sum">{{banner.summary}}</text>
-        </view>
-        <view wx:if="{{banners.length > 1}}" class="dots">
-          <view class="dot {{index === bannerIndex ? 'dot-on' : ''}}" wx:for="{{banners}}" wx:key="id"/>
-        </view>
-      </view>
-
-      <view class="news">
-        <view class="feed-head">
-          <text class="feed-title">资讯</text>
-          <view class="spacer"></view>
-          <text class="feed-hint">{{newsCount}} 条</text>
-        </view>
-        <view class="news-row">
-          <view class="news-card" wx:for="{{stories}}" wx:key="id" data-target="{{item.id}}" bindtap="onNewsTap">
-            <text class="news-no">{{item.no}}</text>
-            <view class="news-title-box">
-              <text class="news-title">{{item.title}}</text>
-            </view>
-            <view class="news-sum-box">
-              <text class="news-sum">{{item.summary}}</text>
+        <view class="story-row">
+          <view class="story" wx:for="{{stories}}" wx:key="id" data-target="{{item.id}}" bindtap="onNewsTap">
+            <image wx:if="{{item.cover_url}}" class="story-img" src="{{item.cover_url}}" mode="aspectFill"/>
+            <view class="story-scrim"></view>
+            <view class="story-body">
+              <view class="story-title-box">
+                <text class="story-title">{{item.title}}</text>
+              </view>
+              <view class="story-sum-box">
+                <text class="story-sum">{{item.summary}}</text>
+              </view>
             </view>
           </view>
+          <view class="story story-blank" wx:for="{{storyBlanks}}" wx:for-item="b"></view>
           <view wx:if="{{stories.length === 0}}" class="empty">
             <text class="empty-text">暂无资讯，稍后再来看看</text>
           </view>
         </view>
       </view>
+    </view>
 
-      <view class="spacer"></view>
-
-      <view class="dock">
-        <view class="dock-row" wx:for="{{dockRows}}" wx:for-item="row">
-          <view class="tile" wx:for="{{row.items}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onDockTap">
-            <view wx:if="{{item.add}}" class="tile-icon tile-icon-fallback">
-              <text class="tile-all">+</text>
+    <view class="right">
+      <!-- 快捷启动：最近用过的排前面，不足补精选 -->
+      <view class="panel">
+        <view class="panel-head">
+          <text class="panel-title">快捷启动</text>
+          <view class="spacer"></view>
+          <text class="panel-hint">最近使用</text>
+        </view>
+        <view class="grid-row" wx:for="{{recentRows}}" wx:for-item="row">
+          <view class="grid-tile" wx:for="{{row.items}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
+            <image wx:if="{{item.icon_url}}" class="grid-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+            <view wx:else class="grid-icon grid-icon-empty">
+              <text class="grid-initial">{{item.initial}}</text>
             </view>
-            <image wx:elif="{{item.icon_url}}" class="tile-icon" src="{{item.icon_url}}" mode="aspectFill"/>
-            <view wx:else class="tile-icon tile-icon-fallback">
-              <text class="tile-initial">{{item.initial}}</text>
-            </view>
-            <view class="tile-name-box">
-              <text class="tile-name">{{item.title}}</text>
+            <view class="grid-name-box">
+              <text class="grid-name">{{item.title}}</text>
             </view>
           </view>
-          <view class="tile tile-blank" wx:for="{{row.blanks}}" wx:for-item="b"></view>
+          <view class="grid-tile grid-blank" wx:for="{{row.blanks}}" wx:for-item="b"></view>
+        </view>
+      </view>
+
+      <!-- 热门排行：按使用次数排 -->
+      <view class="panel panel-grow">
+        <view class="panel-head">
+          <text class="panel-title">热门排行</text>
+          <view class="spacer"></view>
+          <text class="panel-hint">使用次数</text>
+        </view>
+        <view class="rank-list">
+          <view class="rank" wx:for="{{hot}}" wx:key="id" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onLaunch">
+            <text class="{{item.hot ? 'rank-no rank-no-hot' : 'rank-no'}}">{{item.no}}</text>
+            <image wx:if="{{item.icon_url}}" class="rank-icon" src="{{item.icon_url}}" mode="aspectFill"/>
+            <view wx:else class="rank-icon rank-icon-empty"></view>
+            <view class="rank-body">
+              <view class="rank-name-box">
+                <text class="rank-name">{{item.title}}</text>
+              </view>
+              <view class="rank-meta-box">
+                <text class="rank-meta">{{item.meta}}</text>
+              </view>
+            </view>
+            <text class="rank-arrow">&gt;</text>
+          </view>
+        </view>
+        <view wx:if="{{hot.length === 0}}" class="empty">
+          <text class="empty-text">暂无排行</text>
         </view>
       </view>
     </view>

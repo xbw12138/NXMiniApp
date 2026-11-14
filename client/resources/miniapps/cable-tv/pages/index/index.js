@@ -1,7 +1,8 @@
 // 有线电视 · 央视 + 卫视直播
 //
-// 设计目标：启动即出画面。所有频道与线路都内置在包里，冷启动不做任何网络
-// 解析，onLoad 里直接给 <video> 一个 src，由容器的 autoplay 起播。
+// 设计目标：启动先出界面，再起播。所有频道与线路都内置在包里，冷启动不做任何
+// 网络解析；onLoad 先把频道号/台名/控制条画出来，隔一小段时间再给 <video> 一个
+// src。播放器初始化（MPV）是同步且耗时的，放在 onLoad 里会把首帧一起卡住。
 //
 // 已知容器行为（决定了下面的写法）：
 // 1. <video autoplay> 对同一个节点只会触发一次起播，所以换台不能只改 src，
@@ -118,7 +119,7 @@ Page({
     this.wasFs = false;
     if (keys) this.setData({ keys: true });
 
-    // 先用上次缓存的新线路覆盖内置表（同步、无网络等待），再起播。
+    // 先用上次缓存的新线路覆盖内置表（同步、无网络等待）。
     this.applyCachedSources();
 
     var idx = 0;
@@ -127,14 +128,46 @@ Page({
       var hit = indexOfNo(saved);
       if (hit >= 0) idx = hit;
     } catch (e) {}
-    this.tune(CHANNELS[idx], 0, true);
+    this.index = idx;
+    this.cur = CHANNELS[idx];
+
+    // 先把界面渲染出来：频道号、台名、状态立刻可见，频道表也能马上打开。
+    // 起播要同步初始化播放器（MPV），放在 onLoad 里会把首帧一起卡住，
+    // 点进来先是黑屏、没有任何反馈。这里给首帧留出一小段时间再起播。
+    this.showChannel(this.cur);
+    var self = this;
+    this.startTimer = setTimeout(function() {
+      self.startTimer = null;
+      self.tune(self.cur, 0, true);
+      // video 节点要等下一次重排才进渲染树，随后再请求全屏。
+      self.fsTimer = setTimeout(function() {
+        self.fsTimer = null;
+        if (self.keys && !self.entered && !self.data.panel) {
+          self.entered = true;
+          self.requestFs();
+          self.armHud();
+        }
+      }, 150);
+    }, 150);
 
     // 起播之后再静默刷新，慢网络也不影响出画面。
-    var self = this;
     this.refreshTimer = setTimeout(function() {
       self.refreshTimer = null;
       self.refreshSources();
     }, 4000);
+  },
+
+  // 只更新界面信息，不碰 video 节点：用于首帧先出字，视频稍后再起播。
+  showChannel: function(ch) {
+    if (!ch) return;
+    this.setData({
+      chno: ch.no,
+      name: ch.name,
+      sub: ch.sub,
+      groupLabel: ch.g === 'cctv' ? '央视' : '卫视',
+      status: '正在连接…',
+      live: false
+    });
   },
 
   applyCachedSources: function() {
@@ -204,6 +237,11 @@ Page({
   // 切到一个频道的某条线路。initial=true 时交给 autoplay 起播。
   tune: function(ch, line, initial) {
     if (!ch) return;
+    // 首帧延后起播的定时器如果还没触发，用户在频道表里选了别的台就取消它。
+    if (this.startTimer) {
+      clearTimeout(this.startTimer);
+      this.startTimer = null;
+    }
     this.clearWatch();
     this.cur = ch;
     this.line = line || 0;
@@ -244,10 +282,9 @@ Page({
     this.watchTimer = setTimeout(function() { self.onStall(); }, CONNECT_TIMEOUT);
   },
 
-  // 首次布局完成就进入全屏，缓冲阶段也是满屏，不闪窗口。
+  // 首次布局完成：先让界面稳定画出来，起播与全屏交给 onLoad 里的定时器。
   onReady: function() {
     if (!this.keys) return;
-    this.requestFs();
     this.armHud();
   },
 
@@ -511,6 +548,14 @@ Page({
   // 容器销毁页面时不会主动停 MPV，必须自己停，否则回到桌面还有声音。
   onUnload: function() {
     this.clearWatch();
+    if (this.startTimer) {
+      clearTimeout(this.startTimer);
+      this.startTimer = null;
+    }
+    if (this.fsTimer) {
+      clearTimeout(this.fsTimer);
+      this.fsTimer = null;
+    }
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
       this.refreshTimer = null;

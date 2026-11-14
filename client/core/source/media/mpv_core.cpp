@@ -136,10 +136,12 @@ MPVCore::MPVCore() {
 MPVCore::~MPVCore() = default;
 
 void MPVCore::init() {
+    brls::Logger::info("mpv init begin");
     setlocale(LC_NUMERIC, "C");
     this->mpv = mpv_create();
     if (!mpv) {
-        brls::fatal("Error Create mpv Handle");
+        brls::Logger::error("mpv create failed");
+        return;
     }
     std::string confDir = nxkit::dataDirectory();
     // misc
@@ -161,7 +163,19 @@ void MPVCore::init() {
         brls::Logger::info("lavc: skip loop filter and set fast decode");
         mpv_set_option_string(mpv, "vd-lavc-skiploopfilter", "all");
         mpv_set_option_string(mpv, "vd-lavc-fast", "yes");
+#if MPV_CLIENT_API_VERSION >= MPV_MAKE_VERSION(2, 2)
         mpv_set_option_string(mpv, "profile", "fast");
+#else
+        // 老版本 mpv 没有 fast profile，手工关掉最耗 CPU 的缩放/抖动步骤。
+        mpv_set_option_string(mpv, "scale", "bilinear");
+        mpv_set_option_string(mpv, "dscale", "bilinear");
+        mpv_set_option_string(mpv, "dither", "no");
+        mpv_set_option_string(mpv, "correct-downscaling", "no");
+        mpv_set_option_string(mpv, "linear-downscaling", "no");
+        mpv_set_option_string(mpv, "sigmoid-upscaling", "no");
+        mpv_set_option_string(mpv, "hdr-compute-peak", "no");
+        mpv_set_option_string(mpv, "allow-delayed-peak-detect", "yes");
+#endif
     }
 
     if (MPVCore::INMEMORY_CACHE) {
@@ -199,9 +213,17 @@ void MPVCore::init() {
     }
 
     if (mpv_initialize(mpv) < 0) {
+        // 内存不足时初始化会失败：这里不能再 fatal，否则整个容器直接退出，
+        // 上层连「播放失败」都提示不出来。
+        brls::Logger::error("Could not initialize mpv context");
         mpv_terminate_destroy(mpv);
-        brls::fatal("Could not initialize mpv context");
+        mpv = nullptr;
+        return;
     }
+
+    // 把 mpv/ffmpeg 的告警与错误转发到容器日志（miniapp.log），
+    // 真机播放失败时才能看到具体原因（打不开流、编码不支持等）。
+    mpv_request_log_messages(mpv, MPVCore::TERMINAL ? "v" : "warn");
 
     // set observe properties
     check_error(mpv_observe_property(mpv, 1, "core-idle", MPV_FORMAT_FLAG));
@@ -228,8 +250,10 @@ void MPVCore::init() {
         {MPV_RENDER_PARAM_INVALID, nullptr}};
 
     if (mpv_render_context_create(&mpv_context, mpv, params) < 0) {
+        brls::Logger::error("failed to initialize mpv GL context");
         mpv_terminate_destroy(mpv);
-        brls::fatal("failed to initialize mpv GL context");
+        mpv = nullptr;
+        return;
     }
 
     brls::Logger::info("MPV Version: {}", mpv_get_property_string(mpv, "mpv-version"));
@@ -252,9 +276,12 @@ void MPVCore::init() {
         });
 
     this->initializeVideo();
+    brls::Logger::info("mpv init done");
 }
 
 void MPVCore::clean() {
+    // 初始化失败时 mpv/mpv_context 可能为空，退出流程仍会走到这里。
+    if (!this->mpv) return;
     check_error(mpv_command_string(this->mpv, "quit"));
 
     brls::Application::getWindowFocusChangedEvent()->unsubscribe(focusSubscription);

@@ -6,9 +6,6 @@ Page({
     videoSrc: '',
     headers: '',
     playing: false,
-    currentTime: 0,
-    duration: 0,
-    timeText: '00:00 / 00:00',
     statusText: '正在获取播放地址…',
     loading: true
   },
@@ -24,20 +21,31 @@ Page({
     this.setData({ sourceId: sourceId, itemId: itemId, title: title });
     wx.setNavigationBarTitle({ title: title || '播放' });
 
+    // 续播位置只在内存里记录，时间显示交给容器原生控制层，避免每秒 setData 重排。
+    var source = getApp().getSource(sourceId);
+    var prog = source ? getApp().getProgress(sourceId + ':' + itemId) : null;
+    this.seekTo = prog ? prog.seconds : 0;
+    this.currentTime = this.seekTo || 0;
+
+    this.load();
+  },
+
+  load() {
     var app = getApp();
-    var source = app.getSource(sourceId);
+    var source = app.getSource(this.data.sourceId);
     if (!source) {
-      this.setData({ loading: false, statusText: '数据源不存在' });
+      this.setData({ loading: false, videoSrc: '', statusText: '数据源不存在，请返回后重新添加。' });
       return;
     }
+    this.setData({
+      loading: true,
+      videoSrc: '',
+      playing: false,
+      statusText: '正在获取播放地址…'
+    });
 
     var self = this;
-    // 恢复上次进度
-    var gid = sourceId + ':' + itemId;
-    var prog = app.getProgress(gid);
-    self.seekTo = prog ? prog.seconds : 0;
-
-    app.getPlayUrl(source, itemId).then(function (result) {
+    app.getPlayUrl(source, this.data.itemId).then(function (result) {
       // result 可能是字符串 URL，也可能是 {url, headers}
       var url = '';
       var headers = '';
@@ -48,6 +56,7 @@ Page({
         headers = result.headers || '';
       }
       if (!url) throw new Error('未获取到播放地址');
+      console.log('play: src ready');
       self.setData({
         videoSrc: url,
         headers: headers,
@@ -57,22 +66,28 @@ Page({
     }).catch(function (err) {
       self.setData({
         loading: false,
+        videoSrc: '',
         statusText: '获取播放地址失败：' + ((err && err.message) || (err && err.errMsg) || '未知错误')
       });
     });
   },
 
-  onReady() {
-    var self = this;
+  onRetry() {
+    this._lastSaved = 0;
+    this.load();
+  },
+
+  // 元数据就绪后再 seek，比 onReady 固定延时可靠。
+  onMeta() {
     if (this.seekTo > 0) {
-      setTimeout(function () {
-        try { wx.createVideoContext('player').seek(self.seekTo); } catch (e) {}
-      }, 800);
+      var target = this.seekTo;
+      this.seekTo = 0;
+      try { wx.createVideoContext('player').seek(target); } catch (e) {}
     }
   },
 
   onPlay() {
-    this.setData({ playing: true, statusText: '' });
+    this.setData({ playing: true });
   },
 
   onPause() {
@@ -81,57 +96,46 @@ Page({
 
   onEnded() {
     this.setData({ playing: false });
+    this.currentTime = 0;
     var gid = this.data.sourceId + ':' + this.data.itemId;
     getApp().saveProgress(gid, 0);
   },
 
   onTime(e) {
     var cur = Math.floor(e.detail.currentTime || 0);
-    var dur = Math.floor(e.detail.duration || 0);
-    var app = getApp();
-    // 进度按秒落盘，但界面文字每秒刷新一次就够：timeupdate 每秒会触发多次，
-    // 每次都 setData 会重建整棵树，播放时摇杆/按键会明显发涩。
+    this.currentTime = cur;
+    // 进度按秒落盘；界面不再 setData，避免播放时反复重建渲染树造成卡顿。
     if (cur > 0 && cur % 5 === 0 && cur !== this._lastSaved) {
       this._lastSaved = cur;
-      var gid = this.data.sourceId + ':' + this.data.itemId;
-      app.saveProgress(gid, cur);
+      getApp().saveProgress(this.data.sourceId + ':' + this.data.itemId, cur);
     }
-    if (cur === this._shownTime) return;
-    this._shownTime = cur;
-    this.setData({
-      currentTime: cur,
-      duration: dur,
-      timeText: app.fmtTime(cur) + ' / ' + app.fmtTime(dur)
-    });
   },
 
   onError(e) {
-    // 播放失败时收起播放器，露出错误提示和返回按钮，避免黑屏无从操作。
+    // 收起播放器，露出可读原因和重试入口，避免只剩黑屏。
+    var msg = (e.detail && e.detail.errMsg) || '请检查网络或数据源';
+    console.log('play: error ' + msg);
     this.setData({
       playing: false,
       videoSrc: '',
-      statusText: '播放失败：' + ((e.detail && e.detail.errMsg) || '请检查网络或数据源')
+      loading: false,
+      statusText: msg
     });
   },
 
-  onToggle() {
-    var ctx = wx.createVideoContext('player');
-    if (this.data.playing) ctx.pause();
-    else ctx.play();
-  },
-
-  onSeek(e) {
-    var delta = Number(e.currentTarget.dataset.delta);
-    var ctx = wx.createVideoContext('player');
-    var target = Math.max(0, this.data.currentTime + delta);
-    ctx.seek(target);
+  saveProgress() {
+    if (this.currentTime > 0) {
+      var gid = this.data.sourceId + ':' + this.data.itemId;
+      getApp().saveProgress(gid, this.currentTime);
+    }
   },
 
   onBack() {
-    if (this.data.currentTime > 0) {
-      var gid = this.data.sourceId + ':' + this.data.itemId;
-      getApp().saveProgress(gid, this.data.currentTime);
-    }
+    this.saveProgress();
     wx.navigateBack({ delta: 1 });
+  },
+
+  onUnload() {
+    this.saveProgress();
   }
 });

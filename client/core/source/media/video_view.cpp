@@ -4,6 +4,10 @@
 
 #include "nxkit/media/video_view.hpp"
 
+#ifdef NXKIT_WITH_MPV
+#include <mpv/client.h>
+#endif
+
 #include <borealis/core/logger.hpp>
 
 namespace nxkit {
@@ -41,8 +45,18 @@ void VideoView::setUrl(const std::string& url, const std::string& headers,
     fireState();
     // http-header-fields 必须通过全局 set 设置，不能走 loadfile 的 per-file 选项
     // （mpv 会把选项串按 option=value 解析，破坏 Cookie 等含 =/; 的值）。
-    mpv().setHttpHeaders(headers);
-    mpv().setUrl(url, extra, "replace");
+    auto& core = mpv();
+    if (!core.isValid()) {
+        // 懒初始化失败（多为内存不足）：转成页面上的错误，不要拖垮整个容器。
+        state.error = true;
+        state.errorText = "视频播放器初始化失败（内存不足）";
+        state.loading = false;
+        state.waiting = false;
+        fireState();
+        return;
+    }
+    core.setHttpHeaders(headers);
+    core.setUrl(url, extra, "replace");
 #else
     (void)url;
     (void)headers;
@@ -255,12 +269,34 @@ void VideoView::registerMpvEvent() {
                     state.ended = true;
                     state.currentTime = state.duration;
                     break;
-                case MpvEventEnum::MPV_FILE_ERROR:
+                case MpvEventEnum::MPV_FILE_ERROR: {
+                    const int code = MPVCore::instance().mpv_error_code;
+                    std::string detail = "视频加载失败";
+                    switch (code) {
+                        case MPV_ERROR_LOADING_FAILED:
+                            detail = "视频加载失败（格式不支持、编码不受支持或网络中断）";
+                            break;
+                        case MPV_ERROR_UNSUPPORTED:
+                            detail = "视频格式或编码不受支持";
+                            break;
+                        case MPV_ERROR_NOMEM:
+                            detail = "内存不足，播放器无法解码此视频";
+                            break;
+                        case MPV_ERROR_INVALID_PARAMETER:
+                            detail = "视频参数无效";
+                            break;
+                        default: break;
+                    }
+                    const char* reason = mpv_error_string(code);
                     state.error = true;
-                    state.errorText = "视频加载失败";
+                    state.errorText = detail + " [mpv " + std::to_string(code) + ": " +
+                                      (reason ? reason : "unknown") + "]";
                     state.playing = false;
                     state.loading = false;
+                    brls::Logger::error("VideoView: playback failed: {} [mpv {}: {}]",
+                                        detail, code, reason ? reason : "unknown");
                     break;
+                }
                 default:
                     return;  // no state change worth firing
             }

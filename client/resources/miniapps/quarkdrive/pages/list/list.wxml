@@ -1,30 +1,47 @@
 <view class="page">
   <view class="topbar">
-    <text class="crumb">{{name}}</text>
-    <button class="btn btn-ghost topbtn" bindtap="onRefresh">刷新</button>
-    <button class="btn btn-ghost topbtn" bindtap="goSearch">搜索</button>
-    <button class="btn btn-ghost topbtn" bindtap="goHome">首页</button>
+    <view class="topbar-title">
+      <text class="section-title">{{name}}</text>
+      <text class="section-sub">{{subtitle}}</text>
+    </view>
+    <view class="top-actions">
+      <view class="chip" bindtap="onBack">返回</view>
+      <view class="chip" bindtap="onRefresh">刷新</view>
+      <view class="chip" bindtap="goSearch">搜索</view>
+      <view class="chip" bindtap="goHome">首页</view>
+    </view>
   </view>
 
-  <scroll-view class="scroll" scroll-y="{{true}}" style="height: 100%;">
+  <scroll-view class="scroll" scroll-y="{{true}}">
     <view wx:for="{{items}}" wx:key="fid"
-          class="row-item"
+          class="file-row"
+          autofocus="{{index === 0}}"
           data-fid="{{item.fid}}" data-name="{{item.name}}" data-kind="{{item.kind}}"
           data-size="{{item.sizeText}}" data-time="{{item.timeText}}"
           bindtap="onItem">
       <view class="tag tag-{{item.kind}}"><text class="tag-text">{{item.badge}}</text></view>
-      <text class="fname">{{item.name}}</text>
-      <text class="fmeta">{{item.sizeText}}</text>
+      <view class="file-info">
+        <text class="fname">{{item.name}}</text>
+        <text class="fmeta">{{item.metaText}}</text>
+      </view>
+      <text class="file-action">{{item.actionText}}</text>
     </view>
 
     <view wx:if="{{items.length === 0 && !loading}}" class="empty">
-      <text class="hint">{{errMsg || '此目录为空'}}</text>
+      <text class="empty-title">{{errMsg || '此目录为空'}}</text>
+      <text class="hint">{{errMsg ? '按 A 重试，按 B 返回' : '换个目录看看吧'}}</text>
     </view>
 
     <view class="pager" wx:if="{{pages > 1}}">
-      <button class="btn btn-ghost topbtn" bindtap="prevPage">上一页</button>
-      <text class="hint" style="margin-top: 0;">第 {{page}} / {{pages}} 页 · 共 {{total}} 项</text>
-      <button class="btn btn-ghost topbtn" bindtap="nextPage">下一页</button>
+      <view class="chip" bindtap="prevPage">上一页</view>
+      <text class="pager-text">{{pageText}}</text>
+      <view class="chip" bindtap="nextPage">下一页</view>
     </view>
   </scroll-view>
+
+  <view class="hintbar">
+    <text class="hintbar-text">A 打开 / 播放</text>
+    <text class="hintbar-text">B 返回上一级</text>
+    <text class="hintbar-text">方向键 移动焦点</text>
+  </view>
 </view>

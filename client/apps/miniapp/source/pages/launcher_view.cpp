@@ -16,6 +16,8 @@
 #include <cstdlib>
 #include <thread>
 
+#include "miniapp/api/miniapp_api.hpp"
+#include "miniapp/crash_reporter.hpp"
 #include "miniapp/install/package_manager.hpp"
 #include "miniapp/miniapp_activity.hpp"
 #include "miniapp/miniapp_view.hpp"
@@ -51,6 +53,38 @@ std::string subtitleOf(const MiniAppItem& item) {
     return subtitle;
 }
 
+// 语义化版本比较：逐段比较数字，缺省段按 0 处理。
+bool versionNewer(const std::string& latest, const std::string& current) {
+    auto parse = [](const std::string& value) {
+        std::vector<int> parts;
+        int number = 0;
+        bool hasDigit = false;
+        for (char c : value) {
+            if (c >= '0' && c <= '9') {
+                number = number * 10 + (c - '0');
+                hasDigit = true;
+            } else if (c == '.') {
+                parts.push_back(hasDigit ? number : 0);
+                number = 0;
+                hasDigit = false;
+            } else {
+                break;
+            }
+        }
+        parts.push_back(hasDigit ? number : 0);
+        return parts;
+    };
+    std::vector<int> a = parse(latest);
+    std::vector<int> b = parse(current);
+    const size_t count = std::max(a.size(), b.size());
+    for (size_t i = 0; i < count; ++i) {
+        int x = i < a.size() ? a[i] : 0;
+        int y = i < b.size() ? b[i] : 0;
+        if (x != y) return x > y;
+    }
+    return false;
+}
+
 // 图标字形 Label：直接使用 Material Icons 字体渲染。
 // 经主字体回退渲染时，垂直居中按主字体度量计算，无下降部的图标字形会被顶偏；
 // 字体与度量同源后，图标才能在按钮里真正居中。
@@ -71,7 +105,6 @@ brls::Box* makeIconButton(const char* glyph, std::function<bool(brls::View*)> on
     brls::Style style = brls::Application::getStyle();
 
     brls::Box* button = new brls::Box(brls::Axis::ROW);
-    button->setFocusable(true);
     button->setJustifyContent(brls::JustifyContent::CENTER);
     button->setAlignItems(brls::AlignItems::CENTER);
     button->setPadding(9, 14, 9, 14);
@@ -96,6 +129,7 @@ LauncherView::LauncherView() {
     this->setAxis(brls::Axis::COLUMN);
 
     brls::Box* header = new brls::Box(brls::Axis::ROW);
+    this->header = header;
     header->setAlignItems(brls::AlignItems::CENTER);
     header->setPadding(16, 28, 8, 28);
 
@@ -118,28 +152,6 @@ LauncherView::LauncherView() {
     brls::Box* spacer = new brls::Box();
     spacer->setGrow(1);
     header->addView(spacer);
-
-    brls::Button* search = new brls::Button();
-    this->searchBtn = search;
-    search->setText("搜索");
-    search->setMarginLeft(12);
-    search->registerClickAction([this](brls::View*) {
-        this->promptSearch();
-        return true;
-    });
-    header->addView(search);
-
-    this->clearSearchBtn = new brls::Button();
-    this->clearSearchBtn->setText("清除");
-    this->clearSearchBtn->setMarginLeft(8);
-    this->clearSearchBtn->setVisibility(brls::Visibility::GONE);
-    this->clearSearchBtn->registerClickAction([this](brls::View*) {
-        this->searchQuery.clear();
-        this->clearSearchBtn->setVisibility(brls::Visibility::GONE);
-        this->applyItems();
-        return true;
-    });
-    header->addView(this->clearSearchBtn);
 
     // 图标按钮：字形为 Material Icons 码点，直接用图标字体渲染保证居中。
     brls::Box* refresh = makeIconButton("\xee\x97\x95", [this](brls::View*) {  // refresh
@@ -193,12 +205,18 @@ LauncherView::LauncherView() {
         this->showExitDialog();
         return true;
     });
+    // 首页内嵌后原生标题栏隐藏，X 直接弹出关于信息，里面保留刷新/上传日志/装到桌面。
+    this->registerAction("工具", brls::BUTTON_X, [this](brls::View*) {
+        this->showAbout();
+        return true;
+    });
 }
 
 LauncherView::~LauncherView() { *this->alive = false; }
 
 void LauncherView::willAppear(bool resetState) {
     brls::Box::willAppear(resetState);
+    this->checkContainerUpdate();
     // 首页小程序已内嵌：保持其运行状态，返回时不重建、不回落商店网格。
     if (this->homeView) return;
     if (!this->loaded) {
@@ -209,11 +227,40 @@ void LauncherView::willAppear(bool resetState) {
 }
 
 void LauncherView::showAbout() {
+    std::string title = "Switch小程序";
+#ifdef NXMINIAPP_VERSION
+    title += " v" NXMINIAPP_VERSION;
+#endif
     brls::Dialog* dialog = new brls::Dialog(
-        "Switch小程序\n服务器：" + MiniAppApi::instance().serverUrl() +
+        title + "\n服务器：" + MiniAppApi::instance().serverUrl() +
         "\n设备 ID：" + MiniAppApi::instance().deviceId() +
         "\n源码：github.com/xbw12138/NXMiniApp");
-    dialog->addButton("知道了", [] {});
+    dialog->addButton("刷新首页", [this] {
+        this->loaded = false;
+        this->reload();
+    });
+    dialog->addButton("上传日志", [] {
+        auto& api = miniapp::MiniAppApi::instance();
+        if (!api.ready()) {
+            brls::Application::notify("未配置服务器地址");
+            return;
+        }
+#ifdef NXMINIAPP_VERSION
+        const std::string version = NXMINIAPP_VERSION;
+#else
+        const std::string version = "unknown";
+#endif
+        brls::Application::notify("正在上传日志…");
+        miniapp::crash::reportCurrentLog(
+            api.serverUrl(), version, api.deviceId(), "manual",
+            [](bool ok, const std::string& message) {
+                (void)ok;
+                brls::Application::notify(message);
+            });
+    });
+#ifdef BUILTIN_NSP
+    dialog->addButton("添加到桌面", [this] { this->installDesktopIcon(); });
+#endif
     dialog->open();
 }
 
@@ -222,6 +269,39 @@ void LauncherView::showExitDialog() {
     dialog->addButton("取消", [] {});
     dialog->addButton("退出", [] { brls::Application::quit(); });
     dialog->open();
+}
+
+void LauncherView::checkContainerUpdate() {
+    if (this->updateChecked) return;
+    this->updateChecked = true;
+#ifdef NXMINIAPP_VERSION
+    const std::string current = NXMINIAPP_VERSION;
+#else
+    return;
+#endif
+    MiniAppApi::instance().fetchLatestRelease(
+        [this, alive = this->alive, current](const LatestRelease& release, const std::string& error) {
+            if (!error.empty() || release.version.empty() ||
+                !versionNewer(release.version, current)) {
+                return;
+            }
+            // 同一版本只提示一次，避免每次启动打断用户。
+            auto& config = nxkit::Config::instance();
+            if (config.getString("miniapp.notifiedRelease", "") == release.version) return;
+            config.setString("miniapp.notifiedRelease", release.version);
+            config.save();
+
+            brls::sync([this, alive, release, current] {
+                if (!*alive) return;
+                std::string message =
+                    "发现容器新版本 v" + release.version + "（当前 v" + current + "）";
+                if (!release.notes.empty()) message += "\n" + release.notes;
+                message += "\n\n请退出本程序，在桌面运行更新工具完成升级。";
+                brls::Dialog* dialog = new brls::Dialog(message);
+                dialog->addButton("知道了", [] {});
+                dialog->open();
+            });
+        });
 }
 
 void LauncherView::installDesktopIcon() {
@@ -350,14 +430,14 @@ void LauncherView::embedHome(const MiniAppItem& home) {
     nxkit::Config::instance().setString("miniapp.home.version", home.version);
     nxkit::Config::instance().setString("miniapp.home.title", home.title);
     nxkit::Config::instance().save();
-    // 首页自带搜索入口，原生搜索/清除按钮只服务于商店网格。
-    if (this->searchBtn) this->searchBtn->setVisibility(brls::Visibility::GONE);
-    if (this->clearSearchBtn) this->clearSearchBtn->setVisibility(brls::Visibility::GONE);
 
     if (this->homeView) {
         this->removeView(this->homeView);
         this->homeView = nullptr;
     }
+
+    // 首页自带顶栏：隐藏原生标题栏，把整块 720p 高度让给页面，避免底部被裁。
+    if (this->header) this->header->setVisibility(brls::Visibility::GONE);
 
     MiniappView* view = new MiniappView(packages::directory(home.id), home.title);
     view->setGrow(1);
@@ -431,32 +511,6 @@ void LauncherView::applyItems() {
         return;
     }
 
-    // 搜索模式：不按「最近使用」排序，全量过滤标题/id/分类/开发者。
-    if (!this->searchQuery.empty()) {
-        std::string query = this->searchQuery;
-        std::transform(query.begin(), query.end(), query.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        std::vector<nxkit::CoverItem> covers;
-        for (const auto& app : this->items) {
-            std::string hay = app.title + " " + app.id + " " + app.category + " " + app.developer;
-            std::transform(hay.begin(), hay.end(), hay.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-            if (hay.find(query) == std::string::npos) continue;
-            nxkit::CoverItem cover;
-            cover.id = app.id;
-            cover.cover = app.iconUrl;
-            cover.title = app.title;
-            cover.subtitle = subtitleOf(app);
-            covers.push_back(std::move(cover));
-        }
-        if (covers.empty()) {
-            this->grid->setEmpty("没有找到匹配「" + this->searchQuery + "」的小程序");
-        } else {
-            this->grid->setItems(covers);
-        }
-        return;
-    }
-
     std::vector<std::string> recent = this->recentIds();
     std::vector<nxkit::CoverItem> covers;
     std::vector<std::string> added;
@@ -513,7 +567,9 @@ void LauncherView::openItem(const MiniAppItem& item) {
     }
 
     this->downloadingId = item.id;
-    brls::Application::notify("正在下载 " + item.title);
+    // 目录已存在但版本不一致：这是热更新，文案上区分「下载」与「更新」。
+    const bool updating = packages::installed(item.id, "");
+    brls::Application::notify(updating ? "正在更新 " + item.title : "正在下载 " + item.title);
 
     MiniAppApi::instance().download(
         item.id, [this, alive = this->alive, item](const std::string& archive, const std::string& error) {
@@ -562,17 +618,6 @@ void LauncherView::bumpUsage(const std::string& id) {
 
 int LauncherView::usageCount(const std::string& id) const {
     return nxkit::Config::instance().getInt("miniapp.usage." + id + ".count", 0);
-}
-
-void LauncherView::promptSearch() {
-    brls::Application::getImeManager()->openForText(
-        [this](std::string text) {
-            this->searchQuery = text;
-            this->clearSearchBtn->setVisibility(text.empty() ? brls::Visibility::GONE
-                                                             : brls::Visibility::VISIBLE);
-            this->applyItems();
-        },
-        "搜索小程序", "", 64, this->searchQuery);
 }
 
 }  // namespace miniapp

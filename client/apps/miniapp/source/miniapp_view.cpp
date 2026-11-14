@@ -8,10 +8,12 @@
 #include <borealis/core/assets.hpp>
 #include <borealis/core/font.hpp>
 #include <borealis/core/ime.hpp>
+#include <borealis/core/input.hpp>
 #include <borealis/core/thread.hpp>
 #include <borealis/core/touch/tap_gesture.hpp>
 #include <nxkit/http_client.hpp>
 #include <nxkit/paths.hpp>
+#include <nxkit/media/audio_player.hpp>
 #include <nxkit/media/video_view.hpp>
 
 #include <algorithm>
@@ -41,6 +43,9 @@
 
 #ifdef __SWITCH__
 #include <malloc.h>
+#include <switch.h>
+
+#include <mutex>
 #endif
 
 #include "miniapp/api/miniapp_api.hpp"
@@ -62,7 +67,8 @@ namespace {
 constexpr float kRpxDesignWidth = 750.0f;
 constexpr float kRpxBaseWidth = 640.0f;
 
-const Rgba kAccent{0.059f, 0.863f, 0.471f, 1.0f};
+// 容器强调色：Switch 系统蓝，和首页/商店的蓝色主色一致。
+const Rgba kAccent{0.039f, 0.518f, 1.0f, 1.0f};
 const Rgba kTextPrimary{0.94f, 0.95f, 0.96f, 1.0f};
 const Rgba kTextMuted{0.55f, 0.58f, 0.62f, 1.0f};
 
@@ -117,6 +123,27 @@ std::string stripTags(const std::string& html) {
     }
     return out;
 }
+
+/// 被动触摸中继：始终返回 FAILED，不参与手势竞争，只把触摸/鼠标状态转发给页面。
+class PointerRelayRecognizer : public brls::GestureRecognizer {
+public:
+    using Callback = std::function<void(brls::TouchPhase, brls::Point)>;
+
+    explicit PointerRelayRecognizer(Callback callback) : callback(std::move(callback)) {}
+
+    brls::GestureState recognitionLoop(brls::TouchState touch, brls::MouseState mouse,
+                                       brls::View*, brls::Sound*) override {
+        if (touch.phase != brls::TouchPhase::NONE) {
+            callback(touch.phase, touch.position);
+        } else if (mouse.leftButton != brls::TouchPhase::NONE) {
+            callback(mouse.leftButton, mouse.position);
+        }
+        return brls::GestureState::FAILED;
+    }
+
+private:
+    Callback callback;
+};
 
 bool readTextFile(const std::string& path, std::string& out) {
     std::ifstream file(path, std::ios::binary);
@@ -257,7 +284,12 @@ std::string formatClock(double seconds) {
     if (!(seconds > 0.0)) seconds = 0.0;
     int total = static_cast<int>(seconds);
     char buffer[24];
-    std::snprintf(buffer, sizeof(buffer), "%d:%02d", total / 60, total % 60);
+    if (total >= 3600) {
+        std::snprintf(buffer, sizeof(buffer), "%d:%02d:%02d", total / 3600,
+                      (total % 3600) / 60, total % 60);
+    } else {
+        std::snprintf(buffer, sizeof(buffer), "%d:%02d", total / 60, total % 60);
+    }
     return buffer;
 }
 
@@ -392,12 +424,47 @@ private:
     bool disabled = false;
 };
 
-// 解码为 RGBA（调用方负责 stbi_image_free）。
+// 远程图解码后贴图上限（最长边像素）。海报在 1280x720 上只有两三百像素宽，
+// 原图动辄 2000+ 像素，一张 RGBA 就是十几 MB——上百张封面足以把显存吃光。
+constexpr int kRemoteImageMaxSide = 360;
+
+// 最近邻抽样缩放（质量够海报用，且没有额外依赖）。
+unsigned char* downscaleRgba(const unsigned char* src, int srcW, int srcH, int dstW,
+                             int dstH) {
+    unsigned char* dst = static_cast<unsigned char*>(
+        malloc(static_cast<size_t>(dstW) * dstH * 4));
+    if (!dst) return nullptr;
+    for (int y = 0; y < dstH; ++y) {
+        const int sy = srcH > 1 ? y * (srcH - 1) / (dstH - 1) : 0;
+        const unsigned char* row = src + static_cast<size_t>(sy) * srcW * 4;
+        unsigned char* out = dst + static_cast<size_t>(y) * dstW * 4;
+        for (int x = 0; x < dstW; ++x) {
+            const int sx = srcW > 1 ? x * (srcW - 1) / (dstW - 1) : 0;
+            std::memcpy(out + static_cast<size_t>(x) * 4,
+                        row + static_cast<size_t>(sx) * 4, 4);
+        }
+    }
+    return dst;
+}
+
+// 解码为 RGBA（调用方负责 stbi_image_free），超过上限时自动缩小。
 unsigned char* decodeToRgba(const std::string& bytes, int& width, int& height) {
     if (bytes.empty()) return nullptr;
-    return stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(bytes.data()),
-                                 static_cast<int>(bytes.size()), &width, &height,
-                                 nullptr, 4);
+    unsigned char* pixels = stbi_load_from_memory(
+        reinterpret_cast<const stbi_uc*>(bytes.data()), static_cast<int>(bytes.size()),
+        &width, &height, nullptr, 4);
+    if (!pixels || width <= 0 || height <= 0) return pixels;
+    const int longest = width > height ? width : height;
+    if (longest <= kRemoteImageMaxSide) return pixels;
+
+    const int dstW = std::max(1, width * kRemoteImageMaxSide / longest);
+    const int dstH = std::max(1, height * kRemoteImageMaxSide / longest);
+    unsigned char* small = downscaleRgba(pixels, width, height, dstW, dstH);
+    stbi_image_free(pixels);
+    if (!small) return nullptr;
+    width = dstW;
+    height = dstH;
+    return small;
 }
 
 }  // namespace
@@ -405,6 +472,9 @@ unsigned char* decodeToRgba(const std::string& bytes, int& width, int& height) {
 MiniappView::MiniappView(std::string packagePath, std::string appTitleHint)
     : packagePathOverride(std::move(packagePath)), loadingTitle(std::move(appTitleHint)) {
     brls::Logger::info("MiniappView: ctor enter");
+    uiThreadId = std::this_thread::get_id();
+    // 脚本、定时器和异步回调都在这条线程跑；创建失败时任务会退化成同步执行。
+    logicThread = std::make_unique<LogicThread>();
     rpxScale = kRpxBaseWidth / kRpxDesignWidth;
 #ifdef __SWITCH__
     // Switch 平台必须用 zh-Hans 作为主字体：borealis 已为它挂好
@@ -424,6 +494,7 @@ MiniappView::MiniappView(std::string packagePath, std::string appTitleHint)
 
     auto action = [this](brls::View*) {
         if (this->dispatchKeyToPage("a")) return true;
+        if (this->handleVideoKey("a")) return true;
         this->handleActivate();
         return true;
     };
@@ -457,39 +528,51 @@ MiniappView::MiniappView(std::string packagePath, std::string appTitleHint)
     });
 
     // 十字键：先派发页面按键事件，未被消费时才移动焦点。
+    // 页面内没有可移动目标时也要吞掉按键：焦点一旦逃出去就会落到容器原生控件
+    // （如右上角浮层按钮），摇杆推到底会莫名选中它们。
     auto up = [this](brls::View*) {
         if (this->dispatchKeyToPage("up")) return true;
-        return this->handleDirection(brls::FocusDirection::UP);
+        this->handleDirection(brls::FocusDirection::UP);
+        return true;
     };
     auto down = [this](brls::View*) {
         if (this->dispatchKeyToPage("down")) return true;
-        return this->handleDirection(brls::FocusDirection::DOWN);
+        this->handleDirection(brls::FocusDirection::DOWN);
+        return true;
     };
     auto left = [this](brls::View*) {
         if (this->dispatchKeyToPage("left")) return true;
-        return this->handleDirection(brls::FocusDirection::LEFT);
+        if (this->handleVideoKey("left")) return true;
+        this->handleDirection(brls::FocusDirection::LEFT);
+        return true;
     };
     auto right = [this](brls::View*) {
         if (this->dispatchKeyToPage("right")) return true;
-        return this->handleDirection(brls::FocusDirection::RIGHT);
+        if (this->handleVideoKey("right")) return true;
+        this->handleDirection(brls::FocusDirection::RIGHT);
+        return true;
     };
     // 摇杆（BUTTON_NAV_* 同时覆盖十字键与摇杆）：只移动焦点，
     // 不派发按键事件，避免摇杆误切台。十字键按下时交给上面的 action。
     auto navUp = [this](brls::View*) {
         if (this->isDpadHeld(brls::BUTTON_UP)) return true;
-        return this->handleDirection(brls::FocusDirection::UP);
+        this->handleDirection(brls::FocusDirection::UP);
+        return true;
     };
     auto navDown = [this](brls::View*) {
         if (this->isDpadHeld(brls::BUTTON_DOWN)) return true;
-        return this->handleDirection(brls::FocusDirection::DOWN);
+        this->handleDirection(brls::FocusDirection::DOWN);
+        return true;
     };
     auto navLeft = [this](brls::View*) {
         if (this->isDpadHeld(brls::BUTTON_LEFT)) return true;
-        return this->handleDirection(brls::FocusDirection::LEFT);
+        this->handleDirection(brls::FocusDirection::LEFT);
+        return true;
     };
     auto navRight = [this](brls::View*) {
         if (this->isDpadHeld(brls::BUTTON_RIGHT)) return true;
-        return this->handleDirection(brls::FocusDirection::RIGHT);
+        this->handleDirection(brls::FocusDirection::RIGHT);
+        return true;
     };
     this->registerAction("上", brls::BUTTON_UP, up);
     this->registerAction("上", brls::BUTTON_NAV_UP, navUp);
@@ -500,7 +583,32 @@ MiniappView::MiniappView(std::string packagePath, std::string appTitleHint)
     this->registerAction("右", brls::BUTTON_RIGHT, right);
     this->registerAction("右", brls::BUTTON_NAV_RIGHT, navRight);
 
+    // 播放器快捷键：Y 切换全屏、LT/RT 前后 1 分钟。
+    // 先给页面 onKeyDown，页面显式消费（如直播页用自己的键位）时不再拦截。
+    this->registerAction("全屏", brls::BUTTON_Y, [this](brls::View*) {
+        if (this->dispatchKeyToPage("y")) return true;
+        return this->handleVideoKey("y");
+    });
+    this->registerAction("快退 1 分钟", brls::BUTTON_LT, [this](brls::View*) {
+        if (this->dispatchKeyToPage("lt")) return true;
+        return this->handleVideoKey("lt");
+    });
+    this->registerAction("快进 1 分钟", brls::BUTTON_RT, [this](brls::View*) {
+        if (this->dispatchKeyToPage("rt")) return true;
+        return this->handleVideoKey("rt");
+    });
+
     // 鼠标左键 / 触摸点击：由手势识别器统一转发到渲染树命中测试。
+    this->addGestureRecognizer(new PointerRelayRecognizer(
+        [this](brls::TouchPhase phase, brls::Point position) {
+            if (phase == brls::TouchPhase::START) {
+                this->handlePointerState(position.x, position.y, "start");
+            } else if (phase == brls::TouchPhase::STAY) {
+                this->handlePointerState(position.x, position.y, "move");
+            } else if (phase == brls::TouchPhase::END) {
+                this->handlePointerState(position.x, position.y, "end");
+            }
+        }));
     this->addGestureRecognizer(new brls::TapGestureRecognizer(
         [this](brls::TapGestureStatus status, brls::Sound*) {
             if (status.state == brls::GestureState::END) {
@@ -558,6 +666,27 @@ MiniappView::~MiniappView() {
         cleanupPage(*page);
     }
     pages.clear();
+    // 页面引用的 JsRuntime 可能还被逻辑线程队列里的任务持有：
+    // join 之后再析构它们，保证 QuickJS 的释放不会和脚本执行并发。
+    if (logicThread) {
+        logicThread->stop();
+        logicThread.reset();
+    }
+    // 音频输出是进程级单例，页面退出时统一停掉，避免残留音轨在别的页面继续占渲染器。
+    audioTracks.clear();
+    activeAudioId.clear();
+    suspendedAudioId.clear();
+    audioPlayer.reset();
+    // 释放本视图持有的 NanoVG 纹理，避免反复进入小程序后显存/内存持续增长。
+    // 图片缓存按视图隔离，LRU 只在视图存活期间复用。
+    if (NVGcontext* vg = brls::Application::getNVGContext()) {
+        for (const auto& entry : imageTextures) {
+            if (entry.second > 0) nvgDeleteImage(vg, entry.second);
+        }
+    }
+    imageTextures.clear();
+    imageTextureUse.clear();
+    pendingImages.clear();
     brls::Logger::info("MiniappView: dtor done");
 }
 
@@ -644,6 +773,7 @@ void MiniappView::loadPackage() {
 }
 
 bool MiniappView::openPage(const std::string& url, bool push) {
+    pendingVideoStartPath.clear();
     std::string rawPath = stripQuery(url);
     if (rawPath.empty()) return false;
     if (rawPath.size() > 5 && rawPath.compare(rawPath.size() - 5, 5, ".wxml") == 0) {
@@ -654,8 +784,11 @@ bool MiniappView::openPage(const std::string& url, bool push) {
         if (current->runtime) current->runtime->callLifecycle("onHide");
     }
 
+    brls::Logger::info("miniapp: open page '{}' push={}", rawPath, push);
     auto page = std::make_unique<PageState>();
     loadPageFiles(*page, rawPath, true);
+    brls::Logger::info("miniapp: page '{}' loaded={} err={}", rawPath, page->loaded,
+                       page->error);
     if (!page->loaded) {
         errorMessage = page->error;
         brls::Logger::error("miniapp: page '{}' failed: {}", rawPath, page->error);
@@ -667,8 +800,10 @@ bool MiniappView::openPage(const std::string& url, bool push) {
     if (page->runtime) {
         page->runtime->callLifecycle("onLoad", &query);
         page->runtime->callLifecycle("onShow");
-        page->data = page->runtime->data();
+        page->data = page->runtime->dataCopy();
+        page->dataVersion = page->runtime->dataVersion();
     }
+    brls::Logger::info("miniapp: page '{}' onLoad done", rawPath);
 
     if (!push && current) {
         closeCurrentPage();
@@ -690,6 +825,7 @@ bool MiniappView::openPage(const std::string& url, bool push) {
 
 void MiniappView::closeCurrentPage() {
     if (!current) return;
+    pendingVideoStartPath.clear();
     stopVideo();
     if (current->runtime) {
         current->runtime->callLifecycle("onHide");
@@ -741,13 +877,17 @@ void MiniappView::loadPageFiles(PageState& page, const std::string& path, bool w
     }
 
     if (withRuntime) {
-        page.runtime = std::make_unique<JsRuntime>(this, packageDir, path, appSource);
+        page.runtime = std::make_shared<JsRuntime>(this, packageDir, path, appSource);
+        // 异步宿主回调统一投递到逻辑线程执行，不再占用 UI 线程。
+        page.runtime->setTaskPoster(
+            [this](std::function<void()> task) { this->postLogic(std::move(task)); });
         std::string jsError;
         if (!page.runtime->initialize(page.jsText, path + ".js", jsError)) {
             page.error = "JS: " + jsError;
             return;
         }
-        page.data = page.runtime->data();
+        page.data = page.runtime->dataCopy();
+        page.dataVersion = page.runtime->dataVersion();
     }
 
     page.loaded = true;
@@ -763,50 +903,210 @@ void MiniappView::cleanupPage(PageState& page) {
 }
 
 void MiniappView::onDataChanged() {
-    if (!current) return;
-    if (current->runtime) current->data = current->runtime->data();
-    current->dirty = true;
+    // setData 可能来自逻辑线程，这里不碰 UI 状态：
+    // UI 线程在 tick 里按 dataVersion 拉取快照并标脏。
 }
 
-void MiniappView::rebuildTree(PageState& page) {
-    if (page.root) {
-        freeYogaTree(*page.root);
-        page.root.reset();
+void MiniappView::postUi(std::function<void()> task) {
+    if (!task) return;
+    if (isUiThread()) {
+        task();
+        return;
     }
+    std::weak_ptr<bool> weak = aliveToken;
+    brls::sync([weak, task = std::move(task)]() {
+        auto token = weak.lock();
+        if (!token || !*token) return;
+        task();
+    });
+}
+
+void MiniappView::postLogic(std::function<void()> task) {
+    if (!task) return;
+    if (!logicThread) {
+        task();
+        return;
+    }
+    std::weak_ptr<bool> weak = aliveToken;
+    logicThread->post([weak, task = std::move(task)]() {
+        auto token = weak.lock();
+        if (!token || !*token) return;
+        task();
+    });
+}
+
+void MiniappView::refreshHostStateCache() {
+    JsonValue system = collectSystemInfo();
+    JsonValue pad = collectGamepadState();
+    // 先把 id 拷出来：collectAudioState 可能触发音轨切换，不能在遍历时改 map。
+    std::vector<std::string> audioIds;
+    audioIds.reserve(audioTracks.size());
+    for (const auto& entry : audioTracks) audioIds.push_back(entry.first);
+    std::map<std::string, JsonValue> audio;
+    for (const auto& id : audioIds) {
+        audio[id] = collectAudioState(id);
+    }
+
+    std::lock_guard<std::mutex> lock(hostStateMutex);
+    cachedSystemInfo = std::move(system);
+    cachedGamepadState = std::move(pad);
+    cachedAudioState = std::move(audio);
+}
+
+namespace {
+
+// 把一次性快照节点的「展示数据」合并到长期存活的渲染节点上。
+// 刻意不复制 children / parent / yoga / 绝对矩形 / 滚动与媒体运行时状态：
+// 这些由渲染树自己维护，替换掉会让焦点、滚动和播放进度一起被重置。
+void applyRenderSnapshot(RenderNode& dst, const RenderNode& src) {
+    dst.tag = src.tag;
+    dst.text = src.text;
+    dst.classes = src.classes;
+    dst.id = src.id;
+    dst.path = src.path;
+
+    dst.bindTap = src.bindTap;
+    dst.bindTouchStart = src.bindTouchStart;
+    dst.bindTouchMove = src.bindTouchMove;
+    dst.bindTouchEnd = src.bindTouchEnd;
+    dst.bindTouchCancel = src.bindTouchCancel;
+    dst.bindLongPress = src.bindLongPress;
+    dst.catchTouch = src.catchTouch;
+    dst.bindChange = src.bindChange;
+    dst.bindInput = src.bindInput;
+    dst.bindConfirm = src.bindConfirm;
+    dst.dataset = src.dataset;
+
+    dst.src = src.src;
+    dst.imageMode = src.imageMode;
+    dst.imageHeaders = src.imageHeaders;
+    dst.imageLazyLoad = src.imageLazyLoad;
+    dst.bindImageLoad = src.bindImageLoad;
+    dst.bindImageError = src.bindImageError;
+
+    dst.value = src.value;
+    dst.placeholder = src.placeholder;
+    dst.navUrl = src.navUrl;
+    dst.openType = src.openType;
+    dst.radioName = src.radioName;
+    dst.checked = src.checked;
+    dst.disabled = src.disabled;
+    dst.sliderMin = src.sliderMin;
+    dst.sliderMax = src.sliderMax;
+    dst.sliderStep = src.sliderStep;
+
+    dst.progressPercent = src.progressPercent;
+    dst.progressActive = src.progressActive;
+    dst.progressTrack = src.progressTrack;
+    dst.iconType = src.iconType;
+    dst.iconSize = src.iconSize;
+    dst.canvasWidth = src.canvasWidth;
+    dst.canvasHeight = src.canvasHeight;
+
+    dst.videoSrc = src.videoSrc;
+    dst.videoPoster = src.videoPoster;
+    dst.videoHeaders = src.videoHeaders;
+    dst.videoObjectFit = src.videoObjectFit;
+    dst.videoAutoplay = src.videoAutoplay;
+    dst.videoLoop = src.videoLoop;
+    dst.videoMuted = src.videoMuted;
+    dst.videoControls = src.videoControls;
+    dst.videoInitialTime = src.videoInitialTime;
+    dst.videoPlaybackRate = src.videoPlaybackRate;
+    dst.videoVolume = src.videoVolume;
+    dst.videoSubtitle = src.videoSubtitle;
+
+    dst.bindPlay = src.bindPlay;
+    dst.bindPause = src.bindPause;
+    dst.bindEnded = src.bindEnded;
+    dst.bindTimeUpdate = src.bindTimeUpdate;
+    dst.bindError = src.bindError;
+    dst.bindLoadedMetadata = src.bindLoadedMetadata;
+    dst.bindWaiting = src.bindWaiting;
+    dst.bindProgress = src.bindProgress;
+    dst.bindSeekComplete = src.bindSeekComplete;
+    dst.bindFullscreenChange = src.bindFullscreenChange;
+    dst.catchTap = src.catchTap;
+
+    dst.overlay = src.overlay;
+    dst.autoFocus = src.autoFocus;
+
+    dst.horizontal = src.horizontal;
+    dst.swiperIndex = src.swiperIndex;
+    dst.swiperCount = src.swiperCount;
+    dst.autoplay = src.autoplay;
+    dst.swiperInterval = src.swiperInterval;
+
+    dst.style = src.style;
+    dst.fontSize = src.fontSize;
+    dst.lineHeight = src.lineHeight;
+}
+
+}  // namespace
+
+void MiniappView::rebuildTree(PageState& page) {
     page.error.clear();
+    const auto rebuildStart = std::chrono::steady_clock::now();
+
+    // 整棵树共用一个求值会话：page.data 直接作为 JS 作用域原型，
+    // 每个 {{}} 只绑定自己的 locals，不再重复映射整份 data。
+    const JsRuntime::SessionStatus sessionStatus =
+        page.runtime ? page.runtime->beginEvalSession(evalSession)
+                     : JsRuntime::SessionStatus::Unavailable;
+    if (sessionStatus == JsRuntime::SessionStatus::Busy) {
+        // 脚本线程正忙：保留上一帧的树，下一帧再重建，绝不让求值阻塞 UI。
+        page.dirty = true;
+        return;
+    }
+    const bool scoped = sessionStatus == JsRuntime::SessionStatus::Ready;
+    evalSessionActive = scoped;
 
     std::vector<std::unique_ptr<RenderNode>> roots;
     std::vector<SelectorNode> ancestors;
     std::vector<LocalValue> locals;
     buildChildren(page.wxmlRoot, inheritStyle(Style()), ancestors, locals, "", roots);
 
+    std::unique_ptr<RenderNode> snapshot;
     if (roots.size() == 1) {
-        page.root = std::move(roots[0]);
+        snapshot = std::move(roots[0]);
     } else if (!roots.empty()) {
-        page.root = std::make_unique<RenderNode>();
-        page.root->tag = "view";
-        page.root->classes = {"page"};
-        page.root->style = inheritStyle(Style());
-        SelectorNode selector{"view", "", page.root->classes};
-        page.stylesheet.apply(selector, ancestors, page.root->style, rpxScale);
-        page.root->children = std::move(roots);
-        page.root->fontSize = page.root->style.fontSize;
-        page.root->lineHeight = effectiveLineHeight(page.root->style);
+        snapshot = std::make_unique<RenderNode>();
+        snapshot->tag = "view";
+        snapshot->classes = {"page"};
+        snapshot->style = inheritStyle(Style());
+        SelectorNode selector{"view", "", snapshot->classes};
+        page.stylesheet.apply(selector, ancestors, snapshot->style, rpxScale);
+        snapshot->children = std::move(roots);
+        snapshot->fontSize = snapshot->style.fontSize;
+        snapshot->lineHeight = effectiveLineHeight(snapshot->style);
     }
 
-    if (!page.root) {
+    if (scoped) page.runtime->endEvalSession(evalSession);
+    evalSessionActive = false;
+
+    if (!snapshot) {
         page.error = "WXML has no renderable root";
         page.dirty = false;
         return;
     }
 
     // app.json 的 window.backgroundColor 作为页面背景兜底。
-    if (!page.root->style.hasBackground) {
+    if (!snapshot->style.hasBackground) {
         Rgba background;
         if (parseColor(page.background, background)) {
-            page.root->style.hasBackground = true;
-            page.root->style.background = background;
+            snapshot->style.hasBackground = true;
+            snapshot->style.background = background;
         }
+    }
+
+    // 合并到现有树：结构相同就复用节点，只把变化的节点标脏，
+    // 这样 setData 只重排受影响的子树，而不是整页重建 + 整页重排。
+    if (page.root && page.root->tag == snapshot->tag) {
+        if (reconcileTree(*page.root, *snapshot)) page.layoutDirty = true;
+    } else {
+        if (page.root) freeYogaTree(*page.root);
+        page.root = std::move(snapshot);
+        page.layoutDirty = true;
     }
 
     // 链接父子指针并恢复滚动位置。
@@ -825,17 +1125,81 @@ void MiniappView::rebuildTree(PageState& page) {
     }
 
     page.dirty = false;
+
+    // setData 后重建整页树是唯一会长时间占用主线程的路径，超过一帧就留痕，
+    // 方便在真机日志里直接看到是哪个页面把帧拖住了。
+    const double rebuildMs =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+                                                  rebuildStart)
+            .count();
+    if (rebuildMs >= 16.0) {
+        brls::Logger::warning("miniapp: rebuild tree {} {:.1f}ms", page.path, rebuildMs);
+    }
+}
+
+bool MiniappView::reconcileTree(RenderNode& dst, RenderNode& src) {
+    bool layoutTouched = false;
+    const bool wasFocusable = dst.isInteractive() && !dst.disabled;
+    if (!sameLayoutStyle(dst.style, src.style) || dst.text != src.text ||
+        dst.fontSize != src.fontSize || dst.lineHeight != src.lineHeight) {
+        layoutTouched = true;
+        dst.layoutDirty = true;
+    }
+    applyRenderSnapshot(dst, src);
+    // 可交互状态变了要重建焦点列表（例如按钮从 disabled 恢复）。
+    if (wasFocusable != (dst.isInteractive() && !dst.disabled)) {
+        layoutTouched = true;
+        dst.layoutDirty = true;
+    }
+
+    const size_t common = std::min(dst.children.size(), src.children.size());
+    for (size_t i = 0; i < common; ++i) {
+        RenderNode& live = *dst.children[i];
+        RenderNode& next = *src.children[i];
+        if (live.tag == next.tag && live.path == next.path) {
+            if (reconcileTree(live, next)) layoutTouched = true;
+        } else {
+            // 类型或位置变了：整棵子树换掉，交给 Yoga 重新创建。
+            freeYogaTree(live);
+            dst.children[i] = std::move(src.children[i]);
+            dst.children[i]->parent = &dst;
+            dst.children[i]->layoutDirty = false;
+            layoutTouched = true;
+        }
+    }
+    if (dst.children.size() > common) {
+        for (size_t i = dst.children.size(); i > common; --i) {
+            freeYogaTree(*dst.children[i - 1]);
+        }
+        dst.children.resize(common);
+        layoutTouched = true;
+    }
+    for (size_t i = common; i < src.children.size(); ++i) {
+        src.children[i]->parent = &dst;
+        src.children[i]->layoutDirty = false;
+        dst.children.push_back(std::move(src.children[i]));
+        layoutTouched = true;
+    }
+    return layoutTouched;
 }
 
 void MiniappView::rebuildLayout(PageState& page, float width, float height) {
     if (!page.root) return;
-    if (page.root->yoga) freeYogaTree(*page.root);
-
-    buildYogaTree(*page.root, width, height, rpxScale);
+    const bool sizeChanged = std::fabs(width - layoutWidth) > 0.5f ||
+                             std::fabs(height - layoutHeight) > 0.5f;
+    if (sizeChanged || !page.root->yoga) {
+        // 视口变化：根节点尺寸变了，整棵 Yoga 树需要按新尺寸重建一次。
+        if (page.root->yoga) freeYogaTree(*page.root);
+        buildYogaTree(*page.root, width, height, rpxScale);
+    } else {
+        // 只有 setData 改动的节点才重新应用样式，其余节点复用已有 Yoga 节点。
+        syncYogaTree(*page.root, width, height, rpxScale);
+    }
     calculateYogaTree(*page.root, width, height, brls::Application::getNVGContext(),
                       fontId);
     layoutWidth = width;
     layoutHeight = height;
+    page.layoutDirty = false;
 
     // 让首个可交互节点自动获得焦点。
     std::vector<RenderNode*> collect;
@@ -924,23 +1288,92 @@ void MiniappView::updateFocusList(PageState&) {
 
 // ---------------- WXML 构建 ----------------
 
-JsonValue MiniappView::buildScope(const std::vector<LocalValue>& locals) const {
-    JsonValue scope = current ? current->data : JsonValue::object();
-    if (!scope.isObject()) scope = JsonValue::object();
-    for (const auto& local : locals) scope.setMember(local.name, local.value);
-    return scope;
+namespace {
+
+/// 纯属性路径（a、a.b.c）不需要进 QuickJS。返回 false 表示含运算符等，
+/// 交给脚本引擎求值。
+bool splitPropertyPath(const std::string& expression, std::vector<std::string>& segments) {
+    segments.clear();
+    std::string current;
+    for (size_t i = 0; i <= expression.size(); ++i) {
+        const char c = i < expression.size() ? expression[i] : '.';
+        if (c == '.') {
+            if (current.empty()) return false;
+            segments.push_back(current);
+            current.clear();
+            continue;
+        }
+        const bool first = current.empty();
+        const bool valid =
+            c == '_' || c == '$' || std::isalpha(static_cast<unsigned char>(c)) ||
+            (!first && std::isdigit(static_cast<unsigned char>(c)));
+        if (!valid) {
+            segments.clear();
+            return false;
+        }
+        current.push_back(c);
+    }
+    return !segments.empty();
+}
+
+}  // namespace
+
+bool MiniappView::resolvePropertyPath(const std::vector<LocalValue>& locals,
+                                      const std::vector<std::string>& segments,
+                                      JsonValue& out) const {
+    const JsonValue* node = nullptr;
+    for (auto it = locals.rbegin(); it != locals.rend(); ++it) {
+        if (it->name == segments.front()) {
+            node = &it->value;
+            break;
+        }
+    }
+    if (!node && current) node = current->data.find(segments.front());
+    // 根标识符不存在：交回脚本引擎，保持 ReferenceError 的原有行为。
+    if (!node) return false;
+
+    for (size_t i = 1; i < segments.size(); ++i) {
+        const std::string& key = segments[i];
+        if (node->isArray() && key == "length") {
+            out = JsonValue::number(static_cast<double>(node->size()));
+            return true;
+        }
+        if (node->isString() && key == "length") {
+            out = JsonValue::number(static_cast<double>(node->asString().size()));
+            return true;
+        }
+        if (!node->isObject()) {
+            out = JsonValue();
+            return true;
+        }
+        const JsonValue* next = node->find(key);
+        if (!next) {
+            out = JsonValue();
+            return true;
+        }
+        node = next;
+    }
+    out = *node;
+    return true;
 }
 
 bool MiniappView::evaluateExpression(const std::string& expression,
                                      const std::vector<LocalValue>& locals,
                                      JsonValue& out, bool* failed) {
     if (failed) *failed = false;
-    if (!current || !current->runtime) {
+    if (!current || !current->runtime || !evalSessionActive) {
         if (failed) *failed = true;
         return false;
     }
+    // 绝大多数 {{}} 只是取字段：本地查表比进一次脚本引擎快两个数量级。
+    std::vector<std::string> segments;
+    if (splitPropertyPath(expression, segments) &&
+        resolvePropertyPath(locals, segments, out)) {
+        return true;
+    }
     std::string error;
-    if (!current->runtime->evaluate(expression, buildScope(locals), out, error)) {
+    const bool ok = current->runtime->evaluate(expression, evalSession, locals, out, error);
+    if (!ok) {
         brls::Logger::warning("miniapp expr '{}': {}", expression, error);
         if (failed) *failed = true;
         return false;
@@ -1148,7 +1581,7 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
         "view", "text", "image", "button", "scroll-view", "swiper", "swiper-item",
         "input", "textarea", "switch", "checkbox", "checkbox-group", "radio",
         "radio-group", "slider", "navigator", "form", "progress", "rich-text",
-        "label", "icon", "video"};
+        "label", "icon", "video", "canvas"};
     bool known = false;
     for (const char* knownTag : kKnownTags) {
         if (tag == knownTag) {
@@ -1230,11 +1663,16 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
             style.borderRadius = 12.0f * rpxScale;
         }
         style.overflowHidden = true;
+    } else if (tag == "canvas") {
+        if (!style.hasBackground) {
+            style.hasBackground = true;
+            style.background = Rgba{0.0f, 0.0f, 0.0f, 1.0f};
+        }
+        style.overflowHidden = true;
     }
 
     // 事件与 dataset。
-    const char* tapNames[] = {"bindtap", "bind:tap", "catchtap", "catch:tap",
-                              "bindlongpress", "bind:longpress"};
+    const char* tapNames[] = {"bindtap", "bind:tap", "catchtap", "catch:tap"};
     for (const char* name : tapNames) {
         if (const std::string* handler = node.attr(name)) {
             std::string text = trim(*handler);
@@ -1243,6 +1681,50 @@ void MiniappView::buildElement(const WxmlNode& node, const Style& parentStyle,
                 render->catchTap = std::strcmp(name, "catchtap") == 0 ||
                                    std::strcmp(name, "catch:tap") == 0;
                 break;
+            }
+        }
+    }
+    if (const std::string* handler = node.attr("bindlongpress")) {
+        render->bindLongPress = trim(*handler);
+    } else if (const std::string* handler = node.attr("bind:longpress")) {
+        render->bindLongPress = trim(*handler);
+    }
+    if (const std::string* handler = node.attr("catchlongpress")) {
+        render->bindLongPress = trim(*handler);
+        render->catchTouch = true;
+    }
+    {
+        struct TouchBinding {
+            const char* bind;
+            const char* catchName;
+            std::string* field;
+        };
+        const TouchBinding bindings[] = {
+            {"bindtouchstart", "catchtouchstart", &render->bindTouchStart},
+            {"bindtouchmove", "catchtouchmove", &render->bindTouchMove},
+            {"bindtouchend", "catchtouchend", &render->bindTouchEnd},
+            {"bindtouchcancel", "catchtouchcancel", &render->bindTouchCancel},
+        };
+        for (const auto& binding : bindings) {
+            if (const std::string* handler = node.attr(binding.bind)) {
+                *binding.field = trim(*handler);
+            } else if (const std::string* handler = node.attr(binding.catchName)) {
+                *binding.field = trim(*handler);
+                render->catchTouch = true;
+            }
+        }
+    }
+    if (tag == "canvas") {
+        if (const std::string* rawWidth = node.attr("width")) {
+            const std::string text = trim(interpolate(*rawWidth, locals));
+            if (!text.empty()) {
+                render->canvasWidth = std::max(1.0f, static_cast<float>(std::atof(text.c_str())));
+            }
+        }
+        if (const std::string* rawHeight = node.attr("height")) {
+            const std::string text = trim(interpolate(*rawHeight, locals));
+            if (!text.empty()) {
+                render->canvasHeight = std::max(1.0f, static_cast<float>(std::atof(text.c_str())));
             }
         }
     }
@@ -1545,7 +2027,8 @@ void MiniappView::draw(NVGcontext* vg, float x, float y, float width, float heig
         drawError(vg, x, y, width, height, page.error);
         return;
     }
-    if (!page.root->yoga || std::fabs(width - layoutWidth) > 0.5f ||
+    if (page.layoutDirty || !page.root->yoga ||
+        std::fabs(width - layoutWidth) > 0.5f ||
         std::fabs(height - layoutHeight) > 0.5f) {
         rebuildLayout(page, width, height);
     }
@@ -1566,7 +2049,8 @@ void MiniappView::draw(NVGcontext* vg, float x, float y, float width, float heig
         focusPath.clear();
     }
 
-    // 全屏视频：铺满内容区，只画黑底 + 一行退出提示，画面由 drawVideoSurface 直出。
+    // 全屏视频：铺满内容区，黑底由 drawVideoSurface 直出画面覆盖；
+    // 控制层（进度条/时间/按键提示）在 postDraw 的 drawVideoOverlay 里绘制。
     if (!fullscreenVideoPath.empty()) {
         RenderNode* node = findNodeByPath(*page.root, fullscreenVideoPath);
         if (!node || node->tag != "video") {
@@ -1576,11 +2060,6 @@ void MiniappView::draw(NVGcontext* vg, float x, float y, float width, float heig
             nvgRect(vg, x, y, width, height);
             nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
             nvgFill(vg);
-            nvgFontFaceId(vg, fontId);
-            nvgFontSize(vg, 18.0f);
-            nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, 0.75f));
-            nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
-            nvgText(vg, x + width - 16.0f, y + 12.0f, "按 B 退出全屏", nullptr);
             fullscreenHasOverlay = hasOverlayNodes(*page.root);
             if (!page.readyCalled && page.runtime) {
                 page.readyCalled = true;
@@ -1667,6 +2146,8 @@ void MiniappView::drawNode(NVGcontext* vg, RenderNode& node, float parentAlpha,
         drawIcon(vg, node, alpha);
     } else if (node.tag == "video") {
         drawVideo(vg, node, alpha);
+    } else if (node.tag == "canvas") {
+        drawCanvas(vg, node, alpha);
     } else if (node.tag == "switch") {
         drawSwitch(vg, node, alpha);
     } else if (node.tag == "checkbox") {
@@ -1745,7 +2226,11 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
         key = src;
     } else {
         std::string local = resolveLocalPath(src, pageDir);
-        if (src[0] == '/') {
+        // smb:// 图片会被 resolveLocalPath 转成本地 HTTP 流代理地址，按远程图走下载。
+        if (local.rfind("http://", 0) == 0 || local.rfind("https://", 0) == 0) {
+            key = local;
+            fetchRemote = true;
+        } else if (src[0] == '/') {
             // 服务端下发的资源路径（如 /media/covers/x.jpg）包内通常不存在。
             // 只探测一次并缓存结果，避免绘制时反复访问存储卡。
             auto localIt = imageTextures.find(local);
@@ -1773,6 +2258,8 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
             key = local;
         }
     }
+    // 记录本帧是否用到，淘汰时跳过正在绘制的纹理。
+    imageTextureUse[key] = imageFrame;
     auto it = imageTextures.find(key);
     if (it != imageTextures.end()) return it->second;
 
@@ -1820,6 +2307,39 @@ int MiniappView::imageTexture(const std::string& src, const std::string& pageDir
     }
     imageTextures[key] = texture;
     return texture;
+}
+
+void MiniappView::trimImageTextures() {
+    // 海报墙可能一次加载几百张封面；不回收的话纹理只增不减，最后显存分配失败
+    // 会让 Switch 直接报错退出（这种失败没有 POSIX 信号，崩溃日志里看不到 signal）。
+    constexpr size_t kMaxImageTextures = 120;
+    if (imageTextures.size() <= kMaxImageTextures) return;
+
+    NVGcontext* vg = brls::Application::getNVGContext();
+    size_t removed = 0;
+    while (imageTextures.size() > kMaxImageTextures) {
+        auto oldest = imageTextures.end();
+        uint64_t oldestUse = 0;
+        for (auto it = imageTextures.begin(); it != imageTextures.end(); ++it) {
+            auto use = imageTextureUse.find(it->first);
+            const uint64_t used = use == imageTextureUse.end() ? 0 : use->second;
+            // 本帧正在绘制的纹理必须在帧结束后才能删。
+            if (used >= imageFrame) continue;
+            if (oldest == imageTextures.end() || used < oldestUse) {
+                oldest = it;
+                oldestUse = used;
+            }
+        }
+        if (oldest == imageTextures.end()) break;
+        if (oldest->second > 0 && vg) nvgDeleteImage(vg, oldest->second);
+        imageTextureUse.erase(oldest->first);
+        imageTextures.erase(oldest);
+        ++removed;
+    }
+    if (removed > 0) {
+        brls::Logger::info("miniapp: evicted {} image texture(s), {} left", removed,
+                           imageTextures.size());
+    }
 }
 
 void MiniappView::requestRemoteImage(const std::string& url, const std::string& headers) {
@@ -1968,11 +2488,140 @@ void MiniappView::drawImage(NVGcontext* vg, RenderNode& node, float alpha) {
     nvgSave(vg);
     nvgIntersectScissor(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight);
     nvgBeginPath(vg);
-    nvgRect(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight);
+    // 圆角由图片自身的 border-radius 决定：父容器裁剪只有矩形 scissor，
+    // 图片不在这里画圆角的话会把容器的圆角盖成直角。
+    nvgRoundedRect(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight,
+                   clampRadius(node.style.borderRadius, node.absWidth, node.absHeight));
     NVGpaint paint = nvgImagePattern(vg, patternX, patternY, patternWidth,
                                      patternHeight, 0.0f, texture, alpha);
     nvgFillPaint(vg, paint);
     nvgFill(vg);
+    nvgRestore(vg);
+}
+
+void MiniappView::drawCanvas(NVGcontext* vg, RenderNode& node, float alpha) {
+    if (!current || !current->runtime) return;
+    // 画布指令由脚本线程写入，这里取一份快照再画，避免边画边被改。
+    JsRuntime::CanvasState canvas;
+    if (!current->runtime->canvasSnapshot(node.id, canvas) || canvas.frame.empty()) return;
+
+    const float scaleX = node.canvasWidth > 0.0f ? node.absWidth / node.canvasWidth : 1.0f;
+    const float scaleY = node.canvasHeight > 0.0f ? node.absHeight / node.canvasHeight : 1.0f;
+    const std::string pageDir = current->dir;
+
+    nvgSave(vg);
+    nvgIntersectScissor(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight);
+    nvgTranslate(vg, node.absLeft, node.absTop);
+    nvgScale(vg, scaleX, scaleY);
+    nvgFontFaceId(vg, fontId);
+
+    bool pathOpen = false;
+    auto rgbaAt = [&](const std::vector<double>& n, size_t index) {
+        return nvgRGBAf(static_cast<float>(n[index]), static_cast<float>(n[index + 1]),
+                        static_cast<float>(n[index + 2]),
+                        static_cast<float>(n[index + 3]) * alpha);
+    };
+    auto ensurePath = [&]() {
+        if (!pathOpen) {
+            nvgBeginPath(vg);
+            pathOpen = true;
+        }
+    };
+
+    for (const auto& command : canvas.frame) {
+        const std::vector<double>& n = command.nums;
+        const std::string& kind = command.kind;
+        if (kind == "clearRect") {
+            nvgBeginPath(vg);
+            nvgRect(vg, static_cast<float>(n[0]), static_cast<float>(n[1]),
+                    static_cast<float>(n[2]), static_cast<float>(n[3]));
+            nvgFillColor(vg, nvgRGBAf(0.0f, 0.0f, 0.0f, alpha));
+            nvgFill(vg);
+            pathOpen = false;
+        } else if (kind == "fillRect") {
+            nvgBeginPath(vg);
+            nvgRect(vg, static_cast<float>(n[0]), static_cast<float>(n[1]),
+                    static_cast<float>(n[2]), static_cast<float>(n[3]));
+            nvgFillColor(vg, rgbaAt(n, 4));
+            nvgFill(vg);
+            pathOpen = false;
+        } else if (kind == "strokeRect") {
+            nvgBeginPath(vg);
+            nvgRect(vg, static_cast<float>(n[0]), static_cast<float>(n[1]),
+                    static_cast<float>(n[2]), static_cast<float>(n[3]));
+            nvgStrokeColor(vg, rgbaAt(n, 4));
+            nvgStrokeWidth(vg, static_cast<float>(n[8]));
+            nvgStroke(vg);
+            pathOpen = false;
+        } else if (kind == "beginPath") {
+            nvgBeginPath(vg);
+            pathOpen = true;
+        } else if (kind == "closePath") {
+            nvgClosePath(vg);
+        } else if (kind == "moveTo") {
+            ensurePath();
+            nvgMoveTo(vg, static_cast<float>(n[0]), static_cast<float>(n[1]));
+        } else if (kind == "lineTo") {
+            ensurePath();
+            nvgLineTo(vg, static_cast<float>(n[0]), static_cast<float>(n[1]));
+        } else if (kind == "rect") {
+            ensurePath();
+            nvgRect(vg, static_cast<float>(n[0]), static_cast<float>(n[1]),
+                    static_cast<float>(n[2]), static_cast<float>(n[3]));
+        } else if (kind == "arc") {
+            ensurePath();
+            nvgArc(vg, static_cast<float>(n[0]), static_cast<float>(n[1]),
+                   static_cast<float>(n[2]), static_cast<float>(n[3]),
+                   static_cast<float>(n[4]), NVG_CW);
+        } else if (kind == "fill") {
+            nvgFillColor(vg, rgbaAt(n, 0));
+            nvgFill(vg);
+            pathOpen = false;
+        } else if (kind == "stroke") {
+            nvgStrokeColor(vg, rgbaAt(n, 0));
+            nvgStrokeWidth(vg, static_cast<float>(n[4]));
+            nvgStroke(vg);
+            pathOpen = false;
+        } else if (kind == "fillText") {
+            nvgFontSize(vg, static_cast<float>(n[2]));
+            const int align = static_cast<int>(n[3]);
+            nvgTextAlign(vg, align == 1 ? NVG_ALIGN_CENTER
+                                        : (align == 2 ? NVG_ALIGN_RIGHT : NVG_ALIGN_LEFT));
+            nvgFillColor(vg, rgbaAt(n, 4));
+            nvgText(vg, static_cast<float>(n[0]), static_cast<float>(n[1]),
+                    command.text.c_str(), nullptr);
+        } else if (kind == "drawImage") {
+            const int texture = imageTexture(command.text, pageDir, {});
+            if (texture > 0) {
+                int imageWidth = 0;
+                int imageHeight = 0;
+                nvgImageSize(vg, texture, &imageWidth, &imageHeight);
+                if (imageWidth > 0 && imageHeight > 0) {
+                    nvgBeginPath(vg);
+                    nvgRect(vg, static_cast<float>(n[0]), static_cast<float>(n[1]),
+                            static_cast<float>(n[2]), static_cast<float>(n[3]));
+                    NVGpaint paint = nvgImagePattern(vg, static_cast<float>(n[0]),
+                                                     static_cast<float>(n[1]),
+                                                     static_cast<float>(n[2]),
+                                                     static_cast<float>(n[3]), 0.0f, texture,
+                                                     alpha);
+                    nvgFillPaint(vg, paint);
+                    nvgFill(vg);
+                    pathOpen = false;
+                }
+            }
+        } else if (kind == "save") {
+            nvgSave(vg);
+        } else if (kind == "restore") {
+            nvgRestore(vg);
+        } else if (kind == "translate") {
+            nvgTranslate(vg, static_cast<float>(n[0]), static_cast<float>(n[1]));
+        } else if (kind == "scale") {
+            nvgScale(vg, static_cast<float>(n[0]), static_cast<float>(n[1]));
+        } else if (kind == "rotate") {
+            nvgRotate(vg, static_cast<float>(n[0]));
+        }
+    }
     nvgRestore(vg);
 }
 
@@ -2057,9 +2706,9 @@ void MiniappView::drawIcon(NVGcontext* vg, RenderNode& node, float alpha) {
 void MiniappView::drawVideo(NVGcontext* vg, RenderNode& node, float alpha) {
     if (node.absWidth <= 0.0f || node.absHeight <= 0.0f) return;
 
-    float barHeight =
-        node.videoControls ? std::min(44.0f, node.absHeight * 0.35f) : 0.0f;
-    float videoHeight = std::max(1.0f, node.absHeight - barHeight);
+    const float barHeight =
+        node.videoControls ? std::min(60.0f, node.absHeight * 0.4f) : 0.0f;
+    const float videoHeight = std::max(1.0f, node.absHeight - barHeight);
 
     nvgSave(vg);
     nvgIntersectScissor(vg, node.absLeft, node.absTop, node.absWidth, node.absHeight);
@@ -2070,7 +2719,13 @@ void MiniappView::drawVideo(NVGcontext* vg, RenderNode& node, float alpha) {
     nvgFillColor(vg, nvgRGBAf(0.03f, 0.04f, 0.05f, alpha));
     nvgFill(vg);
 
-    bool showPoster = !node.videoPlaying || node.videoError;
+    bool started = false;
+    if (current) {
+        auto it = current->videoStarted.find(node.path);
+        started = it != current->videoStarted.end() && it->second;
+    }
+    // 暂停时保留最后一帧（画面由直出层继续绘制），poster 只在从未起播或出错时显示。
+    const bool showPoster = node.videoError || (!started && !node.videoPlaying);
     if (showPoster && !node.videoPoster.empty()) {
         int texture = imageTexture(node.videoPoster, current ? current->dir : packageDir);
         int imageWidth = 0;
@@ -2096,8 +2751,8 @@ void MiniappView::drawVideo(NVGcontext* vg, RenderNode& node, float alpha) {
         }
     }
 
-    // 未播放时在画面中央画播放按钮；播放中的画面由 OpenGL 直出覆盖。
-    if (showPoster) {
+    // 从未起播时在画面中央画播放按钮，提示这里可以按 A 起播。
+    if (showPoster && !node.videoError && !node.videoPlaying) {
         float centerX = node.absLeft + node.absWidth * 0.5f;
         float centerY = node.absTop + videoHeight * 0.5f;
         float radius = std::max(18.0f, std::min(44.0f, std::min(node.absWidth, videoHeight) * 0.14f));
@@ -2114,53 +2769,281 @@ void MiniappView::drawVideo(NVGcontext* vg, RenderNode& node, float alpha) {
         nvgFill(vg);
     }
 
-    if (node.videoError && !node.videoErrorText.empty()) {
-        nvgFontFaceId(vg, fontId);
-        nvgFontSize(vg, std::min(node.fontSize, 22.0f));
-        nvgFillColor(vg, nvgRGBAf(1.0f, 0.42f, 0.42f, alpha));
-        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgText(vg, node.absLeft + node.absWidth * 0.5f,
-                node.absTop + videoHeight - 18.0f, node.videoErrorText.c_str(), nullptr);
+    // 播放失败：在黑底上给出可读原因，而不是只留一行小字。
+    if (node.videoError) {
+        const std::string message =
+            node.videoErrorText.empty() ? "视频加载失败，可能是编码不受支持或网络中断" : node.videoErrorText;
+        float boxWidth = std::min(std::max(180.0f, node.absWidth - 48.0f), 620.0f);
+        float boxHeight = std::min(std::max(72.0f, videoHeight - 48.0f), 128.0f);
+        if (videoHeight > 140.0f) {
+            float boxLeft = node.absLeft + (node.absWidth - boxWidth) * 0.5f;
+            float boxTop = node.absTop + (videoHeight - boxHeight) * 0.5f;
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, boxLeft, boxTop, boxWidth, boxHeight, 12.0f);
+            nvgFillColor(vg, nvgRGBAf(0.05f, 0.05f, 0.06f, 0.86f * alpha));
+            nvgFill(vg);
+            nvgFontFaceId(vg, fontId);
+            nvgFontSize(vg, 16.0f);
+            nvgFillColor(vg, nvgRGBAf(1.0f, 0.47f, 0.47f, alpha));
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgText(vg, node.absLeft + node.absWidth * 0.5f, boxTop + 30.0f,
+                    "无法播放此视频", nullptr);
+            nvgFontSize(vg, 14.0f);
+            nvgFillColor(vg, nvgRGBAf(0.85f, 0.87f, 0.9f, alpha));
+            nvgTextBox(vg, boxLeft + 20.0f, boxTop + 52.0f, boxWidth - 40.0f,
+                       message.c_str(), nullptr);
+        } else {
+            nvgFontFaceId(vg, fontId);
+            nvgFontSize(vg, std::min(node.fontSize, 16.0f));
+            nvgFillColor(vg, nvgRGBAf(1.0f, 0.42f, 0.42f, alpha));
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgText(vg, node.absLeft + node.absWidth * 0.5f,
+                    node.absTop + videoHeight - 16.0f, message.c_str(), nullptr);
+        }
     }
 
     if (barHeight > 0.0f) {
-        float barTop = node.absTop + videoHeight;
-        nvgBeginPath(vg);
-        nvgRect(vg, node.absLeft, barTop, node.absWidth, barHeight);
-        nvgFillColor(vg, nvgRGBAf(0.08f, 0.09f, 0.11f, 0.96f * alpha));
-        nvgFill(vg);
-
-        float progress = 0.0f;
-        if (node.videoDuration > 0.0) {
-            progress = static_cast<float>(node.videoTime / node.videoDuration);
-        }
-        progress = std::max(0.0f, std::min(1.0f, progress));
-        nvgBeginPath(vg);
-        nvgRect(vg, node.absLeft, barTop, node.absWidth * progress, 3.0f);
-        nvgFillColor(vg, toColor(kAccent, alpha));
-        nvgFill(vg);
-
-        std::string clock = formatClock(node.videoTime) + " / " +
-                            formatClock(node.videoDuration);
-        std::string status;
-        if (node.videoError) {
-            status = "播放失败";
-        } else {
-            status = node.videoPlaying ? "播放中" : "已暂停";
-        }
-
-        nvgFontFaceId(vg, fontId);
-        nvgFontSize(vg, 18.0f);
-        nvgFillColor(vg, nvgRGBAf(0.82f, 0.84f, 0.88f, alpha));
-        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgText(vg, node.absLeft + 12.0f, barTop + barHeight * 0.62f, clock.c_str(),
-                nullptr);
-        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-        nvgText(vg, node.absLeft + node.absWidth - 12.0f, barTop + barHeight * 0.62f,
-                status.c_str(), nullptr);
+        drawVideoBar(vg, node, node.absLeft, node.absTop + videoHeight, node.absWidth,
+                     barHeight, alpha, false);
     }
 
     nvgRestore(vg);
+}
+
+void MiniappView::drawVideoBar(NVGcontext* vg, const RenderNode& node, float left,
+                               float top, float width, float height, float alpha,
+                               bool fullscreen) {
+    if (width <= 0.0f || height <= 0.0f) return;
+
+    const float pad = fullscreen ? 14.0f : 10.0f;
+    if (!fullscreen) {
+        nvgBeginPath(vg);
+        nvgRect(vg, left, top, width, height);
+        nvgFillColor(vg, nvgRGBAf(0.045f, 0.05f, 0.06f, 0.96f * alpha));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRect(vg, left, top, width, 1.0f);
+        nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, 0.06f * alpha));
+        nvgFill(vg);
+    }
+
+    // ---- 进度条 ----
+    const float trackLeft = left + pad;
+    const float trackWidth = std::max(24.0f, width - pad * 2.0f);
+    const float trackY = top + (fullscreen ? 10.0f : 12.0f);
+    const float trackHeight = fullscreen ? 6.0f : 5.0f;
+    float progress = 0.0f;
+    if (node.videoDuration > 0.0) {
+        progress = static_cast<float>(node.videoTime / node.videoDuration);
+    }
+    progress = std::max(0.0f, std::min(1.0f, progress));
+
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, trackLeft, trackY, trackWidth, trackHeight, trackHeight * 0.5f);
+    nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, 0.18f * alpha));
+    nvgFill(vg);
+
+    if (node.videoDuration > 0.0) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, trackLeft, trackY,
+                       std::max(trackHeight, trackWidth * progress), trackHeight,
+                       trackHeight * 0.5f);
+        nvgFillColor(vg, toColor(kAccent, alpha));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgCircle(vg, trackLeft + trackWidth * progress, trackY + trackHeight * 0.5f, 6.0f);
+        nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, alpha));
+        nvgFill(vg);
+    }
+
+    const float textY = top + (fullscreen ? 38.0f : height * 0.64f);
+    const float iconCx = left + pad + 14.0f;
+    const float radius = fullscreen ? 14.0f : 13.0f;
+
+    // ---- 播放/暂停圆钮 ----
+    nvgBeginPath(vg);
+    nvgCircle(vg, iconCx, textY, radius);
+    nvgFillColor(vg, node.videoError ? nvgRGBAf(0.55f, 0.2f, 0.2f, 0.92f * alpha)
+                                     : nvgRGBAf(1.0f, 1.0f, 1.0f, 0.14f * alpha));
+    nvgFill(vg);
+    nvgBeginPath(vg);
+    if (node.videoPlaying && !node.videoError) {
+        nvgRect(vg, iconCx - 5.0f, textY - 6.5f, 3.5f, 13.0f);
+        nvgRect(vg, iconCx + 1.5f, textY - 6.5f, 3.5f, 13.0f);
+    } else if (!node.videoError) {
+        nvgMoveTo(vg, iconCx - 4.0f, textY - 6.5f);
+        nvgLineTo(vg, iconCx + 6.5f, textY);
+        nvgLineTo(vg, iconCx - 4.0f, textY + 6.5f);
+        nvgClosePath(vg);
+    } else {
+        nvgRect(vg, iconCx - 6.0f, textY - 1.5f, 12.0f, 3.0f);
+    }
+    nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, alpha));
+    nvgFill(vg);
+
+    // ---- 时间 ----
+    std::string clock;
+    if (!node.videoMetadataDispatched) {
+        clock = "加载中…";
+    } else if (node.videoDuration > 0.0) {
+        clock = formatClock(node.videoTime) + " / " + formatClock(node.videoDuration);
+    } else {
+        clock = "直播 · " + formatClock(node.videoTime);
+    }
+    nvgFontFaceId(vg, fontId);
+    nvgFontSize(vg, fullscreen ? 19.0f : 16.0f);
+    nvgFillColor(vg, nvgRGBAf(0.9f, 0.92f, 0.95f, alpha));
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    const float timeX = iconCx + radius + 12.0f;
+    nvgText(vg, timeX, textY, clock.c_str(), nullptr);
+
+    // ---- 状态 / 按键提示 ----
+    std::string status;
+    if (node.videoError) {
+        status = "播放失败";
+    } else if (node.videoWaiting && node.videoPlaying) {
+        status = "缓冲中…";
+    } else if (node.videoPlaying) {
+        status = "播放中";
+    } else {
+        status = "已暂停";
+    }
+    if (!fullscreen && width > 380.0f) {
+        status += node.videoDuration > 0.0 ? "  ·  A 播放  ←→ 快进" : "  ·  A 播放";
+    }
+
+    nvgFontSize(vg, fullscreen ? 17.0f : 14.0f);
+    nvgFillColor(vg, node.videoError ? nvgRGBAf(1.0f, 0.45f, 0.45f, alpha)
+                                     : nvgRGBAf(0.66f, 0.69f, 0.74f, alpha));
+    nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+    nvgText(vg, left + width - pad, textY, status.c_str(), nullptr);
+
+    if (fullscreen) {
+        const std::string hint =
+            node.videoDuration > 0.0
+                ? "←/→ 快退快进 10 秒   LT/RT 1 分钟   A 播放/暂停   Y 退出全屏   B 返回"
+                : "直播流   A 播放/暂停   Y 退出全屏   B 返回";
+        nvgFontSize(vg, 13.0f);
+        nvgFillColor(vg, nvgRGBAf(0.58f, 0.61f, 0.66f, 0.95f));
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgText(vg, left + pad, top + 62.0f, hint.c_str(), nullptr);
+    }
+}
+
+void MiniappView::drawVideoControlOverlay(NVGcontext* vg, float width, float height) {
+    if (!current || !current->root || fullscreenVideoPath.empty()) return;
+    RenderNode* node = findNodeByPath(*current->root, fullscreenVideoPath);
+    if (!node || node->tag != "video") return;
+
+    const bool controlsVisible = overlayClock < videoOverlayUntil || !node->videoPlaying ||
+                                 node->videoWaiting || node->videoError ||
+                                 !videoOsdText.empty();
+    if (node->videoWaiting) this->invalidate();
+
+    if (controlsVisible) {
+        const float barHeight = 98.0f;
+        const float barTop = height - barHeight;
+        NVGpaint shade = nvgLinearGradient(vg, 0.0f, barTop - 60.0f, 0.0f, height,
+                                           nvgRGBAf(0.0f, 0.0f, 0.0f, 0.0f),
+                                           nvgRGBAf(0.0f, 0.0f, 0.0f, 0.88f));
+        nvgBeginPath(vg);
+        nvgRect(vg, 0.0f, barTop - 60.0f, width, barHeight + 60.0f);
+        nvgFillPaint(vg, shade);
+        nvgFill(vg);
+
+        // 顶部标题栏：只在控制层可见时出现，不挡画面。
+        NVGpaint topShade = nvgLinearGradient(vg, 0.0f, 0.0f, 0.0f, 84.0f,
+                                              nvgRGBAf(0.0f, 0.0f, 0.0f, 0.72f),
+                                              nvgRGBAf(0.0f, 0.0f, 0.0f, 0.0f));
+        nvgBeginPath(vg);
+        nvgRect(vg, 0.0f, 0.0f, width, 84.0f);
+        nvgFillPaint(vg, topShade);
+        nvgFill(vg);
+
+        nvgFontFaceId(vg, fontId);
+        nvgFontSize(vg, 21.0f);
+        nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, 0.94f));
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        const std::string title = navigationTitle.empty() ? "播放" : navigationTitle;
+        nvgText(vg, 24.0f, 28.0f, title.c_str(), nullptr);
+
+        drawVideoBar(vg, *node, 20.0f, barTop + 18.0f, width - 40.0f, 80.0f, 1.0f, true);
+    }
+
+    if (node->videoError) {
+        const std::string message = node->videoErrorText.empty()
+                                        ? "视频加载失败，可能是编码不受支持或网络中断"
+                                        : node->videoErrorText;
+        const float boxWidth = std::min(width - 80.0f, 760.0f);
+        const float boxHeight = 140.0f;
+        const float boxLeft = (width - boxWidth) * 0.5f;
+        const float boxTop = (height - boxHeight) * 0.5f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, boxLeft, boxTop, boxWidth, boxHeight, 14.0f);
+        nvgFillColor(vg, nvgRGBAf(0.05f, 0.05f, 0.06f, 0.9f));
+        nvgFill(vg);
+        nvgFontFaceId(vg, fontId);
+        nvgFontSize(vg, 22.0f);
+        nvgFillColor(vg, nvgRGBAf(1.0f, 0.45f, 0.45f, 1.0f));
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(vg, width * 0.5f, boxTop + 38.0f, "无法播放此视频", nullptr);
+        nvgFontSize(vg, 17.0f);
+        nvgFillColor(vg, nvgRGBAf(0.85f, 0.87f, 0.9f, 1.0f));
+        nvgTextBox(vg, boxLeft + 24.0f, boxTop + 62.0f, boxWidth - 48.0f,
+                   message.c_str(), nullptr);
+        nvgFontSize(vg, 14.0f);
+        nvgFillColor(vg, nvgRGBAf(0.6f, 0.63f, 0.68f, 1.0f));
+        nvgText(vg, width * 0.5f, boxTop + boxHeight - 24.0f, "按 B 返回，Y 重新全屏",
+                nullptr);
+    } else if (node->videoWaiting && node->videoPlaying) {
+        const float cx = width * 0.5f;
+        const float cy = height * 0.5f;
+        const float spin =
+            static_cast<float>(std::fmod(overlayClock * 0.006, 6.283185307179586));
+        nvgBeginPath(vg);
+        nvgArc(vg, cx, cy, 22.0f, spin, spin + 4.39822971502571, NVG_CW);
+        nvgStrokeColor(vg, toColor(kAccent));
+        nvgStrokeWidth(vg, 4.0f);
+        nvgStroke(vg);
+        nvgFontFaceId(vg, fontId);
+        nvgFontSize(vg, 16.0f);
+        nvgFillColor(vg, nvgRGBAf(0.85f, 0.87f, 0.9f, 1.0f));
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(vg, cx, cy + 46.0f, "缓冲中…", nullptr);
+    } else if (!node->videoPlaying && overlayClock < videoOverlayUntil) {
+        const float cx = width * 0.5f;
+        const float cy = height * 0.5f;
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, cy, 40.0f);
+        nvgFillColor(vg, nvgRGBAf(0.0f, 0.0f, 0.0f, 0.45f));
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, cx - 10.0f, cy - 16.0f);
+        nvgLineTo(vg, cx + 18.0f, cy);
+        nvgLineTo(vg, cx - 10.0f, cy + 16.0f);
+        nvgClosePath(vg);
+        nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, 0.95f));
+        nvgFill(vg);
+    }
+
+    if (!videoOsdText.empty() && overlayClock < videoOsdUntil) {
+        nvgFontFaceId(vg, fontId);
+        nvgFontSize(vg, 20.0f);
+        float bounds[4];
+        nvgTextBounds(vg, 0.0f, 0.0f, videoOsdText.c_str(), nullptr, bounds);
+        const float pillWidth = std::min(width - 80.0f, bounds[2] - bounds[0] + 56.0f);
+        const float pillHeight = 48.0f;
+        const float pillLeft = (width - pillWidth) * 0.5f;
+        const float pillTop = height - 186.0f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, pillLeft, pillTop, pillWidth, pillHeight, pillHeight * 0.5f);
+        nvgFillColor(vg, nvgRGBAf(0.05f, 0.05f, 0.06f, 0.86f));
+        nvgFill(vg);
+        nvgFillColor(vg, nvgRGBAf(0.95f, 0.96f, 0.98f, 1.0f));
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(vg, width * 0.5f, pillTop + pillHeight * 0.5f, videoOsdText.c_str(),
+                nullptr);
+    }
 }
 
 void MiniappView::drawVideoSurface() {
@@ -2176,13 +3059,17 @@ void MiniappView::drawVideoSurface() {
         nxkit::VideoView::instance().draw(brls::Rect(0.0f, 0.0f, vw, vh), 1.0f);
         return;
     }
-    if (!node->videoPlaying) return;
+    // 暂停时继续直出最后一帧，避免暂停瞬间画面变黑。
+    if (!node->videoPlaying) {
+        auto it = current->videoStarted.find(node->path);
+        if (it == current->videoStarted.end() || !it->second) return;
+    }
     if (node->style.displayNone || node->absWidth <= 0.0f || node->absHeight <= 0.0f) {
         return;
     }
 
     float barHeight =
-        node->videoControls ? std::min(44.0f, node->absHeight * 0.35f) : 0.0f;
+        node->videoControls ? std::min(60.0f, node->absHeight * 0.4f) : 0.0f;
     float viewWidth = brls::Application::contentWidth;
     float viewHeight = brls::Application::contentHeight;
     if (node->absLeft < 0.0f || node->absTop < 0.0f ||
@@ -2233,9 +3120,14 @@ void MiniappView::drawOverlayNodes(NVGcontext* vg, RenderNode& node, float paren
 
 void MiniappView::drawVideoOverlay() {
     if (fullscreenVideoPath.empty() || !current || !current->root) return;
+    RenderNode* node = findNodeByPath(*current->root, fullscreenVideoPath);
+    const bool controlsVisible =
+        node && node->tag == "video" &&
+        (overlayClock < videoOverlayUntil || !node->videoPlaying || node->videoWaiting ||
+         node->videoError || !videoOsdText.empty());
     const bool overlaysActive = modal.active || loadingVisible ||
                                 (!toastText.empty() && overlayClock < toastUntil);
-    if (!fullscreenHasOverlay && !overlaysActive) return;
+    if (!fullscreenHasOverlay && !overlaysActive && !controlsVisible) return;
 
     NVGcontext* vg = brls::Application::getNVGContext();
     if (!vg) return;
@@ -2246,6 +3138,8 @@ void MiniappView::drawVideoOverlay() {
     nvgBeginFrame(vg, static_cast<float>(brls::Application::windowWidth),
                   static_cast<float>(brls::Application::windowHeight), ratio);
     nvgScale(vg, brls::Application::windowScale, brls::Application::windowScale);
+
+    drawVideoControlOverlay(vg, width, height);
 
     if (fullscreenHasOverlay) {
         drawOverlayNodes(vg, *current->root, 1.0f);
@@ -2668,6 +3562,10 @@ void MiniappView::handleActivate() {
 
 void MiniappView::handlePointerTap(float x, float y) {
     if (!current) return;
+    if (suppressTap) {
+        suppressTap = false;
+        return;
+    }
 
     if (modal.active) {
         float panelWidth = std::min(760.0f, layoutWidth * 0.68f);
@@ -2690,6 +3588,24 @@ void MiniappView::handlePointerTap(float x, float y) {
     }
 
     if (!current->root) return;
+
+    // 全屏播放器：点击先唤出控制层；点在底部进度条区域则直接跳转到对应位置。
+    if (!fullscreenVideoPath.empty()) {
+        videoOverlayUntil = overlayClock + 3200.0;
+        this->invalidate();
+        RenderNode* video = findNodeByPath(*current->root, fullscreenVideoPath);
+        if (video && video->tag == "video" && video->videoDuration > 0.0 &&
+            y >= layoutHeight - 116.0f) {
+            const float margin = 34.0f;
+            const float ratio = std::max(
+                0.0f, std::min(1.0f,
+                               (x - margin) / std::max(1.0f, layoutWidth - margin * 2.0f)));
+            applyVideoSeek(video->videoDuration * ratio - video->videoTime);
+            return;
+        }
+        // 其余区域继续走页面命中测试，保证 data-overlay 里的按钮仍可点击。
+    }
+
     RenderNode* hit = hitTestNode(*current->root, x, y);
     if (!hit) return;
 
@@ -2704,6 +3620,153 @@ void MiniappView::handlePointerTap(float x, float y) {
 
     focusPath = target->path;
     activateNode(target);
+}
+
+void MiniappView::handlePointerState(float x, float y, const std::string& phase) {
+    if (!current || !current->root) return;
+
+    if (phase == "start") {
+        suppressTap = false;
+        longPressFired = false;
+        longPressCancelled = false;
+        RenderNode* hit = hitTestNode(*current->root, x, y);
+        RenderNode* target = nullptr;
+        for (RenderNode* node = hit; node; node = node->parent) {
+            if (!node->bindTouchStart.empty() || !node->bindTouchMove.empty() ||
+                !node->bindTouchEnd.empty() || !node->bindTouchCancel.empty() ||
+                !node->bindLongPress.empty()) {
+                target = node;
+                break;
+            }
+        }
+        touchActive = true;
+        touchTargetPath = target ? target->path : std::string();
+        touchStartX = touchLastX = x;
+        touchStartY = touchLastY = y;
+        touchStartTime = steadyMilliseconds();
+        // 没有触摸事件处理器时，把拖动交给最近的 scroll-view：Switch 触屏可以
+        // 直接滑动列表，不必依赖摇杆把焦点移到每个子项。canvas 等有触摸回调的
+        // 节点保持原有行为，避免抢走画笔/拖拽手势。
+        touchScrollPath.clear();
+        if (!target) {
+            for (RenderNode* node = hit; node; node = node->parent) {
+                if (!node->isScrollView()) continue;
+                const float viewport = node->horizontal ? node->absWidth : node->absHeight;
+                const float content = node->horizontal ? node->contentWidth : node->contentHeight;
+                if (content > viewport + 1.0f) {
+                    touchScrollPath = node->path;
+                    touchScrollLastX = x;
+                    touchScrollLastY = y;
+                }
+                break;
+            }
+        }
+        if (target) dispatchTouchEvent("touchstart", target, x, y);
+        return;
+    }
+
+    if (phase == "move") {
+        if (!touchActive) return;
+        touchLastX = x;
+        touchLastY = y;
+        if (!longPressCancelled) {
+            const float dx = x - touchStartX;
+            const float dy = y - touchStartY;
+            if (dx * dx + dy * dy > 144.0f) longPressCancelled = true;
+        }
+        if (!touchTargetPath.empty()) {
+            if (RenderNode* target = findNodeByPath(*current->root, touchTargetPath)) {
+                dispatchTouchEvent("touchmove", target, x, y);
+            }
+        }
+        if (!touchScrollPath.empty()) {
+            if (RenderNode* view = findNodeByPath(*current->root, touchScrollPath)) {
+                const float dx = x - touchScrollLastX;
+                const float dy = y - touchScrollLastY;
+                touchScrollLastX = x;
+                touchScrollLastY = y;
+                const float delta = view->horizontal ? -dx : -dy;
+                const float viewport = view->horizontal ? view->absWidth : view->absHeight;
+                const float content = view->horizontal ? view->contentWidth : view->contentHeight;
+                const float maxOffset = std::max(0.0f, content - viewport);
+                const float next =
+                    std::max(0.0f, std::min(maxOffset, view->scrollOffset + delta));
+                if (std::abs(next - view->scrollOffset) > 0.01f) {
+                    view->scrollOffset = next;
+                    current->scrollOffsets[view->path] = next;
+                    current->dirty = true;
+                    // 拖动超过阈值后不再触发点击，避免滑列表时误开卡片。
+                    if (std::abs(x - touchStartX) > 12.0f || std::abs(y - touchStartY) > 12.0f) {
+                        suppressTap = true;
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    if (phase == "end" || phase == "cancel") {
+        if (!touchActive) return;
+        RenderNode* target = touchTargetPath.empty()
+                                 ? nullptr
+                                 : findNodeByPath(*current->root, touchTargetPath);
+        if (target) {
+            dispatchTouchEvent(phase == "end" ? "touchend" : "touchcancel", target, x, y);
+        }
+        touchActive = false;
+        touchTargetPath.clear();
+        touchScrollPath.clear();
+    }
+}
+
+void MiniappView::dispatchTouchEvent(const std::string& type, RenderNode* target, float x,
+                                     float y) {
+    if (!target || !current || !current->runtime) return;
+
+    JsonValue touch = JsonValue::object();
+    touch.setMember("identifier", JsonValue::number(0));
+    touch.setMember("clientX", JsonValue::number(x));
+    touch.setMember("clientY", JsonValue::number(y));
+    touch.setMember("pageX", JsonValue::number(x));
+    touch.setMember("pageY", JsonValue::number(y));
+
+    const bool ending = type == "touchend" || type == "touchcancel";
+    JsonValue detail = JsonValue::object();
+    detail.setMember("touches", JsonValue::array(ending ? std::vector<JsonValue>{}
+                                                       : std::vector<JsonValue>{touch}));
+    detail.setMember("changedTouches", JsonValue::array({touch}));
+
+    for (RenderNode* node = target; node; node = node->parent) {
+        std::string* handler = nullptr;
+        if (type == "touchstart") {
+            handler = &node->bindTouchStart;
+        } else if (type == "touchmove") {
+            handler = &node->bindTouchMove;
+        } else if (type == "touchend") {
+            handler = &node->bindTouchEnd;
+        } else if (type == "touchcancel") {
+            handler = &node->bindTouchCancel;
+        } else if (type == "longpress") {
+            handler = &node->bindLongPress;
+        }
+        if (!handler || handler->empty()) continue;
+        // x/y 是相对当前处理节点的坐标，方便 canvas 直接换算绘图坐标。
+        detail.setMember("x", JsonValue::number(x - node->absLeft));
+        detail.setMember("y", JsonValue::number(y - node->absTop));
+        current->runtime->dispatchEvent(*handler, type, node->dataset, detail);
+        if (node->catchTouch) break;
+    }
+}
+
+void MiniappView::pumpLongPress(double now) {
+    if (!touchActive || longPressFired || longPressCancelled || touchTargetPath.empty()) return;
+    if (now - touchStartTime < 500.0) return;
+    if (!current || !current->root) return;
+    RenderNode* target = findNodeByPath(*current->root, touchTargetPath);
+    if (!target) return;
+    longPressFired = true;
+    suppressTap = true;
+    dispatchTouchEvent("longpress", target, touchLastX, touchLastY);
 }
 
 void MiniappView::activateNode(RenderNode* node) {
@@ -2842,6 +3905,10 @@ void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
         return;
     }
     activeVideoPath = node->path;
+    brls::Logger::info("video start node={} url={}", node->path, resolved);
+
+    // 反过来也一样：内嵌音频还在播时启动视频，两路 ao 会抢同一个渲染器。
+    if (audioPlayer && audioPlayer->state().playing) audioPlayer->pause();
 
     auto& player = nxkit::VideoView::instance();
     if (!player.isValid()) {
@@ -2867,7 +3934,9 @@ void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
         // 需要鉴权的直链（如夸克转码后的 m3u8）必须带上 Cookie，否则 CDN 返回 412。
         // http-header-fields 走 mpv 全局 set（见 VideoView::setUrl）；start 是
         // loadfile 的 per-file 选项，只在首帧生效，不会影响后续 seek。
+        brls::Logger::info("video load begin src={} forceLoad={}", resolved, forceLoad);
         player.setUrl(resolved, node->videoHeaders, extra);
+        brls::Logger::info("video load issued src={}", resolved);
         if (!node->videoSubtitle.empty()) {
             const std::string subtitle = resolveLocalPath(node->videoSubtitle, current->dir);
             if (!subtitle.empty()) player.addSubtitle(subtitle);
@@ -2887,6 +3956,96 @@ void MiniappView::stopVideo() {
     nxkit::VideoView::instance().stop();
     activeVideoPath.clear();
     activeVideoSrc.clear();
+    videoSeekDir = 0.0;
+    videoSeekStep = 0;
+    videoOsdText.clear();
+    videoOverlayUntil = 0.0;
+}
+
+bool MiniappView::videoControlsActive() const {
+    if (!current || !current->root || activeVideoPath.empty()) return false;
+    if (!fullscreenVideoPath.empty()) return true;
+    RenderNode* node = findNodeByPath(*current->root, activeVideoPath);
+    if (!node || node->tag != "video") return false;
+    // 焦点在播放器上，或铺满内容区的视频（播放页）正在播：此时方向键归播放器。
+    if (focusPath == node->path) return true;
+    const float area = node->absWidth * node->absHeight;
+    const float total = layoutWidth * layoutHeight;
+    return node->videoPlaying && total > 0.0f && area >= total * 0.7f;
+}
+
+bool MiniappView::handleVideoKey(const std::string& key) {
+    if (!videoControlsActive()) return false;
+    RenderNode* node = findNodeByPath(*current->root, activeVideoPath);
+    if (!node || node->tag != "video") return false;
+
+    if (key == "a") {
+        // 全屏页面上如果有聚焦中的 data-overlay 控件，A 应该交给它（例如频道列表/按钮），
+        // 而不是把播放暂停掉。
+        RenderNode* focused = findFocusByPath(focusPath);
+        if (fullscreenHasOverlay && focused && focused->isInteractive() &&
+            isOverlayNode(focused) && focused->path != node->path) {
+            return false;
+        }
+        toggleVideo(node);
+        videoOverlayUntil = overlayClock + 3200.0;
+        this->invalidate();
+        return true;
+    }
+    if (key == "left") return handleVideoSeek(-10.0);
+    if (key == "right") return handleVideoSeek(10.0);
+    if (key == "lt") return handleVideoSeek(-60.0);
+    if (key == "rt") return handleVideoSeek(60.0);
+    if (key == "y") {
+        if (fullscreenVideoPath.empty()) {
+            enterVideoFullscreen(node->path);
+        } else {
+            exitVideoFullscreen();
+        }
+        videoOverlayUntil = overlayClock + 3200.0;
+        this->invalidate();
+        return true;
+    }
+    return false;
+}
+
+bool MiniappView::handleVideoSeek(double delta) {
+    if (!current || activeVideoPath.empty()) return false;
+    RenderNode* node = findNodeByPath(*current->root, activeVideoPath);
+    if (!node || node->tag != "video") return false;
+    if (node->videoDuration <= 0.0) {
+        // HLS 直播没有时长，seek 在 mpv 里会被当成百分比跳到 0，直接提示更清楚。
+        showToast("直播流不支持快进/快退", "none", 1200);
+        videoOverlayUntil = overlayClock + 3000.0;
+        return true;
+    }
+    applyVideoSeek(delta);
+    // 方向键按住时由 tick 继续加速；LT/RT 不参与长按连发。
+    videoSeekDir = delta > 0.0 ? 1.0 : -1.0;
+    videoSeekStep = 0;
+    videoSeekNextAt = overlayClock + 420.0;
+    return true;
+}
+
+void MiniappView::applyVideoSeek(double delta) {
+    if (!current || activeVideoPath.empty() || delta == 0.0) return;
+    RenderNode* node = findNodeByPath(*current->root, activeVideoPath);
+    if (!node || node->tag != "video" || node->videoDuration <= 0.0) return;
+
+    double target = node->videoTime + delta;
+    target = std::max(0.0, std::min(node->videoDuration, target));
+    node->videoTime = target;
+    current->videoTime[node->path] = target;
+    current->dirty = true;
+    nxkit::VideoView::instance().seek(target);
+
+    char buffer[96];
+    std::snprintf(buffer, sizeof(buffer), "%s %d 秒 · %s", delta >= 0.0 ? "快进" : "快退",
+                  static_cast<int>(std::abs(delta) + 0.5), formatClock(target).c_str());
+    videoOsdText = buffer;
+    videoOsdUntil = overlayClock + 1500.0;
+    videoOverlayUntil = overlayClock + 3200.0;
+    this->invalidate();
 }
 
 void MiniappView::dispatchVideoEvent(RenderNode* node, const std::string& handler,
@@ -2906,6 +4065,13 @@ void MiniappView::dispatchVideoEvent(RenderNode* node, const std::string& handle
 
 bool MiniappView::videoControl(const std::string& id, const std::string& action,
                                double value, const std::string& text) {
+    if (!isUiThread()) {
+        // 播放器/渲染树只能在 UI 线程改：入队后乐观返回，脚本不等结果。
+        postUi([this, id, action, value, text]() {
+            this->videoControl(id, action, value, text);
+        });
+        return true;
+    }
     if (!current || !current->root || id.empty()) return false;
     RenderNode* node = findNodeById(*current->root, id);
     if (!node || node->tag != "video") return false;
@@ -2951,16 +4117,255 @@ bool MiniappView::videoControl(const std::string& id, const std::string& action,
     return true;
 }
 
+nxkit::AudioPlayer* MiniappView::ensureAudioPlayer() {
+    if (audioPlayer) return audioPlayer->isValid() ? audioPlayer.get() : nullptr;
+    if (audioUnavailable) return nullptr;
+    auto player = std::make_unique<nxkit::AudioPlayer>();
+    if (!player->isValid()) {
+        // 未启用 libmpv 时不再反复重试，避免每帧刷警告。
+        audioUnavailable = true;
+        brls::Logger::warning("miniapp audio: player unavailable (libmpv disabled)");
+        return nullptr;
+    }
+    audioPlayer = std::move(player);
+    return audioPlayer.get();
+}
+
+void MiniappView::switchAudioTrack(const std::string& id, bool resumePosition) {
+    auto it = audioTracks.find(id);
+    if (it == audioTracks.end()) return;
+    nxkit::AudioPlayer* player = ensureAudioPlayer();
+    if (!player) return;
+
+    // 记下被打断音轨的位置；正在播放的循环音轨（如 BGM）在音效播完后自动接回来。
+    // 用户手动暂停的音轨不参与恢复，避免暂停的 BGM 被音效“唤醒”。
+    if (!activeAudioId.empty() && activeAudioId != id) {
+        auto prev = audioTracks.find(activeAudioId);
+        if (prev != audioTracks.end()) {
+            nxkit::AudioPlayer::State snapshot = player->state();
+            prev->second.position = snapshot.currentTime;
+            if (snapshot.playing && prev->second.loop) {
+                suspendedAudioId = activeAudioId;
+            } else if (suspendedAudioId == activeAudioId) {
+                suspendedAudioId.clear();
+            }
+            player->stop();
+        }
+    }
+
+    activeAudioId = id;
+    AudioTrack& track = it->second;
+    const bool remote =
+        track.src.rfind("http://", 0) == 0 || track.src.rfind("https://", 0) == 0;
+    const std::string resolved =
+        remote ? track.src : resolveLocalPath(track.src, current ? current->dir : std::string());
+    if (resolved.empty()) return;
+    // 起播位置随 loadfile 一起传，避免 seek 早于文件加载完成被 mpv 丢掉。
+    player->load(resolved, track.loop, resumePosition ? track.position : 0.0);
+    player->setVolume(track.volume);
+}
+
+void MiniappView::resumeSuspendedAudio() {
+    if (suspendedAudioId.empty()) return;
+    const std::string id = suspendedAudioId;
+    suspendedAudioId.clear();
+    auto it = audioTracks.find(id);
+    if (it == audioTracks.end()) return;
+    // 恢复时接着原来的位置播，并重新进入循环。
+    switchAudioTrack(id, true);
+    if (activeAudioId == id) {
+        nxkit::AudioPlayer* player = ensureAudioPlayer();
+        if (player) player->play();
+    }
+}
+
+bool MiniappView::audioControl(const std::string& id, const std::string& action,
+                               double value, const std::string& text) {
+    if (!isUiThread()) {
+        postUi([this, id, action, value, text]() {
+            this->audioControl(id, action, value, text);
+        });
+        return true;
+    }
+    if (id.empty()) return false;
+    if (action == "destroy") {
+        if (activeAudioId == id) {
+            if (audioPlayer) audioPlayer->stop();
+            activeAudioId.clear();
+        }
+        if (suspendedAudioId == id) suspendedAudioId.clear();
+        audioTracks.erase(id);
+        resumeSuspendedAudio();
+        return true;
+    }
+
+    if (action == "create") {
+        audioTracks.emplace(id, AudioTrack{});
+        return true;
+    }
+
+    auto it = audioTracks.find(id);
+    if (it == audioTracks.end()) {
+        if (audioUnavailable) return false;
+        it = audioTracks.emplace(id, AudioTrack{}).first;
+    }
+    AudioTrack& track = it->second;
+
+    if (action == "src") {
+        track.src = text;
+        track.position = 0.0;
+        if (activeAudioId == id && audioPlayer) {
+            const bool remote =
+                text.rfind("http://", 0) == 0 || text.rfind("https://", 0) == 0;
+            const std::string resolved =
+                remote ? text : resolveLocalPath(text, current ? current->dir : std::string());
+            if (resolved.empty()) return false;
+            return audioPlayer->load(resolved, track.loop);
+        }
+        return true;
+    }
+    if (action == "volume") {
+        track.volume = static_cast<int>(std::lround(value));
+        if (activeAudioId == id && audioPlayer) audioPlayer->setVolume(track.volume);
+    } else if (action == "loop") {
+        track.loop = value != 0.0;
+        if (activeAudioId == id && audioPlayer) audioPlayer->setLoop(track.loop);
+    } else if (action == "play") {
+        if (track.src.empty()) return false;
+        // 视频播放器是另一个 mpv 实例；Switch 上 audren 音频渲染器是进程级单例，
+        // 视频还挂着音频输出时再开一路音频会直接崩，先把视频卸掉。
+        if (!activeVideoPath.empty()) stopVideo();
+        nxkit::AudioPlayer* player = ensureAudioPlayer();
+        if (!player) return false;
+        if (activeAudioId != id) {
+            // 换音轨：同一时刻只能有一路音频输出（audren 单例）。
+            switchAudioTrack(id, true);
+        }
+        player->play();
+        if (value > 0.0) player->seek(value);
+    } else if (action == "pause") {
+        if (activeAudioId == id && audioPlayer) {
+            track.position = audioPlayer->state().currentTime;
+            audioPlayer->pause();
+        }
+    } else if (action == "stop") {
+        if (activeAudioId == id && audioPlayer) {
+            audioPlayer->stop();
+            track.position = 0.0;
+        }
+    } else if (action == "seek") {
+        if (activeAudioId == id && audioPlayer) {
+            audioPlayer->seek(value);
+        } else {
+            track.position = value;
+        }
+    }
+    return true;
+}
+
+JsonValue MiniappView::audioState(const std::string& id) {
+    if (!isUiThread()) {
+        std::lock_guard<std::mutex> lock(hostStateMutex);
+        auto cached = cachedAudioState.find(id);
+        return cached == cachedAudioState.end() ? JsonValue::object() : cached->second;
+    }
+    return collectAudioState(id);
+}
+
+JsonValue MiniappView::collectAudioState(const std::string& id) {
+    JsonValue state = JsonValue::object();
+    auto it = audioTracks.find(id);
+    if (it == audioTracks.end()) return state;
+
+    if (activeAudioId != id || !audioPlayer) {
+        // 未激活的音轨没有独立播放器，只回放保存的进度。
+        state.setMember("playing", JsonValue::boolean(false));
+        state.setMember("loaded", JsonValue::boolean(false));
+        state.setMember("ended", JsonValue::boolean(false));
+        state.setMember("currentTime", JsonValue::number(it->second.position));
+        state.setMember("duration", JsonValue::number(0));
+        state.setMember("error", JsonValue::string(""));
+        return state;
+    }
+
+    const nxkit::AudioPlayer::State snapshot = audioPlayer->state();
+    // 一次性音效播完后，把被打断的循环音轨接回来。
+    if (snapshot.ended && suspendedAudioId != id) resumeSuspendedAudio();
+    state.setMember("playing", JsonValue::boolean(snapshot.playing));
+    state.setMember("loaded", JsonValue::boolean(snapshot.loaded));
+    state.setMember("ended", JsonValue::boolean(snapshot.ended));
+    state.setMember("currentTime", JsonValue::number(snapshot.currentTime));
+    state.setMember("duration", JsonValue::number(snapshot.duration));
+    state.setMember("error", JsonValue::string(snapshot.error));
+    return state;
+}
+
+JsonValue MiniappView::gamepadState() {
+    if (!isUiThread()) {
+        std::lock_guard<std::mutex> lock(hostStateMutex);
+        return cachedGamepadState;
+    }
+    return collectGamepadState();
+}
+
+JsonValue MiniappView::collectGamepadState() {
+    JsonValue state = JsonValue::object();
+    auto* platform = brls::Application::getPlatform();
+    brls::InputManager* input = platform ? platform->getInputManager() : nullptr;
+    if (!input) return state;
+
+    brls::ControllerState pad{};
+    input->updateUnifiedControllerState(&pad);
+
+    state.setMember("connected", JsonValue::boolean(true));
+    state.setMember("axes", JsonValue::array({
+                                 JsonValue::number(pad.axes[brls::LEFT_X]),
+                                 JsonValue::number(pad.axes[brls::LEFT_Y]),
+                                 JsonValue::number(pad.axes[brls::RIGHT_X]),
+                                 JsonValue::number(pad.axes[brls::RIGHT_Y]),
+                             }));
+
+    struct ButtonBinding {
+        const char* name;
+        brls::ControllerButton button;
+    };
+    static const ButtonBinding kButtons[] = {
+        {"a", brls::BUTTON_A},         {"b", brls::BUTTON_B},
+        {"x", brls::BUTTON_X},         {"y", brls::BUTTON_Y},
+        {"lb", brls::BUTTON_LB},       {"rb", brls::BUTTON_RB},
+        {"lt", brls::BUTTON_LT},       {"rt", brls::BUTTON_RT},
+        {"up", brls::BUTTON_UP},       {"down", brls::BUTTON_DOWN},
+        {"left", brls::BUTTON_LEFT},   {"right", brls::BUTTON_RIGHT},
+        {"start", brls::BUTTON_START}, {"back", brls::BUTTON_BACK},
+        {"lsb", brls::BUTTON_LSB},     {"rsb", brls::BUTTON_RSB},
+    };
+    JsonValue buttons = JsonValue::object();
+    std::vector<JsonValue> pressed;
+    for (const auto& binding : kButtons) {
+        const bool down = pad.buttons[binding.button];
+        buttons.setMember(binding.name, JsonValue::boolean(down));
+        if (down) pressed.push_back(JsonValue::string(binding.name));
+    }
+    state.setMember("buttons", buttons);
+    state.setMember("pressed", JsonValue::array(pressed));
+    return state;
+}
+
 void MiniappView::enterVideoFullscreen(const std::string& path) {
     if (!current || !current->root || path.empty()) return;
     fullscreenVideoPath = path;
+    // 进入全屏先亮 3 秒控制层，之后自动隐藏，按键/点击可再次唤出。
+    videoOverlayUntil = steadyMilliseconds() + 3200.0;
     current->dirty = true;
     RenderNode* node = findNodeByPath(*current->root, path);
     if (node) {
         // 从未开始播放过的 video：进全屏时顺便起播，否则全屏只有黑屏。
+        // 起播会同步初始化 MPV，不能在这里做：requestFullScreen 常来自小程序的
+        // onReady，而 onReady 是在 draw() 里触发的，同步初始化会把这一帧连同界面
+        // 一起卡住。推迟到下一帧 tick（此时界面已经上屏）再起播。
         if (!node->videoPlaying &&
             current->videoStarted.find(path) == current->videoStarted.end()) {
-            toggleVideo(node);
+            pendingVideoStartPath = path;
         }
         dispatchVideoEvent(node, node->bindFullscreenChange, "fullscreenchange");
     }
@@ -2970,6 +4375,8 @@ void MiniappView::exitVideoFullscreen() {
     if (!current || !current->root || fullscreenVideoPath.empty()) return;
     RenderNode* node = findNodeByPath(*current->root, fullscreenVideoPath);
     fullscreenVideoPath.clear();
+    videoOverlayUntil = 0.0;
+    videoOsdText.clear();
     current->dirty = true;
     if (node) dispatchVideoEvent(node, node->bindFullscreenChange, "fullscreenchange");
 }
@@ -3184,6 +4591,9 @@ void MiniappView::ensureVisible(RenderNode* node) {
 }
 
 void MiniappView::tick(double now) {
+    // 帧号用于纹理 LRU：本帧绘制过的纹理不允许淘汰，其余按最久未用回收。
+    ++imageFrame;
+    trimImageTextures();
     if (this->pendingLoad) {
         if (this->loadDelayFrames > 0) {
             // 留一帧给加载页，确保窗口里先出现反馈再开始读包。
@@ -3198,9 +4608,71 @@ void MiniappView::tick(double now) {
         }
     }
     flushPendingNavigation();
+    // 震动到时清零：放在页面判断之前，页面切走也能停振。
+    if (vibrationStopAt > 0.0 && now >= vibrationStopAt) {
+        vibrationStopAt = 0.0;
+        auto* platform = brls::Application::getPlatform();
+        brls::InputManager* input = platform ? platform->getInputManager() : nullptr;
+        if (input) input->sendRumble(0, 0, 0);
+    }
     if (!current) return;
+    // 全屏起播请求在 draw 末尾提出，这里在下一帧帧首执行：此时界面已经上屏，
+    // 同步初始化 MPV 不会再连带首帧一起卡住。
+    if (!pendingVideoStartPath.empty()) {
+        std::string path = pendingVideoStartPath;
+        pendingVideoStartPath.clear();
+        if (current->root) {
+            RenderNode* node = findNodeByPath(*current->root, path);
+            if (node && node->tag == "video" && !node->videoPlaying) toggleVideo(node);
+        }
+    }
     overlayClock = now;
-    if (current->runtime) current->runtime->pumpTimers(now);
+    // 长按方向键连续快进/快退：首按 10 秒，之后按 20/30/40/50 秒递增加速，松手即停。
+    if (videoSeekDir != 0.0) {
+        const brls::ControllerButton button =
+            videoSeekDir > 0.0 ? brls::BUTTON_RIGHT : brls::BUTTON_LEFT;
+        if (!isDpadHeld(button)) {
+            videoSeekDir = 0.0;
+            videoSeekStep = 0;
+        } else if (now >= videoSeekNextAt) {
+            videoSeekStep = std::min(videoSeekStep + 1, 4);
+            videoSeekNextAt = now + 220.0;
+            applyVideoSeek(videoSeekDir * 10.0 * (videoSeekStep + 1));
+        }
+    }
+    if (!videoOsdText.empty() && now >= videoOsdUntil) {
+        videoOsdText.clear();
+        this->invalidate();
+    }
+    // 全屏控制层显示期间持续重绘，保证缓冲动画与进度走动；到点后再重绘一帧收起。
+    if (videoOverlayUntil > 0.0 && now >= videoOverlayUntil) {
+        videoOverlayUntil = 0.0;
+        this->invalidate();
+    } else if (!fullscreenVideoPath.empty() && now < videoOverlayUntil) {
+        this->invalidate();
+    }
+    // 脚本线程产生的 setData：按版本号拉一份快照，标脏后由绘制阶段重建。
+    if (current->runtime) {
+        const std::uint64_t version = current->runtime->dataVersion();
+        if (version != current->dataVersion) {
+            JsonValue snapshot;
+            if (current->runtime->tryDataCopy(snapshot)) {
+                current->data = std::move(snapshot);
+                current->dataVersion = version;
+                current->dirty = true;
+            }
+        }
+    }
+    refreshHostStateCache();
+    // 定时器/网络轮询挪到逻辑线程：每帧最多排一个任务，脚本慢时自然降频而不是堆积。
+    if (current->runtime && !logicPumpPending.exchange(true)) {
+        auto runtime = current->runtime;
+        postLogic([this, runtime, now]() {
+            runtime->pumpTimers(now);
+            logicPumpPending.store(false);
+        });
+    }
+    pumpLongPress(now);
 
     if (!toastText.empty() && now >= toastUntil) toastText.clear();
 
@@ -3218,6 +4690,11 @@ void MiniappView::tick(double now) {
                     int next = (node->swiperIndex + 1) % node->swiperCount;
                     current->swiperIndex[node->path] = next;
                     current->swiperLast[node->path] = now;
+                    JsonValue detail = JsonValue::object();
+                    detail.setMember("current", JsonValue::number(next));
+                    detail.setMember("source", JsonValue::string("autoplay"));
+                    // 自动轮播同样触发 bindchange，页面指示器/联动内容才能同步。
+                    triggerChange(node, detail, "change");
                     current->dirty = true;
                     break;
                 }
@@ -3315,6 +4792,11 @@ void MiniappView::onVideoState(const nxkit::VideoState& vs) {
         dispatchVideoEvent(node, node->bindEnded, "ended");
     }
 
+    if (vs.error || vs.ended) {
+        // 出错/播完时把控制层亮出来，方便直接看到状态与后续操作。
+        videoOverlayUntil = overlayClock + 3200.0;
+    }
+
     if (dirty) current->dirty = true;
 }
 
@@ -3322,34 +4804,42 @@ void MiniappView::onVideoState(const nxkit::VideoState& vs) {
 
 void MiniappView::showToast(const std::string& title, const std::string& icon,
                             int durationMs) {
-    toastText = title;
-    toastIcon = icon;
-    toastUntil = steadyMilliseconds() + std::max(200, durationMs);
+    postUi([this, title, icon, durationMs]() {
+        toastText = title;
+        toastIcon = icon;
+        toastUntil = steadyMilliseconds() + std::max(200, durationMs);
+    });
 }
 
 void MiniappView::showLoading(const std::string& title) {
-    loadingVisible = true;
-    loadingText = title.empty() ? "加载中" : title;
+    postUi([this, title]() {
+        loadingVisible = true;
+        loadingText = title.empty() ? "加载中" : title;
+    });
 }
 
 void MiniappView::hideLoading() {
-    loadingVisible = false;
+    postUi([this]() { loadingVisible = false; });
 }
 
 void MiniappView::showModal(const std::string& title, const std::string& content,
                             bool showCancel, std::function<void(bool)> done) {
-    modal = ModalState{};
-    modal.active = true;
-    modal.title = title.empty() ? "提示" : title;
-    modal.content = content;
-    modal.showCancel = showCancel;
-    modal.focus = showCancel ? 0 : 1;
-    modal.done = std::move(done);
+    postUi([this, title, content, showCancel, done = std::move(done)]() {
+        modal = ModalState{};
+        modal.active = true;
+        modal.title = title.empty() ? "提示" : title;
+        modal.content = content;
+        modal.showCancel = showCancel;
+        modal.focus = showCancel ? 0 : 1;
+        modal.done = done;
+    });
 }
 
 void MiniappView::setNavigationBarTitle(const std::string& title) {
-    navigationTitle = title;
-    if (current) current->title = title;
+    postUi([this, title]() {
+        navigationTitle = title;
+        if (current) current->title = title;
+    });
 }
 
 void MiniappView::httpRequest(const std::string& method, const std::string& url,
@@ -3388,7 +4878,10 @@ void MiniappView::httpRequest(const std::string& method, const std::string& url,
 }
 
 bool MiniappView::navigateTo(const std::string& url) {
-    return openPage(url, true);
+    // 建页要读文件 + 初始化脚本，放到 UI 线程的下一次 sync 里执行，
+    // 脚本线程只做队列投递，不等结果。
+    postUi([this, url]() { openPage(url, true); });
+    return true;
 }
 
 namespace {
@@ -3456,6 +4949,12 @@ void* runSmbConnectJob(void* raw) {
     } catch (...) {
         error = "SMB 连接异常";
     }
+    if (!id.empty()) {
+        // 流代理在这条工作线程上先起来：等 JS 调 streamUrl 时端口已就绪，
+        // 不会在脚本/绘制线程里阻塞等绑定（那会卡住整帧甚至整个 JS 调用）。
+        SmbManager::instance().init();
+    }
+    brls::Logger::info("smb connect done id=[{}] ok={} err={}", id, !id.empty(), error);
     job->done(!id.empty(), id, error);
     return nullptr;
 }
@@ -3488,6 +4987,8 @@ bool startDetached(void* (*entry)(void*), void* arg) {
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    // libsmb2 与 JSON/日志都会吃栈，devkitPro 的 pthread 默认栈太小，显式放大。
+    pthread_attr_setstacksize(&attr, 512 * 1024);
     pthread_t thread;
     int rc = pthread_create(&thread, &attr, entry, arg);
     pthread_attr_destroy(&attr);
@@ -3610,11 +5111,12 @@ void MiniappView::mediaScan(const std::string& sourceId, const std::string& smbI
     }
 }
 
-void MiniappView::mediaLibrary(const std::string& sourceId, int offset, int limit,
-                               SmbDone done) {
+void MiniappView::mediaLibrary(const std::string& sourceId, const std::string& root, int offset,
+                               int limit, SmbDone done) {
     struct LibraryJob {
         SmbDone done;
         std::string sourceId;
+        std::string root;
         int offset = 0;
         int limit = 0;
     };
@@ -3626,6 +5128,7 @@ void MiniappView::mediaLibrary(const std::string& sourceId, int offset, int limi
     }
     job->done = done;
     job->sourceId = sourceId;
+    job->root = root;
     job->offset = offset;
     job->limit = limit;
     // 读本地索引文件放到工作线程，避免在 JS 线程里同步回调造成 QuickJS 重入。
@@ -3635,8 +5138,8 @@ void MiniappView::mediaLibrary(const std::string& sourceId, int offset, int limi
         int total = 0;
         std::vector<MediaEntry> entries;
         try {
-            entries = MediaLibrary::instance().page(self->sourceId, self->offset, self->limit,
-                                                   total, error);
+            entries = MediaLibrary::instance().page(self->sourceId, self->root, self->offset,
+                                                   self->limit, total, error);
         } catch (const std::exception& e) {
             error = e.what() ? e.what() : "媒体库读取异常";
         } catch (...) {
@@ -3650,6 +5153,9 @@ void MiniappView::mediaLibrary(const std::string& sourceId, int offset, int limi
             item.setMember("size", JsonValue::number(static_cast<double>(e.size)));
             if (!e.subtitle.empty()) {
                 item.setMember("subtitle", JsonValue::string(e.subtitle));
+            }
+            if (!e.poster.empty()) {
+                item.setMember("poster", JsonValue::string(e.poster));
             }
             items.push_back(item);
         }
@@ -3670,13 +5176,24 @@ void MiniappView::smbDisconnect(const std::string& id) {
 }
 
 std::string MiniappView::smbStreamUrl(const std::string& id, const std::string& path) {
-    SmbManager::instance().init();
-    return SmbManager::instance().streamUrl(id, path);
+    // 代理只在 wx.smb.connect 的工作线程里启动；这里绝不能 init()：
+    // 绘制/脚本线程一旦等端口绑定，连接线程又握着 SMB 锁，界面会直接卡死。
+    std::string url = SmbManager::instance().streamUrl(id, path);
+    brls::Logger::info("smb stream url id=[{}] path=[{}] url={}", id, path, url);
+    return url;
 }
 
 bool MiniappView::navigateBack(int delta) {
-    if (pages.size() <= 1) return false;
-    pendingNavigation = [this, delta]() { performNavigateBack(delta); };
+    if (isUiThread()) {
+        if (pages.size() <= 1) return false;
+        pendingNavigation = [this, delta]() { performNavigateBack(delta); };
+        return true;
+    }
+    // 脚本线程只投递，真正的页面销毁留给 UI 线程，避免在 JS 回调里释放 context。
+    postUi([this, delta]() {
+        if (pages.size() <= 1) return;
+        pendingNavigation = [this, delta]() { performNavigateBack(delta); };
+    });
     return true;
 }
 
@@ -3689,6 +5206,8 @@ void MiniappView::flushPendingNavigation() {
 
 bool MiniappView::performNavigateBack(int delta) {
     if (pages.size() <= 1) return false;
+    // 返回会销毁当前页，必须先停掉播放器，否则音频会在页面退出后继续。
+    stopVideo();
     int target = std::max(1, static_cast<int>(pages.size()) - std::max(1, delta));
     while (static_cast<int>(pages.size()) > target) {
         PageState& page = *pages.back();
@@ -3711,7 +5230,9 @@ bool MiniappView::performNavigateBack(int delta) {
 }
 
 bool MiniappView::redirectTo(const std::string& url) {
-    pendingNavigation = [this, url]() { performRedirectTo(url); };
+    postUi([this, url]() {
+        pendingNavigation = [this, url]() { performRedirectTo(url); };
+    });
     return true;
 }
 
@@ -3727,9 +5248,11 @@ bool MiniappView::performRedirectTo(const std::string& url) {
     if (page->runtime) {
         page->runtime->callLifecycle("onLoad", &query);
         page->runtime->callLifecycle("onShow");
-        page->data = page->runtime->data();
+        page->data = page->runtime->dataCopy();
+        page->dataVersion = page->runtime->dataVersion();
     }
     if (current) {
+        stopVideo();
         if (current->runtime) {
             current->runtime->callLifecycle("onHide");
             current->runtime->callLifecycle("onUnload");
@@ -3749,11 +5272,14 @@ bool MiniappView::performRedirectTo(const std::string& url) {
 }
 
 bool MiniappView::reLaunch(const std::string& url) {
-    pendingNavigation = [this, url]() { performReLaunch(url); };
+    postUi([this, url]() {
+        pendingNavigation = [this, url]() { performReLaunch(url); };
+    });
     return true;
 }
 
 bool MiniappView::performReLaunch(const std::string& url) {
+    stopVideo();
     while (!pages.empty()) {
         PageState& page = *pages.back();
         if (page.runtime) {
@@ -3904,6 +5430,13 @@ JsonValue MiniappView::recentMiniApps() {
 }
 
 JsonValue MiniappView::systemInfo() {
+    // 逻辑线程不能直接碰平台状态：读 UI 线程每帧刷新的快照。
+    if (isUiThread()) return collectSystemInfo();
+    std::lock_guard<std::mutex> lock(hostStateMutex);
+    return cachedSystemInfo;
+}
+
+JsonValue MiniappView::collectSystemInfo() {
     JsonValue info = JsonValue::object();
     info.setMember("brand", JsonValue::string("Nintendo"));
     info.setMember("model", JsonValue::string("Switch"));
@@ -3935,10 +5468,21 @@ JsonValue MiniappView::systemInfo() {
 }
 
 void MiniappView::vibrateShort() {
-    // Switch 上没有通用短振动接口，保持 no-op。
+    // HID 震动只能在 UI 线程碰。
+    postUi([this]() {
+        // 复用 borealis 已初始化的震动设备：自己再 hidInitializeVibrationDevices 会
+        // 与输入层抢同一组 handle，且后台线程里调 HID 服务在真机上会崩。
+        auto* platform = brls::Application::getPlatform();
+        brls::InputManager* input = platform ? platform->getInputManager() : nullptr;
+        if (!input) return;
+        input->sendRumble(0, 0x9FFF, 0x5FFF);
+        // 180ms 后在 tick() 里清零，全程主线程。
+        vibrationStopAt = steadyMilliseconds() + 180.0;
+    });
 }
 
 bool MiniappView::storageGet(const std::string& key, std::string& value) {
+    std::lock_guard<std::mutex> lock(hostStateMutex);
     auto it = storageValues.find(key);
     if (it != storageValues.end()) {
         value = it->second;
@@ -3954,11 +5498,13 @@ bool MiniappView::storageGet(const std::string& key, std::string& value) {
 }
 
 void MiniappView::storageSet(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(hostStateMutex);
     storageValues[key] = value;
     saveStorageKey(key, value);
 }
 
 void MiniappView::storageRemove(const std::string& key) {
+    std::lock_guard<std::mutex> lock(hostStateMutex);
     storageValues.erase(key);
     if (storageDir.empty()) return;
     std::error_code error;
@@ -3966,6 +5512,7 @@ void MiniappView::storageRemove(const std::string& key) {
 }
 
 void MiniappView::storageClear() {
+    std::lock_guard<std::mutex> lock(hostStateMutex);
     storageValues.clear();
     if (storageDir.empty()) return;
     std::error_code error;
@@ -3974,6 +5521,7 @@ void MiniappView::storageClear() {
 }
 
 std::vector<std::string> MiniappView::storageKeys() {
+    std::lock_guard<std::mutex> lock(hostStateMutex);
     std::vector<std::string> keys;
     if (!storageDir.empty()) {
         std::error_code error;
@@ -3998,10 +5546,12 @@ std::vector<std::string> MiniappView::storageKeys() {
 }
 
 std::string MiniappView::clipboardGet() {
+    std::lock_guard<std::mutex> lock(hostStateMutex);
     return clipboardText;
 }
 
 void MiniappView::clipboardSet(const std::string& text) {
+    std::lock_guard<std::mutex> lock(hostStateMutex);
     clipboardText = text;
 }
 

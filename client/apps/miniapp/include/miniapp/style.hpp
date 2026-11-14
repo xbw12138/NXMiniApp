@@ -129,6 +129,10 @@ void applyDeclarations(Style& style, const std::vector<Declaration>& declaration
 /// 只把可继承的文本属性复制给子节点。
 Style inheritStyle(const Style& parent);
 
+/// 只比较影响 Yoga 布局的字段：颜色/透明度这类只影响绘制的属性不算布局变化，
+/// 避免高亮切换也触发一次布局。
+bool sameLayoutStyle(const Style& a, const Style& b);
+
 float effectiveLineHeight(const Style& style);
 
 }  // namespace miniapp

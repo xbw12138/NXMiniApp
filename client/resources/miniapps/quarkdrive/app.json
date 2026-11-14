@@ -7,7 +7,7 @@
     "pages/image/image"
   ],
   "window": {
-    "backgroundColor": "#141518",
+    "backgroundColor": "#0c0f14",
     "navigationBarTitleText": "夸克网盘"
   }
 }

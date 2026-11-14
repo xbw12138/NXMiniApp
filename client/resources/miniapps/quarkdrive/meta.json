@@ -4,6 +4,6 @@
   "description": "第三方夸克网盘客户端：夸克 App 扫码登录（也支持粘贴 Cookie），支持目录浏览、文件搜索、图片直接预览、多清晰度转码播放（m3u8）与原始文件直连播放，其他类型文件可复制下载链接。Cookie 仅保存在本机。",
   "category": "工具",
   "developer": "xbw12138",
-  "version": "1.1.3",
+  "version": "1.1.6",
   "published": true
 }

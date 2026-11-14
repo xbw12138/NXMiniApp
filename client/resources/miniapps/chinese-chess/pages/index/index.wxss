@@ -1,1 +1,4 @@
-/* 页面样式全部在 app.wxss 中 */
+.screen {
+  width: 1280px;
+  height: 720px;
+}

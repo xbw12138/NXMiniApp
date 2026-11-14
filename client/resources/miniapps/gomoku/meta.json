@@ -4,6 +4,6 @@
   "description": "原生五子棋小程序，15x15 标准棋盘。支持双人同屏轮流对战，也可以与内置电脑对手对弈（你执黑先行），电脑会同时评估进攻与防守选点。提供悔棋、重新开始、当前轮次提示与获胜连珠高亮。完全离线运行，适合 Switch 客厅双人娱乐。",
   "category": "游戏",
   "developer": "NXMiniApp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "published": true
 }

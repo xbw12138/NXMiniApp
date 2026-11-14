@@ -1,0 +1,5 @@
+{
+  "name": "GameKit Demo",
+  "version": "1.0.0",
+  "description": "验证手柄、触摸、canvas、WebSocket 与音频能力"
+}

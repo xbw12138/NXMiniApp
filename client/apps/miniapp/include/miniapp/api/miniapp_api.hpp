@@ -46,6 +46,13 @@ struct HomeInfo {
     std::vector<MiniAppItem> featured;
 };
 
+/// 容器最新版本（来自 /api/v1/container/releases，仅含已发布版本）。
+struct LatestRelease {
+    std::string version;
+    std::string notes;
+    std::string downloadUrl;
+};
+
 /// Fetches the catalogue and packages from the store backend.
 class MiniAppApi {
 public:
@@ -53,6 +60,7 @@ public:
         std::function<void(const std::vector<MiniAppItem>& items, const std::string& error)>;
     using DownloadCallback = std::function<void(const std::string& data, const std::string& error)>;
     using HomeCallback = std::function<void(const HomeInfo& info, const std::string& error)>;
+    using ReleaseCallback = std::function<void(const LatestRelease& release, const std::string& error)>;
 
     static MiniAppApi& instance();
 
@@ -65,6 +73,8 @@ public:
     void fetchList(ListCallback callback);
     void search(const std::string& keyword, ListCallback callback);
     void fetchHome(HomeCallback callback);
+    /// 拉取最新已发布容器版本；未发布或网络失败时 release.version 为空。
+    void fetchLatestRelease(ReleaseCallback callback);
     void download(const std::string& id, DownloadCallback callback);
     /// 上报一次小程序启动（opens + 1），fire-and-forget。
     void reportOpen(const std::string& id);

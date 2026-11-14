@@ -1,8 +1,8 @@
 // 每批渲染的影片数量：数据源可能返回上千条，一次性建树会卡住主线程。
 // 5 列海报墙正好 3 行，一屏加「加载更多」按钮，翻页节奏接近 TV 版。
 var PAGE_STEP = 15;
-var SCAN_POLL_MS = 3000;
-var SCAN_POLL_MAX = 20;
+var SCAN_POLL_MS = 1000;
+var SCAN_POLL_MAX = 240;
 var GRID_COLS = 5;
 // 每次 setData 追加的分组数。setData 会重建整棵渲染树，把后面的分组拆到
 // 后续帧补上，加载过程中摇杆依然能响应（不会像一次性建树那样整段卡住）。
@@ -74,16 +74,30 @@ Page({
   },
 
   onShow() {
-    // 每个页面的 App 实例独立，返回首页时按存储里的数据源数量决定是否重新加载。
+    // 每个页面的 App 实例独立，返回首页时对比数据源签名决定是否重新加载。
+    // 只看数量会漏掉「同一个源改了配置」（例如把 SMB 根目录换成子目录）。
     if (!this._booted) return;
     var self = this;
     setTimeout(function () {
-      if (getApp().getEnabledSources().length !== self.data.sourceCount) {
-        self.refresh(true);
+      var dirtyAt = 0;
+      try { dirtyAt = wx.getStorageSync('bmh_dirty_at') || 0; } catch (e) {}
+      if (self._sourcesKey(getApp().getEnabledSources()) !== self._sourcesKeySeen ||
+          dirtyAt !== self._dirtySeen) {
+        // 数据源刚被增删改：按非静默刷新，立刻给出“正在刷新”的反馈。
+        self.refresh(false);
       } else {
         self.refreshRecent();
       }
     }, 0);
+  },
+
+  // 影响影片列表的配置都算进签名：根目录、地址、账号变了就必须重新聚合。
+  _sourcesKey(sources) {
+    return (sources || []).map(function (s) {
+      var cfg = s.config || {};
+      return [s.id, s.type, s.name || '', cfg.rootPath || '', cfg.server || '',
+              cfg.share || '', cfg.url || ''].join('~');
+    }).join('|');
   },
 
   onUnload() {
@@ -94,6 +108,8 @@ Page({
   refresh(silent) {
     var app = getApp();
     var sources = app.getEnabledSources();
+    this._sourcesKeySeen = this._sourcesKey(sources);
+    try { this._dirtySeen = wx.getStorageSync('bmh_dirty_at') || 0; } catch (e) {}
     var patch = { sources: sources, sourceCount: sources.length };
     if (!silent) {
       patch.loading = true;
@@ -190,11 +206,26 @@ Page({
   },
 
   finishBuild() {
-    if (!this._groups.length && this._hasSmbSource()) {
+    var scanError = this._smbScanError();
+    if (scanError) {
+      // 扫描失败（子目录不存在、SMB 会话断开等）直接把原因显示出来，
+      // 否则空列表会让用户以为视频丢了。
+      this.setData({ errMsg: 'SMB 扫描失败：' + scanError });
+    } else if (!this._groups.length && this._hasSmbSource()) {
       this.setData({ errMsg: 'SMB 媒体库首次扫描中，完成后会自动刷新…' });
     } else if (this.data.errMsg) {
       this.setData({ errMsg: '' });
     }
+  },
+
+  _smbScanError() {
+    var app = getApp();
+    var errors = (app.globalData && app.globalData.smbScanError) || {};
+    var sources = this.data.sources || [];
+    for (var i = 0; i < sources.length; i++) {
+      if (sources[i].type === 'smb' && errors[sources[i].id]) return errors[sources[i].id];
+    }
+    return '';
   },
 
   // 只为当前分页内的影片生成卡片，翻页/筛选时不用重算整库。
@@ -266,6 +297,8 @@ Page({
     var app = getApp();
     var mark = app.globalData.smbUpdatedAt || 0;
     var ticks = 0;
+    // 扫描结果要等网络遍历，先给出明确提示，避免看起来像“卡住了”。
+    this.setData({ errMsg: '正在扫描 SMB 目录，完成后会自动刷新…' });
     this._scanTimer = setInterval(function () {
       ticks++;
       if ((app.globalData.smbUpdatedAt || 0) > mark) {

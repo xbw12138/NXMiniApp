@@ -1,0 +1,81 @@
+.page {
+  padding: 16px 18px;
+  background: #101317;
+}
+
+.head {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #eef1f5;
+  margin-right: 12px;
+}
+
+.sub {
+  font-size: 12px;
+  color: #7b8794;
+}
+
+.body {
+  display: flex;
+  flex-direction: row;
+}
+
+.stage {
+  width: 420px;
+  height: 300px;
+  border-radius: 8px;
+  background-color: #0b0e12;
+}
+
+.side {
+  flex: 1;
+  margin-left: 16px;
+  padding: 10px 12px;
+  background-color: #171c23;
+  border-radius: 8px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 5px 0;
+}
+
+.label {
+  width: 78px;
+  font-size: 12px;
+  color: #7b8794;
+}
+
+.value {
+  flex: 1;
+  font-size: 12px;
+  color: #dfe6ee;
+}
+
+.actions {
+  display: flex;
+  flex-direction: row;
+  margin-top: 14px;
+}
+
+.btn {
+  flex: 1;
+  height: 40px;
+  margin-right: 10px;
+  border-radius: 8px;
+  background-color: #1d2733;
+  color: #cdd6e0;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

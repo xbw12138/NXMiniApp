@@ -1,0 +1,49 @@
+<view class="page">
+  <view class="head">
+    <text class="title">GameKit Demo</text>
+    <text class="sub">手柄 · 触摸 · Canvas · WebSocket · 音频</text>
+  </view>
+
+  <view class="body">
+    <canvas id="game" class="stage" width="420" height="300"
+            bindtouchstart="onTouchStart"
+            bindtouchmove="onTouchMove"
+            bindtouchend="onTouchEnd"
+            bindlongpress="onLongPress"></canvas>
+
+    <view class="side">
+      <view class="stat">
+        <text class="label">手柄</text>
+        <text class="value">{{padText}}</text>
+      </view>
+      <view class="stat">
+        <text class="label">摇杆</text>
+        <text class="value">{{axesText}}</text>
+      </view>
+      <view class="stat">
+        <text class="label">触摸</text>
+        <text class="value">{{touchText}}</text>
+      </view>
+      <view class="stat">
+        <text class="label">震动</text>
+        <text class="value">{{vibrateText}}</text>
+      </view>
+      <view class="stat">
+        <text class="label">音频</text>
+        <text class="value">{{audioText}}</text>
+      </view>
+      <view class="stat">
+        <text class="label">WebSocket</text>
+        <text class="value">{{wsText}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="actions">
+    <view class="btn" bindtap="onVibrate">HD 震动</view>
+    <view class="btn" bindtap="onToggleMusic">{{musicLabel}}</view>
+    <view class="btn" bindtap="onBeep">播放音效</view>
+    <view class="btn" bindtap="onConnect">连接回显</view>
+    <view class="btn" bindtap="onSend">发送 Ping</view>
+  </view>
+</view>

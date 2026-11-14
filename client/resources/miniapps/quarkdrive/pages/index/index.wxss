@@ -1,14 +1,17 @@
-/* index 页面样式（全局样式已覆盖大部分） */
-
 .qr-area {
-  align-items: center;
-  margin-top: 10rpx;
+  width: 468rpx;
+  flex-shrink: 0;
+  margin-right: 36rpx;
 }
 
 .qr-box {
+  width: 468rpx;
+  height: 468rpx;
   background-color: #ffffff;
-  border-radius: 16rpx;
+  border-radius: 22rpx;
   padding: 24rpx;
+  align-items: center;
+  justify-content: center;
 }
 
 .qr-row {
@@ -19,25 +22,26 @@
   background-color: #000000;
 }
 
-.qr-placeholder {
-  width: 468rpx;
-  height: 468rpx;
-  align-items: center;
-  justify-content: center;
-}
-
 .qr-tip {
   font-size: 24rpx;
-  color: #444444;
-  margin-bottom: 12rpx;
+  color: #3f4753;
+  text-align: center;
 }
 
 .qr-tip-err {
   color: #d03050;
+  margin-bottom: 16rpx;
 }
 
-.qr-status {
-  font-size: 24rpx;
-  color: #0fdc78;
-  margin-top: 14rpx;
+.login-info {
+  flex: 1;
+  flex-direction: column;
+  padding: 8rpx 4rpx;
+}
+
+.login-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 10rpx;
 }

@@ -1,0 +1,4 @@
+<view class="page">
+  <canvas id="game" class="screen" width="600" height="330"
+          bindtouchstart="onTouch"></canvas>
+</view>

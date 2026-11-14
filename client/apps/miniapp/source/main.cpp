@@ -38,6 +38,7 @@
 #endif
 
 #include "miniapp/api/miniapp_api.hpp"
+#include "miniapp/crash_reporter.hpp"
 #include "miniapp/miniapp_activity.hpp"
 #include "miniapp/pages/launcher_activity.hpp"
 #include "miniapp/smb_manager.hpp"
@@ -86,7 +87,7 @@ void* runLogWriter(void* raw) {
             }
         }
         if (line.empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
             continue;
         }
         try {
@@ -123,11 +124,35 @@ void setupFileLog() {
     auto* shared = new (std::nothrow) LogShared();
     if (!shared) return;
     shared->file.open("sdmc:/switch/miniapp/miniapp.log", std::ios::trunc);
-    if (!shared->file.good()) return;
+    // 即使 SD 卡打不开也继续订阅：内存环形缓冲仍可供“上传日志”使用。
+    if (!shared->file.good()) {
+        brls::Logger::warning("miniapp: open log file failed, keep memory log only");
+    }
     shared->startedAt = std::chrono::steady_clock::now();
 
     brls::Logger::getLogEvent()->subscribe([shared](const std::string& line) {
+        // 同时留一份在内存里：SD 卡未刷盘或写入失败时，“上传日志”仍能拿到内容。
+        miniapp::crash::appendLogLine(line);
         std::lock_guard<std::mutex> lock(shared->mutex);
+        // 崩溃排查用的关键阶段日志同步落盘：异步队列每 16ms 才刷一次，
+        // 进程被硬杀时最后十几毫秒的日志会整段丢失，正好丢掉崩溃点。
+        static const char* kCritical[] = {
+            "video start", "video load", "mpv init", "smb connect", "smb stream",
+            "smb play", "play: src", "miniapp: open page", "miniapp: page '",
+            "miniapp: terminate",
+        };
+        bool critical = false;
+        for (const char* marker : kCritical) {
+            if (line.find(marker) != std::string::npos) {
+                critical = true;
+                break;
+            }
+        }
+        if (critical) {
+            shared->file << line << "\n";
+            shared->file.flush();
+            return;
+        }
         if (!shared->async) {
             // 启动 2 秒内：同步写，进程即使立刻崩溃也能拿到日志。
             if (!shared->threadStarted &&
@@ -211,6 +236,12 @@ _Unwind_Reason_Code collectTerminateFrame(_Unwind_Context* context, void* arg) {
 
 int main(int, char**) {
     setupWorkingDirectory();
+#ifdef NXMINIAPP_VERSION
+    miniapp::crash::beginSession(NXMINIAPP_VERSION);
+#else
+    miniapp::crash::beginSession("unknown");
+#endif
+    std::atexit([] { miniapp::crash::endSession(); });
     setupFileLog();
     brls::Logger::info("miniapp: starting");
     // 诊断：未捕获异常会让 std::terminate 直接 abort，导致整个容器退出
@@ -281,6 +312,11 @@ int main(int, char**) {
     config.createActivity = [] {
         applyDarkTheme();
         miniapp::MiniAppApi::instance().configure(serverUrl());
+        // 上次崩溃留下的日志在后台补传，不阻塞启动。
+#ifdef NXMINIAPP_VERSION
+        miniapp::crash::startUploader(serverUrl(), NXMINIAPP_VERSION,
+                                      miniapp::MiniAppApi::instance().deviceId());
+#endif
         return new miniapp::LauncherActivity();
     };
     const int code = nxkit::runApp(config);

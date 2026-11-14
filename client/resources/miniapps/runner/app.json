@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "Neon Runner",
+    "navigationBarBackgroundColor": "#0b0e14",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0b0e14"
+  }
+}

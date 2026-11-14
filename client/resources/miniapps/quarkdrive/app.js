@@ -1,9 +1,13 @@
 App({
   globalData: {
-    base: 'https://drive-pc.quark.cn',
+    base: 'https://drive.quark.cn',
     panBase: 'https://pan.quark.cn',
-    common: 'pr=ucpro&fr=pc&uc_param_str=',
+    common: 'pr=ucpro&fr=pc',
     ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    // mpv 的 http-header-fields 用逗号分隔，UA 里不能带逗号，否则会被拆成多个头。
+    // 与 AnyCloud 已验证可播放的客户端标识保持一致。
+    streamUa: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 quark-cloud-drive/3.14.2 Chrome/112.0.5615.165 Electron/24.1.3.4 Safari/537.36 Channel/pckk_other_ch',
+    referer: 'https://pan.quark.cn',
     pageSize: 30
   },
 
@@ -42,14 +46,30 @@ App({
     return d || null;
   },
 
+  // mpv 的 http-header-fields 是逗号分隔的列表，缺 Referer/UA 时夸克 CDN 会直接 403。
+  streamHeaders() {
+    var parts = [];
+    var cookie = this.cookie();
+    if (cookie) parts.push('Cookie: ' + cookie);
+    parts.push('User-Agent: ' + this.globalData.streamUa);
+    parts.push('Referer: ' + this.globalData.referer);
+    return parts.join(',');
+  },
+
   request(opts) {
     var self = this;
     return new Promise(function (resolve, reject) {
+      var header = self.headers();
+      if (opts.header) {
+        for (var k in opts.header) {
+          if (Object.prototype.hasOwnProperty.call(opts.header, k)) header[k] = opts.header[k];
+        }
+      }
       wx.request({
         url: opts.url,
         method: opts.method || 'GET',
         data: opts.data,
-        header: self.headers(),
+        header: header,
         success: function (res) {
           var body = self.parseBody(res);
           if (!body) {
@@ -550,27 +570,30 @@ App({
     return this.request({ url: url });
   },
 
+  // 转码播放流：个人云盘用 /file/v2/play，未转码完成的条目会在 video_list 里返回，需在页面侧过滤。
   videoSources(fid) {
     return this.request({
       url: this.apiUrl('/1/clouddrive/file/v2/play'),
       method: 'POST',
+      header: { 'user-agent': this.globalData.streamUa },
       data: {
         fid: fid,
-        resolutions: 'low,normal,high,super,2k,4k',
-        supports: 'fmp4_av,m3u8_av,m3u8_hdr,m3u8,avc265,avc264'
+        resolutions: 'normal,high,super,2k,4k',
+        supports: 'fmp4_av,m3u8,dolby_vision'
       }
     });
   },
 
-  // download 接口通常直接返回 download_url/preview_url；个别文件才需要轮询任务。
-  fileUrls(fid) {
+  // 直链接口正常直接返回 download_url/preview_url，个别文件才会返回异步任务。
+  downloadInfo(fid) {
     var self = this;
     return this.request({
       url: this.apiUrl('/1/clouddrive/file/download'),
       method: 'POST',
+      header: { 'user-agent': this.globalData.streamUa },
       data: { fids: [fid] }
     }).then(function (body) {
-      var d = body && body.data && body.data[0];
+      var d = body && body.data && (body.data[0] || body.data);
       if (d && (d.download_url || d.preview_url)) return d;
       var taskId = body && body.data && body.data.task_id;
       if (!taskId) throw new Error('获取文件链接失败');
@@ -580,16 +603,15 @@ App({
     });
   },
 
+  fileUrls(fid) {
+    return this.downloadInfo(fid);
+  },
+
   downloadUrl(fid) {
-    var self = this;
-    return this.request({
-      url: this.apiUrl('/1/clouddrive/file/download'),
-      method: 'POST',
-      data: { fids: [fid] }
-    }).then(function (body) {
-      var taskId = body && body.data && body.data.task_id;
-      if (!taskId) throw new Error('创建下载任务失败');
-      return self.waitTask(taskId, 0);
+    return this.downloadInfo(fid).then(function (d) {
+      var url = d && (d.download_url || d.preview_url);
+      if (!url) throw new Error('获取下载链接失败');
+      return url;
     });
   },
 
@@ -623,14 +645,22 @@ App({
       else if (this.DOC_EXT.indexOf(ext) >= 0) kind = 'doc';
     }
     var badgeMap = { dir: '目录', video: '视频', audio: '音频', image: '图片', doc: '文档', file: '文件' };
+    var actionMap = { dir: '打开', video: '播放', audio: '详情', image: '预览', doc: '详情', file: '详情' };
+    var meta = [];
+    if (dir) meta.push('文件夹');
+    else if (f.size) meta.push(this.fmtSize(f.size));
+    var timeText = this.fmtTime(f.updated_at || f.l_updated_at || 0);
+    if (timeText) meta.push(timeText);
     return {
       fid: f.fid || '',
       name: name,
       dir: dir,
       kind: kind,
       badge: badgeMap[kind],
+      actionText: actionMap[kind] || '详情',
       sizeText: dir ? '' : this.fmtSize(f.size || 0),
-      timeText: this.fmtTime(f.updated_at || f.l_updated_at || 0)
+      timeText: timeText,
+      metaText: meta.join(' · ')
     };
   },
 

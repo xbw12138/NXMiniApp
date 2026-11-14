@@ -525,4 +525,34 @@ float effectiveLineHeight(const Style& style) {
     return style.fontSize * 1.4f;
 }
 
+bool sameLayoutStyle(const Style& a, const Style& b) {
+    const auto sameEdges = [](const Edges& x, const Edges& y) {
+        return x.top == y.top && x.right == y.right && x.bottom == y.bottom &&
+               x.left == y.left;
+    };
+    return a.fontSize == b.fontSize && a.hasWidth == b.hasWidth &&
+           a.width == b.width && a.widthPercent == b.widthPercent &&
+           a.hasHeight == b.hasHeight && a.height == b.height &&
+           a.heightPercent == b.heightPercent &&
+           sameEdges(a.padding, b.padding) && sameEdges(a.margin, b.margin) &&
+           a.flexDirection == b.flexDirection && a.justifyContent == b.justifyContent &&
+           a.alignItems == b.alignItems && a.gap == b.gap &&
+           a.hasLineHeight == b.hasLineHeight && a.lineHeight == b.lineHeight &&
+           a.lineHeightFactor == b.lineHeightFactor && a.displayNone == b.displayNone &&
+           a.absolute == b.absolute && a.hasLeft == b.hasLeft && a.left == b.left &&
+           a.hasTop == b.hasTop && a.top == b.top && a.hasRight == b.hasRight &&
+           a.right == b.right && a.hasBottom == b.hasBottom && a.bottom == b.bottom &&
+           a.alignSelf == b.alignSelf && a.flexGrow == b.flexGrow &&
+           a.flexShrink == b.flexShrink && a.hasFlexBasis == b.hasFlexBasis &&
+           a.flexBasis == b.flexBasis && a.flexBasisPercent == b.flexBasisPercent &&
+           a.hasMinWidth == b.hasMinWidth && a.hasMinHeight == b.hasMinHeight &&
+           a.hasMaxWidth == b.hasMaxWidth && a.hasMaxHeight == b.hasMaxHeight &&
+           a.minWidth == b.minWidth && a.minHeight == b.minHeight &&
+           a.maxWidth == b.maxWidth && a.maxHeight == b.maxHeight &&
+           a.minWidthPercent == b.minWidthPercent &&
+           a.minHeightPercent == b.minHeightPercent &&
+           a.maxWidthPercent == b.maxWidthPercent &&
+           a.maxHeightPercent == b.maxHeightPercent;
+}
+
 }  // namespace miniapp

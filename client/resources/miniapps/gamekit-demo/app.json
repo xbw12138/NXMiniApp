@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "GameKit Demo",
+    "navigationBarBackgroundColor": "#101317",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#101317"
+  }
+}

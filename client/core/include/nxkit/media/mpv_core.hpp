@@ -136,12 +136,15 @@ public:
     int mpv_error_code = 0;
     std::string filepath;
 
-    // 低画质解码，剔除解码过程中的部分步骤，可以用来节省cpu
-    inline static bool LOW_QUALITY = false;
-    // 视频内存缓存大小（MB），0 表示关闭缓存
-    inline static int INMEMORY_CACHE = 0;
+    // 低画质解码，剔除解码过程中的部分步骤，可以用来节省cpu。
+    // 与 wiliwili 在 Switch 上的默认值保持一致：软解高码率视频时明显更流畅。
+    inline static bool LOW_QUALITY = true;
+    // 视频内存缓存大小（MB），0 表示关闭缓存。
+    // 网络流（HLS/直链）留一点缓冲，避免弱网时频繁中断重连。
+    inline static int INMEMORY_CACHE = 20;
     inline static bool TERMINAL = false;
-    inline static bool HARDWARE_DEC = false;
+    // 硬件解码：有可用解码器时走硬解，没有则自动回退软解（Switch 端无硬解）。
+    inline static bool HARDWARE_DEC = true;
     inline static std::string PLAYER_HWDEC_METHOD = "auto";
     inline static bool AUTO_PLAY = true;
     inline static int VIDEO_VOLUME = 100;

@@ -58,11 +58,10 @@ YGSize measureTextNode(YGNodeRef yogaNode, float width, YGMeasureMode widthMode,
     return YGSize{std::ceil(contentWidth), std::ceil(contentHeight)};
 }
 
-void setupNode(RenderNode& node, bool root, float rootWidth, float rootHeight,
-               float rpxScale, float extraMarginLeft = 0.0f, float extraMarginTop = 0.0f) {
-    node.yoga = YGNodeNew();
-    YGNodeSetContext(node.yoga, nullptr);
-    gNodeOwners[node.yoga] = &node;
+void applyNodeStyle(RenderNode& node, bool root, float rootWidth, float rootHeight,
+                    float rpxScale, float extraMarginLeft = 0.0f,
+                    float extraMarginTop = 0.0f) {
+    if (!node.yoga) return;
 
     const Style& style = node.style;
     YGNodeStyleSetFlexDirection(
@@ -218,9 +217,43 @@ void setupNode(RenderNode& node, bool root, float rootWidth, float rootHeight,
         if (!style.hasWidth) YGNodeStyleSetWidthPercent(node.yoga, 100.0f);
         if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 360.0f * rpxScale);
     }
+    if (node.tag == "canvas") {
+        if (!style.hasWidth) YGNodeStyleSetWidthPercent(node.yoga, 100.0f);
+        if (!style.hasHeight) YGNodeStyleSetHeight(node.yoga, 300.0f * rpxScale);
+    }
     if (node.isText() || node.isButton() || node.tag == "rich-text") {
         YGNodeSetMeasureFunc(node.yoga, measureTextNode);
     }
+}
+
+/// 释放一个节点及其子树的 Yoga 资源，并清掉 RenderNode 上的悬空指针。
+/// 只摘除被释放的节点，不影响 gNodeOwners 里其他页面的登记。
+void resetNodeYoga(RenderNode& node) {
+    for (auto& child : node.children) resetNodeYoga(*child);
+    if (!node.yoga) return;
+    YGNodeRef parent = YGNodeGetParent(node.yoga);
+    if (parent) YGNodeRemoveChild(parent, node.yoga);
+    gNodeOwners.erase(node.yoga);
+    YGNodeFreeRecursive(node.yoga);
+    node.yoga = nullptr;
+}
+
+/// 保证这棵子树的 Yoga 节点存在、样式是最新的，并按顺序挂到父节点上。
+/// 只在新建或 layoutDirty 时重写样式，其余节点直接跳过。
+void syncNode(RenderNode& node, bool root, float rootWidth, float rootHeight,
+              float rpxScale, float extraMarginLeft, float extraMarginTop) {
+    // 样式变化时整体重建这一小棵 Yoga 子树：属性只增不减会让旧的 width/padding
+    // 残留，而 Yoga 没有逐属性 clear，重建是最稳的做法。叶子节点是常见情况，成本很低。
+    if (node.layoutDirty) resetNodeYoga(node);
+
+    if (!node.yoga) {
+        node.yoga = YGNodeNew();
+        YGNodeSetContext(node.yoga, nullptr);
+        applyNodeStyle(node, root, rootWidth, rootHeight, rpxScale, extraMarginLeft,
+                       extraMarginTop);
+    }
+    node.layoutDirty = false;
+    gNodeOwners[node.yoga] = &node;
 
     for (size_t i = 0; i < node.children.size(); ++i) {
         auto& child = *node.children[i];
@@ -228,23 +261,40 @@ void setupNode(RenderNode& node, bool root, float rootWidth, float rootHeight,
         // 否则每次重建布局都会累加，节点会持续偏移。
         float extraLeft = 0.0f;
         float extraTop = 0.0f;
-        if (style.gap > 0.0f && i > 0) {
-            if (style.flexDirection == 1) {
-                extraLeft = style.gap;
+        if (node.style.gap > 0.0f && i > 0) {
+            if (node.style.flexDirection == 1) {
+                extraLeft = node.style.gap;
             } else {
-                extraTop = style.gap;
+                extraTop = node.style.gap;
             }
         }
-        setupNode(child, false, rootWidth, rootHeight, rpxScale, extraLeft, extraTop);
-        YGNodeInsertChild(node.yoga, child.yoga, i);
+        syncNode(child, false, rootWidth, rootHeight, rpxScale, extraLeft, extraTop);
+    }
+
+    const uint32_t count = YGNodeGetChildCount(node.yoga);
+    bool aligned = count == node.children.size();
+    for (uint32_t i = 0; aligned && i < count; ++i) {
+        aligned = YGNodeGetChild(node.yoga, i) == node.children[i]->yoga;
+    }
+    if (aligned) return;
+
+    while (YGNodeGetChildCount(node.yoga) > 0) {
+        YGNodeRemoveChild(node.yoga, YGNodeGetChild(node.yoga, 0));
+    }
+    for (size_t i = 0; i < node.children.size(); ++i) {
+        YGNodeInsertChild(node.yoga, node.children[i]->yoga, static_cast<uint32_t>(i));
     }
 }
 
 }  // namespace
 
 void buildYogaTree(RenderNode& root, float width, float height, float rpxScale) {
-    gNodeOwners.clear();
-    setupNode(root, true, width, height, rpxScale);
+    root.layoutDirty = true;
+    syncNode(root, true, width, height, rpxScale, 0.0f, 0.0f);
+}
+
+void syncYogaTree(RenderNode& root, float width, float height, float rpxScale) {
+    syncNode(root, true, width, height, rpxScale, 0.0f, 0.0f);
 }
 
 void applyRootSize(RenderNode& root, float width, float height) {
@@ -275,13 +325,7 @@ LayoutBox layoutBox(const RenderNode& node) {
     return box;
 }
 
-void freeYogaTree(RenderNode& root) {
-    if (root.yoga) {
-        gNodeOwners.clear();
-        YGNodeFreeRecursive(root.yoga);
-        root.yoga = nullptr;
-    }
-}
+void freeYogaTree(RenderNode& root) { resetNodeYoga(root); }
 
 void updateGeometry(RenderNode& node, float originX, float originY) {
     LayoutBox box = layoutBox(node);

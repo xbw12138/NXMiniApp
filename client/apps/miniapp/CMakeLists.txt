@@ -26,8 +26,10 @@ nxkit_add_app(miniapp
         source/style.cpp
         source/json.cpp
         source/js_runtime.cpp
+        source/logic_thread.cpp
         source/smb_manager.cpp
         source/media_library.cpp
+        source/crash_reporter.cpp
         source/api/miniapp_api.cpp
         source/install/package_manager.cpp
         source/pages/launcher_activity.cpp
@@ -41,7 +43,7 @@ nxkit_add_app(miniapp
         )
 
 # 容器版本号：显示在启动页标题旁，和后台上传时填的 version 保持一致。
-set(NXMINIAPP_VERSION "1.6.5")
+set(NXMINIAPP_VERSION "1.7.11")
 target_compile_definitions(miniapp PRIVATE NXMINIAPP_VERSION="${NXMINIAPP_VERSION}")
 
 if(PLATFORM_SWITCH AND BUILTIN_NSP)

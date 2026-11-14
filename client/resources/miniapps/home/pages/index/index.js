@@ -1,21 +1,39 @@
 const HOME_CACHE_KEY = 'home.cache.v1';
 const MAX_STORIES = 3;
-const DOCK_MAX_RECENT = 9;  // 最近使用最多 9 个，空出最后一格给「添加」
-const DOCK_COLS = 5;
+const GRID_COLS = 3;
+const GRID_ROWS = 2;
+const HOT_SIZE = 5;
+
+const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+function blanks(count) {
+  const list = [];
+  for (let i = 0; i < count; i += 1) list.push(i);
+  return list;
+}
+
+function dateText() {
+  const now = new Date();
+  return (now.getMonth() + 1) + '月' + now.getDate() + '日 ' + WEEKDAYS[now.getDay()];
+}
 
 Page({
   data: {
     banners: [],
-    banner: {},
     bannerIndex: 0,
+    hero: {},
     stories: [],
+    storyBlanks: [],
     newsCount: 0,
-    dockRows: [],
+    recentRows: [],
+    hot: [],
+    dateText: dateText(),
     status: '正在加载…'
   },
 
   onLoad() {
     this.featured = [];
+    this.apps = [];
     // 先用上次的缓存直出，网络请求在后台刷新：打开首页不再等接口往返。
     this.applyCached();
     this.loadHome();
@@ -39,25 +57,39 @@ Page({
 
   applyPayload(payload, fresh) {
     const banners = payload.banners || [];
-    const featured = payload.featured || [];
     const news = payload.news || [];
+    const featured = payload.featured || [];
+    const apps = payload.apps || [];
     this.featured = featured;
+    this.apps = apps;
+
+    const stories = this.buildStories(news);
+    const hero = banners.length > 0 ? banners[0] : {
+      id: 0,
+      title: '欢迎来到 NX 商店',
+      summary: '用方向键浏览精选小程序，按 A 直接打开'
+    };
+
     this.setData({
       banners: banners,
-      banner: banners.length > 0 ? banners[0] : {},
       bannerIndex: 0,
-      stories: this.buildStories(news),
+      hero: hero,
+      stories: stories,
+      storyBlanks: blanks(Math.max(0, MAX_STORIES - stories.length)),
       newsCount: news.length,
-      dockRows: this.buildDock(featured),
+      recentRows: this.buildRecent(featured),
+      hot: this.buildHot(featured, apps),
       // 没有任何内容时才提示加载中，避免缓存直出时闪一行文字。
       status: (banners.length || featured.length || news.length) ? '' : '正在加载…'
     });
+
     if (fresh) {
       try {
         wx.setStorageSync(HOME_CACHE_KEY, {
           banners: banners,
           news: news,
-          featured: featured
+          featured: featured,
+          apps: apps
         });
       } catch (err) {
         // 缓存失败不影响展示。
@@ -66,17 +98,15 @@ Page({
     this.startBanner(banners.length);
   },
 
-  // 资讯栏用 01、02 这样的编号，读起来像专栏目录；横向只放得下 3 条。
   buildStories(news) {
-    return news.slice(0, MAX_STORIES).map((item, i) => Object.assign({}, item, {
-      no: (i < 9 ? '0' : '') + (i + 1)
-    }));
+    return news.slice(0, MAX_STORIES);
   },
 
-  // Dock 只放最近使用过的应用：最近的排第一个，没排满时补一个「添加」入口。
-  buildDock(featured) {
-    const byId = {};
-    featured.forEach((f) => { byId[f.id] = f; });
+  // 快捷启动：最近用过的排前面，不够一屏时用精选补位。
+  buildRecent(featured) {
+    const total = GRID_COLS * GRID_ROWS;
+    const apps = [];
+    const seen = {};
 
     let recent = [];
     try {
@@ -85,46 +115,89 @@ Page({
       recent = [];
     }
 
-    const apps = [];
-    const seen = {};
-    recent.forEach((r) => {
-      if (!r.id || seen[r.id] || apps.length >= DOCK_MAX_RECENT) return;
-      seen[r.id] = true;
-      const f = byId[r.id] || {};
-      const title = (r.title && r.title !== r.id) ? r.title : (f.title || r.id);
+    const push = (id, title, icon) => {
+      if (!id || seen[id] || apps.length >= total) return;
+      seen[id] = true;
       apps.push({
-        id: r.id,
-        title: title,
-        // 容器在启动小程序时已把图标地址存进最近使用记录，这里直接用。
-        icon_url: r.icon || f.icon_url || '',
-        initial: title.substring(0, 1),
-        add: false
+        id: id,
+        title: title || id,
+        icon_url: icon || '',
+        initial: (title || id).substring(0, 1)
       });
-    });
-    apps.push({ id: '', title: '添加', add: true });
+    };
 
-    // 容器不支持 flex-wrap，按 5 列在 JS 里切行；最后一行空缺补不可聚焦的占位块。
+    recent.forEach((r) => {
+      const meta = featured.filter((f) => f.id === r.id)[0] || {};
+      const title = (r.title && r.title !== r.id) ? r.title : (meta.title || r.id);
+      push(r.id, title, r.icon || meta.icon_url);
+    });
+    featured.forEach((f) => push(f.id, f.title, f.icon_url));
+
     const rows = [];
-    for (let i = 0; i < apps.length; i += DOCK_COLS) {
-      const items = apps.slice(i, i + DOCK_COLS);
-      const blanks = [];
-      for (let b = items.length; b < DOCK_COLS; b += 1) blanks.push(b);
-      rows.push({ items: items, blanks: blanks });
+    for (let i = 0; i < apps.length; i += GRID_COLS) {
+      const items = apps.slice(i, i + GRID_COLS);
+      const rowBlanks = [];
+      for (let b = items.length; b < GRID_COLS; b += 1) rowBlanks.push(b);
+      rows.push({ items: items, blanks: rowBlanks });
     }
     return rows;
   },
 
+  // 热门排行：用商店全量列表按使用次数排序，没有列表时退回精选。
+  buildHot(featured, apps) {
+    const pool = (apps && apps.length > 0 ? apps : featured).filter((item) => item.id !== 'home');
+    const sorted = pool.slice().sort((a, b) => (Number(b.opens) || 0) - (Number(a.opens) || 0));
+    return sorted.slice(0, HOT_SIZE).map((item, i) => ({
+      id: item.id,
+      title: item.title,
+      icon_url: item.icon_url || '',
+      no: (i < 9 ? '0' : '') + (i + 1),
+      hot: i < 3,
+      meta: (item.category || '小程序') + ' · ' + (Number(item.opens) || 0) + ' 次使用'
+    }));
+  },
+
   loadHome() {
+    let home = null;
+    let apps = null;
+    let remaining = 2;
+
+    const finish = () => {
+      remaining -= 1;
+      if (remaining > 0) return;
+      if (home) {
+        this.applyPayload({
+          banners: home.banners || [],
+          news: home.news || [],
+          featured: home.featured || [],
+          apps: apps || []
+        }, true);
+        if (this.data.status === '正在加载…') this.setData({ status: '暂无内容' });
+        return;
+      }
+      this.setData({ status: this.hasCache ? '离线 · 显示缓存' : '无法连接服务端' });
+    };
+
     wx.request({
       url: '/api/v1/miniapp-home',
       success: (res) => {
-        const payload = res.data || {};
-        this.applyPayload(payload, true);
-        if (this.data.status === '正在加载…') this.setData({ status: '暂无内容' });
+        home = res.data || {};
+        finish();
       },
       fail: () => {
-        // 有缓存时保持缓存内容，只在顶栏提示网络状态。
-        this.setData({ status: this.hasCache ? '离线 · 显示缓存' : '无法连接服务端' });
+        finish();
+      }
+    });
+
+    wx.request({
+      url: '/api/v1/miniapps',
+      data: { page: 1, page_size: 50 },
+      success: (res) => {
+        apps = (res.data && res.data.items) || [];
+        finish();
+      },
+      fail: () => {
+        finish();
       }
     });
   },
@@ -135,19 +208,15 @@ Page({
     let index = 0;
     this.bannerTimer = setInterval(() => {
       index = (index + 1) % count;
-      this.setData({ banner: this.data.banners[index], bannerIndex: index });
-    }, 4000);
+      this.setData({ hero: this.data.banners[index], bannerIndex: index });
+    }, 5000);
   },
 
-  onDockTap(e) {
-    const ds = e.currentTarget.dataset;
-    // 「全部」入口没有 id，用它区分，避免 dataset 布尔值被转成字符串。
-    if (!ds.id) {
-      this.onSearch();
-      return;
-    }
-    wx.miniapp.launch(ds.id, ds.title || '');
-    this.setData({ dockRows: this.buildDock(this.featured) });
+  onHeroTap() {
+    const hero = this.data.hero;
+    if (!hero || !hero.id) return;
+    this.reportNewsOpen(hero.id);
+    wx.navigateTo({ url: '/pages/news/news?id=' + hero.id });
   },
 
   onNewsTap(e) {
@@ -173,8 +242,18 @@ Page({
     });
   },
 
+  onLaunch(e) {
+    const ds = e.currentTarget.dataset;
+    if (ds.id) wx.miniapp.launch(ds.id, ds.title || '');
+  },
+
   onSearch() {
     wx.navigateTo({ url: '/pages/search/search' });
+  },
+
+  // 「今日」就是当前页，点击相当于刷新一次首页数据。
+  onToday() {
+    this.loadHome();
   },
 
   onAll() {

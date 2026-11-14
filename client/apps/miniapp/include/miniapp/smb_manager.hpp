@@ -90,10 +90,14 @@ private:
     /// 会话断线时按保存的凭据重建 ctx；成功返回 true。
     bool ensureConnected(Session* session, std::string& error);
     bool listDirInternal(Session* session, const std::string& path, std::vector<SmbEntry>& out,
-                         bool verbose);
+                         bool verbose, std::string* error = nullptr);
 
     // mongoose HTTP 事件回调。
     void handleHttp(mg_connection* c, int ev, void* ev_data);
+
+    // 代理线程主体（由 init() 用带显式栈大小的 pthread 拉起）。
+    void runProxyLoop();
+    static void* proxyEntry(void* arg);
 
     // HTTP 代理内部使用：按 smbId + path 取/读/回收文件句柄。
     // 句柄做 LRU 缓存，避免 MPV 每个 Range 请求都重新 open+stat（一次网络往返）。

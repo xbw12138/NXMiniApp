@@ -19,6 +19,8 @@ struct MediaEntry {
     uint64_t size = 0;
     /// 同目录下与视频同名的外挂字幕（.srt/.ass/.ssa/.vtt），找不到则为空。
     std::string subtitle;
+    /// 封面：优先同名的图片，其次目录级封面（folder.jpg/poster.jpg 等），找不到为空。
+    std::string poster;
 };
 
 class MediaLibrary {
@@ -26,12 +28,15 @@ public:
     static MediaLibrary& instance();
 
     /// 增量扫描 SMB 数据源并写盘索引，返回索引内文件总数。
+    /// root 会记进索引：换了扫描根目录后旧索引不再适用，会从空库重新扫描。
     int scanSmb(const std::string& sourceId, const std::string& smbId, const std::string& root,
                 int maxDepth, int maxFiles, std::string& error);
 
     /// 读取一页文件（按路径排序），total 返回索引内文件总数。
-    std::vector<MediaEntry> page(const std::string& sourceId, int offset, int limit, int& total,
-                                 std::string& error);
+    /// root 必须与建索引时的扫描根一致，否则返回空（等重新扫描），
+    /// 避免换了子目录后还展示上一个根目录的内容。
+    std::vector<MediaEntry> page(const std::string& sourceId, const std::string& root, int offset,
+                                 int limit, int& total, std::string& error);
 
 private:
     MediaLibrary() = default;

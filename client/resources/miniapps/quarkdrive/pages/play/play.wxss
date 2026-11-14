@@ -1,20 +1,93 @@
+.play-page {
+  padding: 0;
+  background-color: #000000;
+}
+
+.stage {
+  width: 100%;
+  height: 560rpx;
+  background-color: #000000;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .player {
   width: 100%;
-  height: 500rpx;
-  background-color: #000000;
+  height: 100%;
+}
+
+.stage-empty {
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.stage-ring {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 36rpx;
+  border: 6rpx solid #33d6c0;
+  margin-bottom: 24rpx;
+}
+
+.stage-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #f4f7fb;
+}
+
+.stage-text {
+  font-size: 23rpx;
+  color: #8b98aa;
+  margin-top: 10rpx;
+  text-align: center;
+}
+
+.stage-actions {
+  margin-top: 24rpx;
 }
 
 .panel {
   flex: 1;
-  padding: 16rpx 10rpx 0;
+  flex-direction: column;
+  background-color: #0c0f14;
+  padding: 20rpx 28rpx 0;
 }
 
-.pname {
-  font-size: 26rpx;
+.play-info {
+  flex-direction: column;
+}
+
+.play-title {
+  font-size: 31rpx;
   font-weight: bold;
-  color: #e6e9ee;
+  color: #f4f7fb;
 }
 
-.btn-res {
-  min-width: 120rpx;
+.play-tools {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 14rpx;
+}
+
+.quality-row {
+  flex-direction: row;
+  align-items: center;
+  margin-left: 10rpx;
+}
+
+.quality-label {
+  font-size: 22rpx;
+  color: #7d8a9c;
+  margin-right: 8rpx;
+}
+
+.chip-sm {
+  height: 52rpx;
+  padding: 0 20rpx;
+  margin-left: 10rpx;
+  font-size: 22rpx;
 }

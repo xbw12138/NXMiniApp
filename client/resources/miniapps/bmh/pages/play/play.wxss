@@ -1,4 +1,4 @@
-/* 播放页 · 全屏沉浸 */
+/* 播放页 · 全屏沉浸，进度/时间/按键提示由容器原生控制层绘制 */
 .play-page {
   width: 100%;
   height: 100%;
@@ -10,38 +10,66 @@
   height: 100%;
 }
 
-.hud {
+.state-box {
   position: absolute;
-  left: 28rpx;
-  top: 20rpx;
-  flex-direction: column;
-}
-
-.hud-title {
-  font-size: 26rpx;
-  font-weight: bold;
-  color: #ffffff;
-}
-
-.hud-time {
-  font-size: 20rpx;
-  color: #aab2bd;
-  margin-top: 2rpx;
-}
-
-.loading-box {
-  flex: 1;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   align-items: center;
   justify-content: center;
+}
+
+.state-card {
+  width: 76%;
   flex-direction: column;
+  align-items: center;
+  padding: 44rpx 40rpx;
+  border-radius: 20rpx;
+  background-color: #17191d;
 }
 
-.loading-text {
+.state-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #f2f4f7;
+}
+
+.state-title.error {
+  color: #ff6b6b;
+}
+
+.state-sub {
+  margin-top: 16rpx;
   font-size: 24rpx;
-  color: #9aa3af;
+  line-height: 36rpx;
+  color: #aab2bd;
+  text-align: center;
 }
 
-.retry-btn {
-  margin-top: 26rpx;
-  padding: 0 40rpx;
+.state-hint {
+  margin-top: 14rpx;
+  font-size: 21rpx;
+  line-height: 32rpx;
+  color: #6f7681;
+  text-align: center;
+}
+
+.actions {
+  margin-top: 32rpx;
+  flex-direction: row;
+}
+
+.btn {
+  padding: 16rpx 44rpx;
+  margin: 0 12rpx;
+  border-radius: 40rpx;
+  font-size: 26rpx;
+  color: #e6e9ee;
+  background-color: #2a2e35;
+}
+
+.btn.primary {
+  color: #0b0d10;
+  background-color: #0fdc78;
 }

@@ -1,0 +1,9 @@
+.page {
+  background: #0b0e14;
+}
+
+.screen {
+  width: 100%;
+  height: 330px;
+  background-color: #0b0e14;
+}

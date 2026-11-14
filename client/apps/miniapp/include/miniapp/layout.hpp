@@ -18,6 +18,8 @@ struct LayoutBox {
 };
 
 void buildYogaTree(RenderNode& root, float width, float height, float rpxScale);
+/// 增量同步：只为新增/被标记 layoutDirty 的节点重建 Yoga 属性，其余节点复用。
+void syncYogaTree(RenderNode& root, float width, float height, float rpxScale);
 void applyRootSize(RenderNode& root, float width, float height);
 void calculateYogaTree(RenderNode& root, float width, float height,
                        NVGcontext* vg, int fontId);

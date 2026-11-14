@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <pthread.h>
 #include <thread>
 
 namespace miniapp {
@@ -47,6 +48,15 @@ std::string toSmbPath(const std::string& path) {
     while (start < p.size() && p[start] == '\\') ++start;
     p = p.substr(start);
     return p.empty() ? "\\" : p;
+}
+
+// 列目录/stat 时按顺序尝试的路径写法。
+// 根目录兼容 "/" 与 ""；子目录只试带/不带前导斜杠两种写法，
+// 不再回落到根目录——否则子目录打不开时会静默列出整个共享的内容。
+std::vector<std::string> pathCandidates(const std::string& path) {
+    const std::string smbPath = toSmbPath(path);
+    if (smbPath == "\\") return {"/", ""};
+    return {"/" + smbPath, smbPath};
 }
 
 // 把文件名拼到当前 POSIX 目录路径后，得到完整 POSIX 路径。
@@ -130,76 +140,104 @@ void SmbManager::init() {
         proxyReady_ = false;
     }
 
-    std::thread t([this]() {
-        struct mg_mgr mgr;
-        mg_mgr_init(&mgr);
-
-        struct mg_connection* listener = nullptr;
-        for (int port = 18080; port < 18100 && !listener; ++port) {
-            char url[64];
-            std::snprintf(url, sizeof(url), "http://127.0.0.1:%d", port);
-            listener = mg_http_listen(&mgr, url, [](struct mg_connection* c, int ev,
-                                                    void* ev_data, void*) {
-                SmbManager::instance().handleHttp(c, ev, ev_data);
-            }, nullptr);
-            if (listener) {
-                port_.store(port);
-            }
+    // 必须显式指定栈大小：devkitPro 的 pthread 默认栈很小，mongoose/libsmb2 跑在
+    // 上面一旦压栈越界就是整机报错退出（这种失败没有崩溃报告）。也不能用
+    // std::thread——它在创建失败时会抛异常，直接 terminate。
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setstacksize(&attr, 512 * 1024);
+    pthread_t thread;
+    int rc = pthread_create(&thread, &attr, &SmbManager::proxyEntry, this);
+    pthread_attr_destroy(&attr);
+    if (rc != 0) {
+        brls::Logger::error("smb proxy: pthread_create failed rc={}", rc);
+        proxyRunning_.store(false);
+        port_.store(0);
+        {
+            std::lock_guard<std::mutex> proxyLock(proxyMutex_);
+            proxyReady_ = true;
         }
-        auto signalReady = [this]() {
-            {
-                std::lock_guard<std::mutex> proxyLock(proxyMutex_);
-                proxyReady_ = true;
-            }
-            proxyCv_.notify_all();
-        };
-        if (!listener) {
-            brls::Logger::error("smb proxy: no port available in 18080-18099");
+        proxyCv_.notify_all();
+        return;
+    }
+
+    // 等端口绑定完成再返回，调用方随后立即 streamUrl() 才拿得到有效地址。
+    std::unique_lock<std::mutex> proxyLock(proxyMutex_);
+    proxyCv_.wait_for(proxyLock, std::chrono::milliseconds(800),
+                      [this]() { return proxyReady_; });
+}
+
+void* SmbManager::proxyEntry(void* arg) {
+    static_cast<SmbManager*>(arg)->runProxyLoop();
+    return nullptr;
+}
+
+void SmbManager::runProxyLoop() {
+    struct mg_mgr mgr;
+    mg_mgr_init(&mgr);
+
+    struct mg_connection* listener = nullptr;
+    for (int port = 18080; port < 18100 && !listener; ++port) {
+        char url[64];
+        std::snprintf(url, sizeof(url), "http://127.0.0.1:%d", port);
+        listener = mg_http_listen(&mgr, url, [](struct mg_connection* c, int ev,
+                                                void* ev_data, void* fn_data) {
+            static_cast<SmbManager*>(fn_data)->handleHttp(c, ev, ev_data);
+        }, this);
+        if (listener) {
+            port_.store(port);
+        }
+    }
+    auto signalReady = [this]() {
+        {
+            std::lock_guard<std::mutex> proxyLock(proxyMutex_);
+            proxyReady_ = true;
+        }
+        proxyCv_.notify_all();
+    };
+    if (!listener) {
+        brls::Logger::error("smb proxy: no port available in 18080-18099");
+        proxyRunning_.store(false);
+        port_.store(0);
+        signalReady();
+        mg_mgr_free(&mgr);
+        return;
+    }
+
+    brls::Logger::info("smb proxy listening on 127.0.0.1:{}", port_.load());
+#ifdef __SWITCH__
+    brls::Logger::info("smb proxy diag: soc={} romfs={} sdmc={}", FindDevice("soc:"),
+                       FindDevice("romfs:"), FindDevice("sdmc:"));
+    for (int i = 0; i < 35; i++) {
+        if (devoptab_list[i]) {
+            brls::Logger::info("smb proxy diag: dev[{}]={}", i, devoptab_list[i]->name);
+        }
+    }
+    for (struct mg_connection* mc = mgr.conns; mc != nullptr; mc = mc->next) {
+        int fd = static_cast<int>(reinterpret_cast<size_t>(mc->fd));
+        // __get_handle 不做越界检查，fd 越界会直接踩内存。
+        __handle* h = (fd >= 0 && fd < STD_MAX) ? __get_handle(fd) : nullptr;
+        int dev = h ? static_cast<int>(h->device) : -1;
+        const char* nm =
+            (dev >= 0 && dev < 35 && devoptab_list[dev]) ? devoptab_list[dev]->name : "(null)";
+        brls::Logger::info("smb proxy diag: conn fd={} handle={} dev={} name={}", fd,
+                           static_cast<void*>(h), dev, nm);
+        if (h && dev >= 0 && dev < 35 && devoptab_list[dev] == nullptr) {
+            brls::Logger::error("smb proxy diag: bad devoptab for fd {}, proxy disabled", fd);
             proxyRunning_.store(false);
             port_.store(0);
             signalReady();
             mg_mgr_free(&mgr);
             return;
         }
-
-        brls::Logger::info("smb proxy listening on 127.0.0.1:{}", port_.load());
-#ifdef __SWITCH__
-        brls::Logger::info("smb proxy diag: soc={} romfs={} sdmc={}", FindDevice("soc:"),
-                           FindDevice("romfs:"), FindDevice("sdmc:"));
-        for (int i = 0; i < 35; i++) {
-            if (devoptab_list[i]) {
-                brls::Logger::info("smb proxy diag: dev[{}]={}", i, devoptab_list[i]->name);
-            }
-        }
-        for (struct mg_connection* mc = mgr.conns; mc != nullptr; mc = mc->next) {
-            int fd = static_cast<int>(reinterpret_cast<size_t>(mc->fd));
-            __handle* h = __get_handle(fd);
-            int dev = h ? static_cast<int>(h->device) : -1;
-            const char* nm =
-                (dev >= 0 && dev < 35 && devoptab_list[dev]) ? devoptab_list[dev]->name : "(null)";
-            brls::Logger::info("smb proxy diag: conn fd={} handle={} dev={} name={}", fd,
-                               static_cast<void*>(h), dev, nm);
-            if (h && dev >= 0 && dev < 35 && devoptab_list[dev] == nullptr) {
-                brls::Logger::error("smb proxy diag: bad devoptab for fd {}, proxy disabled", fd);
-                proxyRunning_.store(false);
-                port_.store(0);
-                signalReady();
-                mg_mgr_free(&mgr);
-                return;
-            }
-        }
+    }
 #endif
-        signalReady();
-        while (!proxyStop_.load()) {
-            mg_mgr_poll(&mgr, 50);
-        }
-        mg_mgr_free(&mgr);
-    });
-    t.detach();
-    // 等端口绑定完成再返回，调用方随后立即 streamUrl() 才拿得到有效地址。
-    std::unique_lock<std::mutex> proxyLock(proxyMutex_);
-    proxyCv_.wait_for(proxyLock, std::chrono::milliseconds(800),
-                      [this]() { return proxyReady_; });
+    signalReady();
+    while (!proxyStop_.load()) {
+        mg_mgr_poll(&mgr, 50);
+    }
+    mg_mgr_free(&mgr);
 }
 
 void SmbManager::shutdown() {
@@ -341,27 +379,28 @@ std::string SmbManager::connect(const std::string& server, const std::string& sh
 }
 
 bool SmbManager::listDirInternal(Session* s, const std::string& path, std::vector<SmbEntry>& out,
-                                 bool verbose) {
+                                 bool verbose, std::string* error) {
     std::vector<SmbEntry> result;
-    std::string smbPath = toSmbPath(path);
-    std::string withSlash = "/" + smbPath;
+    (void)verbose;
     // libsmb2 对根目录/相对路径的写法不一致：优先用 "/xxx"（实测在多数服务器上直接可用），
     // 失败再退化到其余写法。每次失败的尝试都是一次网络往返，顺序直接影响扫描速度。
+    const std::vector<std::string> candidates = pathCandidates(path);
     struct smb2dir* dir = nullptr;
     const char* opened = nullptr;
-    const char* candidates[] = {withSlash.c_str(), smbPath.c_str(), "/", ""};
-    for (const char* candidate : candidates) {
-        dir = smb2_opendir(s->ctx, candidate);
+    for (const std::string& candidate : candidates) {
+        dir = smb2_opendir(s->ctx, candidate.c_str());
         if (dir) {
-            opened = candidate;
+            opened = candidate.c_str();
             break;
         }
     }
     if (!dir) {
-        if (verbose) {
-            brls::Logger::error("smb listDir failed: path=[{}] err={}", path,
-                               smb2_get_error(s->ctx));
-        }
+        // 列目录失败必须留日志：子目录打不开时如果静默失败，上层只能看到“没有视频”。
+        const char* detail = smb2_get_error(s->ctx);
+        const std::string reason = detail ? detail : "";
+        brls::Logger::error("smb listDir failed: path=[{}] tried=[{}] err={}", path,
+                            candidates.empty() ? "" : candidates.front(), reason);
+        if (error) *error = "无法打开目录 " + path + (reason.empty() ? "" : "：" + reason);
         return false;
     }
 
@@ -407,18 +446,15 @@ bool SmbManager::listDirMeta(const std::string& id, const std::string& path,
     Session* s = findSession(id);
     if (!ensureConnected(s, error)) return false;
     // 目录修改时间用于增量扫描：未变化的目录可以直接复用旧索引，不必再列一遍。
-    std::string smbPath = toSmbPath(path);
-    std::string withSlash = "/" + smbPath;
     struct smb2_stat_64 st{};
     mtime = 0;
-    const char* candidates[] = {withSlash.c_str(), smbPath.c_str(), "/", ""};
-    for (const char* candidate : candidates) {
-        if (smb2_stat(s->ctx, candidate, &st) == 0) {
+    for (const std::string& candidate : pathCandidates(path)) {
+        if (smb2_stat(s->ctx, candidate.c_str(), &st) == 0) {
             mtime = static_cast<uint32_t>(st.smb2_mtime);
             break;
         }
     }
-    return listDirInternal(s, path, out, false);
+    return listDirInternal(s, path, out, false, &error);
 }
 
 std::vector<SmbEntry> SmbManager::scan(const std::string& id, const std::string& root,

@@ -1,1 +1,4 @@
-/* 页面样式见 app.wxss */
+.screen {
+  width: 1280px;
+  height: 720px;
+}

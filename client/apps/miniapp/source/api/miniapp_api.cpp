@@ -252,6 +252,41 @@ void MiniAppApi::fetchHome(HomeCallback callback) {
     });
 }
 
+void MiniAppApi::fetchLatestRelease(ReleaseCallback callback) {
+    if (!ready()) {
+        if (callback) callback(LatestRelease{}, "未配置小程序服务器");
+        return;
+    }
+    http.getAsync("/api/v1/container/releases", {}, [callback](const nxkit::HttpResult& result) {
+        if (!result.ok) {
+            if (callback) callback(LatestRelease{}, errorOf(result));
+            return;
+        }
+        nlohmann::json payload = result.json();
+        if (!payload.is_object() || !payload.contains("items") || !payload["items"].is_array() ||
+            payload["items"].empty()) {
+            if (callback) callback(LatestRelease{}, "");
+            return;
+        }
+        const auto& entry = payload["items"].front();
+        if (!entry.is_object()) {
+            if (callback) callback(LatestRelease{}, "");
+            return;
+        }
+        LatestRelease release;
+        if (entry.contains("version") && entry["version"].is_string()) {
+            release.version = entry["version"].get<std::string>();
+        }
+        if (entry.contains("notes") && entry["notes"].is_string()) {
+            release.notes = entry["notes"].get<std::string>();
+        }
+        if (entry.contains("download_url") && entry["download_url"].is_string()) {
+            release.downloadUrl = entry["download_url"].get<std::string>();
+        }
+        if (callback) callback(release, "");
+    });
+}
+
 void MiniAppApi::download(const std::string& id, DownloadCallback callback) {
     if (!ready()) {
         if (callback) callback("", "未配置小程序服务器");

@@ -5,17 +5,23 @@
 #include "miniapp/js_runtime.hpp"
 
 #include <quickjs.h>
+#include <mongoose.h>
 
 #include <borealis/core/application.hpp>
 #include <borealis/core/logger.hpp>
 #include <borealis/core/thread.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <deque>
+#include <mutex>
 #include <sstream>
+#include <thread>
+#include <utility>
 
 namespace miniapp {
 
@@ -54,6 +60,68 @@ const char* kHelperScript = R"JS(
     try { return JSON.parse(text); } catch (e) { return text; }
   };
   g.__nx_next_tick = function (fn) { if (typeof fn === 'function') setTimeout(fn, 0); };
+  // wx.createInnerAudioContext 的 JS 外壳：属性/方法转发到原生 __nx_audio_*。
+  g.__nx_make_audio = function (id) {
+    var ctx = {
+      _id: id, _paused: true, _src: '', _volume: 1,
+      _autoplay: false, _loop: false, _startTime: 0
+    };
+    function apply(key, value) {
+      try { __nx_audio_action(id, key, value); } catch (e) {}
+    }
+    Object.defineProperties(ctx, {
+      src: {
+        enumerable: true,
+        get: function () { return ctx._src; },
+        set: function (v) { ctx._src = v == null ? '' : String(v); apply('src', ctx._src); }
+      },
+      autoplay: {
+        enumerable: true,
+        get: function () { return ctx._autoplay; },
+        set: function (v) { ctx._autoplay = !!v; apply('autoplay', ctx._autoplay ? 1 : 0); }
+      },
+      loop: {
+        enumerable: true,
+        get: function () { return ctx._loop; },
+        set: function (v) { ctx._loop = !!v; apply('loop', ctx._loop ? 1 : 0); }
+      },
+      volume: {
+        enumerable: true,
+        get: function () { return ctx._volume; },
+        set: function (v) { ctx._volume = typeof v === 'number' ? v : 1; apply('volume', ctx._volume); }
+      },
+      startTime: {
+        enumerable: true,
+        get: function () { return ctx._startTime; },
+        set: function (v) { ctx._startTime = Number(v) || 0; }
+      },
+      duration: { get: function () { return __nx_audio_number(id, 'duration'); } },
+      currentTime: {
+        get: function () { return __nx_audio_number(id, 'currentTime'); },
+        set: function (v) { apply('seek', Number(v) || 0); }
+      },
+      paused: { get: function () { return ctx._paused; } }
+    });
+    ctx.play = function () { ctx._paused = false; apply('play', ctx._startTime); };
+    ctx.pause = function () { ctx._paused = true; apply('pause', 0); };
+    ctx.stop = function () { ctx._paused = true; apply('stop', 0); };
+    ctx.seek = function (t) { apply('seek', Number(t) || 0); };
+    ctx.destroy = function () { apply('destroy', 0); };
+    function listen(name) {
+      return function (fn) { try { __nx_audio_on(id, name, fn); } catch (e) {} return ctx; };
+    }
+    function unlisten(name) {
+      return function () { try { __nx_audio_on(id, name, null); } catch (e) {} return ctx; };
+    }
+    var events = ['play', 'pause', 'stop', 'ended', 'canplay', 'error', 'seeked', 'timeupdate'];
+    for (var i = 0; i < events.length; i++) {
+      var name = events[i];
+      var cap = name.charAt(0).toUpperCase() + name.slice(1);
+      ctx['on' + cap] = listen(name);
+      ctx['off' + cap] = unlisten(name);
+    }
+    return ctx;
+  };
 })(this);
 )JS";
 
@@ -148,6 +216,78 @@ std::string detectNetworkType() {
 }
 
 }  // namespace
+
+struct JsRuntime::WsClient {
+    struct Event {
+        std::string type;
+        std::string data;
+        std::string error;
+    };
+
+    mg_mgr manager{};
+    mg_connection* connection = nullptr;
+    std::thread worker;
+    std::mutex mutex;
+    std::deque<Event> events;
+    std::deque<std::string> outgoing;
+    std::atomic<bool> running{true};
+
+    static void onEvent(mg_connection*, int event, void* eventData, void* fnData) {
+        auto* self = static_cast<WsClient*>(fnData);
+        if (!self) return;
+        if (event == MG_EV_WS_OPEN) {
+            self->push({"open", "", ""});
+        } else if (event == MG_EV_WS_MSG) {
+            auto* message = static_cast<mg_ws_message*>(eventData);
+            self->push({"message", std::string(message->data.ptr, message->data.len), ""});
+        } else if (event == MG_EV_ERROR) {
+            self->push({"error", "", static_cast<const char*>(eventData)});
+        } else if (event == MG_EV_CLOSE) {
+            self->push({"close", "", ""});
+            self->running = false;
+        }
+    }
+
+    void push(Event event) {
+        std::lock_guard<std::mutex> lock(mutex);
+        events.push_back(std::move(event));
+    }
+
+    void start(const std::string& url) {
+        worker = std::thread([this, url]() {
+            mg_mgr_init(&manager);
+            connection = mg_ws_connect(&manager, url.c_str(), onEvent, this, "%s", "");
+            if (!connection) push({"error", "", "连接失败"});
+            while (running) {
+                if (connection) {
+                    std::deque<std::string> pending;
+                    {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        pending.swap(outgoing);
+                    }
+                    for (const auto& message : pending) {
+                        mg_ws_send(connection, message.data(), message.size(), WEBSOCKET_OP_TEXT);
+                    }
+                }
+                mg_mgr_poll(&manager, 50);
+            }
+            if (connection) connection = nullptr;
+            mg_mgr_free(&manager);
+        });
+    }
+
+    void send(const std::string& data) {
+        std::lock_guard<std::mutex> lock(mutex);
+        outgoing.push_back(data);
+    }
+
+    void stop() {
+        running = false;
+        if (worker.joinable()) worker.join();
+    }
+
+    ~WsClient() { stop(); }
+};
 
 struct RuntimeBridge {
     static JsRuntime* self(JSContext* ctx) {
@@ -318,11 +458,15 @@ struct RuntimeBridge {
         JSValue completeDup = JS_IsFunction(ctx, complete) ? JS_DupValue(ctx, complete)
                                                            : JS_UNDEFINED;
         std::weak_ptr<bool> weak = runtime->alive;
+        // 回调可能晚于页面销毁才返回，投递前用 weak_ptr 确认 runtime 还在。
+        std::weak_ptr<JsRuntime> rtWeak = runtime->weak_from_this();
         runtime->host->showModal(
             toStd(ctx, title), toStd(ctx, content),
             boolArg(ctx, showCancel, true),
-            [runtime, weak, successDup, completeDup](bool confirm) {
-                brls::sync([runtime, weak, successDup, completeDup, confirm]() {
+            [runtime, weak, rtWeak, successDup, completeDup](bool confirm) {
+                auto rt = rtWeak.lock();
+                if (!rt) return;
+                rt->postToScript([runtime, weak, successDup, completeDup, confirm]() {
                     auto token = weak.lock();
                     if (!token || !*token || !runtime->context) return;
                     JSContext* ctx = runtime->context;
@@ -835,15 +979,19 @@ struct RuntimeBridge {
         JSValue completeDup = JS_IsFunction(ctx, complete) ? JS_DupValue(ctx, complete)
                                                            : JS_UNDEFINED;
         std::weak_ptr<bool> weak = runtime->alive;
+        // 回调可能晚于页面销毁才返回，投递前用 weak_ptr 确认 runtime 还在。
+        std::weak_ptr<JsRuntime> rtWeak = runtime->weak_from_this();
 
         runtime->host->httpRequest(
             method, url, headers, body, timeoutMs,
-            [runtime, weak, successDup, failDup, completeDup, responseType](
+            [runtime, weak, rtWeak, successDup, failDup, completeDup, responseType](
                 bool transportOk, int status, const std::string& responseBody,
                 const std::map<std::string, std::string>& responseHeaders,
                 const std::map<std::string, std::string>& responseCookies,
                 const std::string& responseError) {
-                brls::sync([runtime, weak, successDup, failDup, completeDup, transportOk,
+                auto rt = rtWeak.lock();
+                if (!rt) return;
+                rt->postToScript([runtime, weak, successDup, failDup, completeDup, transportOk,
                             status, responseBody, responseHeaders, responseCookies,
                             responseError, responseType]() {
                     auto token = weak.lock();
@@ -1046,11 +1194,15 @@ struct RuntimeBridge {
                                                          : JS_UNDEFINED;
         JSValue failDup = JS_IsFunction(ctx, fail) ? JS_DupValue(ctx, fail) : JS_UNDEFINED;
         std::weak_ptr<bool> weak = runtime->alive;
+        // 回调可能晚于页面销毁才返回，投递前用 weak_ptr 确认 runtime 还在。
+        std::weak_ptr<JsRuntime> rtWeak = runtime->weak_from_this();
 
         runtime->host->smbConnect(server, share, user, password, domain,
-            [runtime, weak, successDup, failDup](bool ok, const std::string& result,
+            [runtime, weak, rtWeak, successDup, failDup](bool ok, const std::string& result,
                                                  const std::string& error) {
-                brls::sync([runtime, weak, successDup, failDup, ok, result, error]() {
+                auto rt = rtWeak.lock();
+                if (!rt) return;
+                rt->postToScript([runtime, weak, successDup, failDup, ok, result, error]() {
                     auto token = weak.lock();
                     if (!token || !*token || !runtime->context) return;
                     JSContext* ctx = runtime->context;
@@ -1097,11 +1249,15 @@ struct RuntimeBridge {
                                                          : JS_UNDEFINED;
         JSValue failDup = JS_IsFunction(ctx, fail) ? JS_DupValue(ctx, fail) : JS_UNDEFINED;
         std::weak_ptr<bool> weak = runtime->alive;
+        // 回调可能晚于页面销毁才返回，投递前用 weak_ptr 确认 runtime 还在。
+        std::weak_ptr<JsRuntime> rtWeak = runtime->weak_from_this();
 
         runtime->host->smbListFiles(id, path,
-            [runtime, weak, successDup, failDup](bool ok, const std::string& result,
+            [runtime, weak, rtWeak, successDup, failDup](bool ok, const std::string& result,
                                                  const std::string& error) {
-                brls::sync([runtime, weak, successDup, failDup, ok, result, error]() {
+                auto rt = rtWeak.lock();
+                if (!rt) return;
+                rt->postToScript([runtime, weak, successDup, failDup, ok, result, error]() {
                     auto token = weak.lock();
                     if (!token || !*token || !runtime->context) return;
                     JSContext* ctx = runtime->context;
@@ -1159,11 +1315,16 @@ struct RuntimeBridge {
         JSValue progressDup = JS_IsFunction(ctx, progress) ? JS_DupValue(ctx, progress)
                                                            : JS_UNDEFINED;
         std::weak_ptr<bool> weak = runtime->alive;
+        // 回调可能晚于页面销毁才返回，投递前用 weak_ptr 确认 runtime 还在。
+        std::weak_ptr<JsRuntime> rtWeak = runtime->weak_from_this();
 
         runtime->host->smbScan(id, path, maxDepth, maxEntries,
-            [runtime, weak, successDup, failDup, progressDup](bool ok, const std::string& result,
-                                                             const std::string& error) {
-                brls::sync([runtime, weak, successDup, failDup, progressDup, ok, result,
+            [runtime, weak, rtWeak, successDup, failDup,
+             progressDup](bool ok, const std::string& result,
+                         const std::string& error) {
+                auto rt = rtWeak.lock();
+                if (!rt) return;
+                rt->postToScript([runtime, weak, successDup, failDup, progressDup, ok, result,
                             error]() {
                     auto token = weak.lock();
                     if (!token || !*token || !runtime->context) return;
@@ -1190,8 +1351,10 @@ struct RuntimeBridge {
                     JS_FreeValue(ctx, progressDup);
                 });
             },
-            [runtime, weak, progressDup](int dirs, int files) {
-                brls::sync([runtime, weak, progressDup, dirs, files]() {
+            [runtime, weak, rtWeak, progressDup](int dirs, int files) {
+                auto rt = rtWeak.lock();
+                if (!rt) return;
+                rt->postToScript([runtime, weak, progressDup, dirs, files]() {
                     auto token = weak.lock();
                     if (!token || !*token || !runtime->context) return;
                     JSContext* ctx = runtime->context;
@@ -1243,11 +1406,15 @@ struct RuntimeBridge {
                                                          : JS_UNDEFINED;
         JSValue failDup = JS_IsFunction(ctx, fail) ? JS_DupValue(ctx, fail) : JS_UNDEFINED;
         std::weak_ptr<bool> weak = runtime->alive;
+        // 回调可能晚于页面销毁才返回，投递前用 weak_ptr 确认 runtime 还在。
+        std::weak_ptr<JsRuntime> rtWeak = runtime->weak_from_this();
 
         runtime->host->mediaScan(sourceId, smbId, root, maxDepth, maxFiles,
-            [runtime, weak, successDup, failDup](bool ok, const std::string& result,
+            [runtime, weak, rtWeak, successDup, failDup](bool ok, const std::string& result,
                                                  const std::string& error) {
-                brls::sync([runtime, weak, successDup, failDup, ok, result, error]() {
+                auto rt = rtWeak.lock();
+                if (!rt) return;
+                rt->postToScript([runtime, weak, successDup, failDup, ok, result, error]() {
                     auto token = weak.lock();
                     if (!token || !*token || !runtime->context) return;
                     JSContext* ctx = runtime->context;
@@ -1288,12 +1455,14 @@ struct RuntimeBridge {
         if (!runtime || !runtime->host || argc <= 0 || !JS_IsObject(argv[0])) return JS_UNDEFINED;
 
         JSValue sourceIdV = JS_GetPropertyStr(ctx, argv[0], "sourceId");
+        JSValue rootV = JS_GetPropertyStr(ctx, argv[0], "root");
         JSValue offsetV = JS_GetPropertyStr(ctx, argv[0], "offset");
         JSValue limitV = JS_GetPropertyStr(ctx, argv[0], "limit");
         JSValue success = JS_GetPropertyStr(ctx, argv[0], "success");
         JSValue fail = JS_GetPropertyStr(ctx, argv[0], "fail");
 
         std::string sourceId = toStd(ctx, sourceIdV);
+        std::string root = toStd(ctx, rootV);
         int32_t offset = 0;
         int32_t limit = 0;
         JS_ToInt32(ctx, &offset, offsetV);
@@ -1303,11 +1472,15 @@ struct RuntimeBridge {
                                                          : JS_UNDEFINED;
         JSValue failDup = JS_IsFunction(ctx, fail) ? JS_DupValue(ctx, fail) : JS_UNDEFINED;
         std::weak_ptr<bool> weak = runtime->alive;
+        // 回调可能晚于页面销毁才返回，投递前用 weak_ptr 确认 runtime 还在。
+        std::weak_ptr<JsRuntime> rtWeak = runtime->weak_from_this();
 
-        runtime->host->mediaLibrary(sourceId, offset, limit,
-            [runtime, weak, successDup, failDup](bool ok, const std::string& result,
+        runtime->host->mediaLibrary(sourceId, root, offset, limit,
+            [runtime, weak, rtWeak, successDup, failDup](bool ok, const std::string& result,
                                                  const std::string& error) {
-                brls::sync([runtime, weak, successDup, failDup, ok, result, error]() {
+                auto rt = rtWeak.lock();
+                if (!rt) return;
+                rt->postToScript([runtime, weak, successDup, failDup, ok, result, error]() {
                     auto token = weak.lock();
                     if (!token || !*token || !runtime->context) return;
                     JSContext* ctx = runtime->context;
@@ -1334,6 +1507,7 @@ struct RuntimeBridge {
             });
 
         JS_FreeValue(ctx, sourceIdV);
+        JS_FreeValue(ctx, rootV);
         JS_FreeValue(ctx, offsetV);
         JS_FreeValue(ctx, limitV);
         JS_FreeValue(ctx, success);
@@ -1363,6 +1537,257 @@ struct RuntimeBridge {
         std::string url = runtime->host->smbStreamUrl(id, path);
         return JS_NewString(ctx, url.c_str());
     }
+
+    // ---- 动画帧 ----
+
+    static JSValue jsRequestAnimationFrame(JSContext* ctx, JSValueConst, int argc,
+                                           JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || argc <= 0 || !JS_IsFunction(ctx, argv[0])) return JS_NewInt32(ctx, 0);
+        return JS_NewInt32(ctx, runtime->addAnimationFrame(argv[0]));
+    }
+
+    static JSValue jsCancelAnimationFrame(JSContext* ctx, JSValueConst, int argc,
+                                          JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (runtime && argc > 0) {
+            int id = 0;
+            JS_ToInt32(ctx, &id, argv[0]);
+            runtime->cancelAnimationFrame(id);
+        }
+        return JS_UNDEFINED;
+    }
+
+    // ---- 手柄 ----
+
+    static JSValue wxGetGamepadState(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host) return JS_NewObject(ctx);
+        return runtime->valueFromJson(runtime->host->gamepadState());
+    }
+
+    // ---- canvas 2D ----
+
+    static JSValue wxCanvasOp(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv,
+                              int magic, JSValue* data) {
+        JsRuntime* runtime = self(ctx);
+        if (runtime) {
+            runtime->canvasOp(toStd(ctx, data[0]), toStd(ctx, data[1]), ctx, argc, argv);
+        }
+        (void)magic;
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxCreateCanvasContext(JSContext* ctx, JSValueConst, int argc,
+                                         JSValueConst* argv) {
+        JSValue context = JS_NewObject(ctx);
+        JSValue id = JS_NewString(ctx, argc > 0 ? toStd(ctx, argv[0]).c_str() : "");
+        JS_SetPropertyStr(ctx, context, "id", JS_DupValue(ctx, id));
+
+        struct Entry {
+            const char* name;
+            const char* kind;
+            int length;
+        };
+        static const Entry entries[] = {
+            {"draw", "draw", 0},
+            {"setFillStyle", "setFillStyle", 1},
+            {"setStrokeStyle", "setStrokeStyle", 1},
+            {"setLineWidth", "setLineWidth", 1},
+            {"setFontSize", "setFontSize", 1},
+            {"setTextAlign", "setTextAlign", 1},
+            {"setTextBaseline", "noop", 1},
+            {"setGlobalAlpha", "setGlobalAlpha", 1},
+            {"setLineCap", "noop", 1},
+            {"setLineJoin", "noop", 1},
+            {"setMiterLimit", "noop", 1},
+            {"setShadow", "noop", 4},
+            {"fillRect", "fillRect", 4},
+            {"strokeRect", "strokeRect", 4},
+            {"clearRect", "clearRect", 4},
+            {"beginPath", "beginPath", 0},
+            {"closePath", "closePath", 0},
+            {"moveTo", "moveTo", 2},
+            {"lineTo", "lineTo", 2},
+            {"arc", "arc", 5},
+            {"rect", "rect", 4},
+            {"fill", "fill", 0},
+            {"stroke", "stroke", 0},
+            {"fillText", "fillText", 3},
+            {"drawImage", "drawImage", 5},
+            {"save", "save", 0},
+            {"restore", "restore", 0},
+            {"translate", "translate", 2},
+            {"scale", "scale", 2},
+            {"rotate", "rotate", 1},
+        };
+        for (const auto& entry : entries) {
+            JSValue data[2] = {id, JS_NewString(ctx, entry.kind)};
+            JSValue fn = JS_NewCFunctionData(ctx, wxCanvasOp, entry.length, 0, 2, data);
+            JS_FreeValue(ctx, data[1]);
+            JS_SetPropertyStr(ctx, context, entry.name, fn);
+        }
+        JS_FreeValue(ctx, id);
+        return context;
+    }
+
+    // ---- WebSocket ----
+
+    static JSValue wxSocketOn(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv,
+                              int, JSValue* data) {
+        JsRuntime* runtime = self(ctx);
+        int id = 0;
+        JS_ToInt32(ctx, &id, data[0]);
+        if (runtime && argc > 0 && JS_IsFunction(ctx, argv[0])) {
+            runtime->setSocketHandler(id, toStd(ctx, data[1]), argv[0]);
+        }
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxSocketAction(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv,
+                                  int, JSValue* data) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime) return JS_UNDEFINED;
+        int id = 0;
+        JS_ToInt32(ctx, &id, data[0]);
+        const std::string action = toStd(ctx, data[1]);
+        if (action == "send") {
+            std::string payload;
+            if (argc > 0) {
+                if (JS_IsString(argv[0])) {
+                    payload = toStd(ctx, argv[0]);
+                } else {
+                    JSValue dataValue = JS_GetPropertyStr(ctx, argv[0], "data");
+                    payload = toStd(ctx, dataValue);
+                    if (!JS_IsString(dataValue)) {
+                        bool ok = false;
+                        payload = runtime->serializeJs(dataValue, &ok);
+                    }
+                    JS_FreeValue(ctx, dataValue);
+                }
+            }
+            runtime->sendSocket(id, payload);
+        } else if (action == "close") {
+            runtime->closeSocket(id);
+        }
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxConnectSocket(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        JSValue task = JS_NewObject(ctx);
+        if (!runtime || argc <= 0 || !JS_IsObject(argv[0])) return task;
+
+        JSValue urlValue = JS_GetPropertyStr(ctx, argv[0], "url");
+        const std::string url = toStd(ctx, urlValue);
+        JS_FreeValue(ctx, urlValue);
+        if (url.empty()) return task;
+
+        const int id = runtime->openSocket(url);
+        JSValue idValue = JS_NewInt32(ctx, id);
+        JS_SetPropertyStr(ctx, task, "socketId", JS_DupValue(ctx, idValue));
+
+        struct Binding {
+            const char* name;
+            const char* event;
+        };
+        static const Binding kEvents[] = {
+            {"onOpen", "open"},
+            {"onMessage", "message"},
+            {"onError", "error"},
+            {"onClose", "close"},
+        };
+        for (const auto& binding : kEvents) {
+            JSValue data[2] = {idValue, JS_NewString(ctx, binding.event)};
+            JS_SetPropertyStr(ctx, task, binding.name,
+                              JS_NewCFunctionData(ctx, wxSocketOn, 1, 0, 2, data));
+            JS_FreeValue(ctx, data[1]);
+        }
+        struct Action {
+            const char* name;
+            const char* action;
+            int length;
+        };
+        static const Action kActions[] = {
+            {"send", "send", 1},
+            {"close", "close", 0},
+        };
+        for (const auto& binding : kActions) {
+            JSValue data[2] = {idValue, JS_NewString(ctx, binding.action)};
+            JS_SetPropertyStr(ctx, task, binding.name,
+                              JS_NewCFunctionData(ctx, wxSocketAction, binding.length, 0, 2,
+                                                  data));
+            JS_FreeValue(ctx, data[1]);
+        }
+        JS_FreeValue(ctx, idValue);
+        return task;
+    }
+
+    // ---- 音频（wx.createInnerAudioContext） ----
+
+    static JSValue wxAudioCreate(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime) return JS_NewInt32(ctx, 0);
+        return JS_NewInt32(ctx, runtime->createAudioContext());
+    }
+
+    static JSValue wxAudioAction(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || argc < 2) return JS_UNDEFINED;
+        int id = 0;
+        JS_ToInt32(ctx, &id, argv[0]);
+        const std::string action = toStd(ctx, argv[1]);
+        double value = 0.0;
+        std::string text;
+        if (argc > 2) {
+            if (JS_IsString(argv[2])) {
+                text = toStd(ctx, argv[2]);
+            } else {
+                value = numberArg(ctx, argv[2]);
+            }
+        }
+        if (argc > 3) text = toStd(ctx, argv[3]);
+        runtime->audioAction(id, action, value, text);
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxAudioOn(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || argc < 2) return JS_UNDEFINED;
+        int id = 0;
+        JS_ToInt32(ctx, &id, argv[0]);
+        runtime->setAudioHandler(id, toStd(ctx, argv[1]), argc > 2 ? argv[2] : JS_UNDEFINED);
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxAudioNumber(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || argc < 2) return JS_NewFloat64(ctx, 0.0);
+        int id = 0;
+        JS_ToInt32(ctx, &id, argv[0]);
+        return JS_NewFloat64(ctx, runtime->audioNumber(id, toStd(ctx, argv[1])));
+    }
+
+    static JSValue wxCreateInnerAudioContext(JSContext* ctx, JSValueConst, int,
+                                             JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime) return JS_NewObject(ctx);
+        const int id = runtime->createAudioContext();
+
+        JSValue global = JS_GetGlobalObject(ctx);
+        JSValue factory = JS_GetPropertyStr(ctx, global, "__nx_make_audio");
+        JSValue arg = JS_NewInt32(ctx, id);
+        JSValue result = JS_Call(ctx, factory, JS_UNDEFINED, 1, &arg);
+        JS_FreeValue(ctx, arg);
+        if (JS_IsException(result)) {
+            logException(runtime, "createInnerAudioContext");
+            JS_FreeValue(ctx, result);
+            result = JS_NewObject(ctx);
+        }
+        JS_FreeValue(ctx, factory);
+        JS_FreeValue(ctx, global);
+        return result;
+    }
 };
 
 JsRuntime::JsRuntime(JsRuntimeHost* host, std::string packageDir, std::string pagePath,
@@ -1372,12 +1797,46 @@ JsRuntime::JsRuntime(JsRuntimeHost* host, std::string packageDir, std::string pa
       pagePath(std::move(pagePath)),
       appSource(std::move(appSource)) {}
 
+void JsRuntime::setTaskPoster(TaskPoster value) { poster = std::move(value); }
+
+void JsRuntime::postToScript(std::function<void()> task) {
+    if (!task) return;
+    std::weak_ptr<JsRuntime> weak = weak_from_this();
+    auto runner = [weak, task = std::move(task)]() mutable {
+        auto runtime = weak.lock();
+        if (!runtime) return;
+        std::lock_guard<std::recursive_timed_mutex> lock(runtime->mutex);
+        if (!runtime->context) return;
+        runtime->syncStackTop();
+        task();
+    };
+    if (poster) {
+        poster(std::move(runner));
+    } else {
+        runner();
+    }
+}
+
 JsRuntime::~JsRuntime() {
+    std::lock_guard<std::recursive_timed_mutex> lock(mutex);
     if (alive) *alive = false;
     if (context) {
         clearTimers();
         for (JSValue fn : networkCallbacks) JS_FreeValue(context, fn);
         networkCallbacks.clear();
+        for (auto& entry : audioHandlers) {
+            AudioHandlers& handlers = entry.second;
+            for (JSValue* slot : {&handlers.onPlay, &handlers.onPause, &handlers.onStop,
+                                  &handlers.onEnded, &handlers.onCanplay, &handlers.onError,
+                                  &handlers.onSeeked, &handlers.onTimeUpdate}) {
+                JS_FreeValue(context, *slot);
+            }
+        }
+        audioHandlers.clear();
+        for (const auto& entry : audios) {
+            if (host) host->audioControl(std::to_string(entry.first), "destroy");
+        }
+        audios.clear();
         for (auto& entry : expressionCache) {
             JS_FreeValue(context, entry.second);
         }
@@ -1416,7 +1875,9 @@ bool JsRuntime::createContext(std::string& error) {
 
 bool JsRuntime::initialize(const std::string& script, const std::string& filename,
                            std::string& error) {
+    std::lock_guard<std::recursive_timed_mutex> lock(mutex);
     if (!createContext(error)) return false;
+    syncStackTop();
 
     if (!appSource.empty()) {
         std::string appMessage;
@@ -1425,9 +1886,12 @@ bool JsRuntime::initialize(const std::string& script, const std::string& filenam
             brls::Logger::warning("miniapp: app.js error: {}", appMessage);
         }
     }
+    brls::Logger::info("miniapp: page '{}' app.js evaluated", filename);
 
     if (!evaluateScript(script, filename, error)) return false;
+    brls::Logger::info("miniapp: page '{}' script evaluated", filename);
     if (!finishPage(error)) return false;
+    brls::Logger::info("miniapp: page '{}' runtime ready", filename);
     return true;
 }
 
@@ -1470,6 +1934,7 @@ bool JsRuntime::finishPage(std::string& error) {
 
 bool JsRuntime::hasHandler(const std::string& name) const {
     if (!context || !pageRegistered || name.empty()) return false;
+    std::lock_guard<std::recursive_timed_mutex> lock(mutex);
     JSValue value = JS_GetPropertyStr(context, page, name.c_str());
     bool result = JS_IsFunction(context, value);
     JS_FreeValue(context, value);
@@ -1477,6 +1942,8 @@ bool JsRuntime::hasHandler(const std::string& name) const {
 }
 
 bool JsRuntime::callLifecycle(const std::string& name, const JsonValue* query) {
+    std::lock_guard<std::recursive_timed_mutex> lock(mutex);
+    syncStackTop();
     if (!context || !pageRegistered) return false;
     JSValue fn = JS_GetPropertyStr(context, page, name.c_str());
     if (!JS_IsFunction(context, fn)) {
@@ -1498,6 +1965,14 @@ bool JsRuntime::callLifecycle(const std::string& name, const JsonValue* query) {
 bool JsRuntime::dispatchEvent(const std::string& handler, const std::string& type,
                               const std::map<std::string, std::string>& dataset,
                               const JsonValue& detail) {
+    // 事件在 UI 线程派发：最多等 8ms 拿脚本锁，拿不到就丢弃这次事件，
+    // 不把输入卡在脚本线程上（8ms 仍在人眼可接受的一帧内）。
+    std::unique_lock<std::recursive_timed_mutex> lock(mutex, std::defer_lock);
+    if (!lock.try_lock_for(std::chrono::milliseconds(8))) {
+        brls::Logger::debug("miniapp: dispatch {} skipped, script busy", handler);
+        return false;
+    }
+    syncStackTop();
     if (!context || !pageRegistered || handler.empty()) return false;
     JSValue fn = JS_GetPropertyStr(context, page, handler.c_str());
     if (!JS_IsFunction(context, fn)) {
@@ -1513,6 +1988,10 @@ bool JsRuntime::dispatchEvent(const std::string& handler, const std::string& typ
 
 bool JsRuntime::dispatchKey(const std::string& key, bool& consumed) {
     consumed = false;
+    // 按键在 UI 线程派发：脚本线程正忙时按「未消费」处理，让焦点导航继续可用。
+    std::unique_lock<std::recursive_timed_mutex> lock(mutex, std::defer_lock);
+    if (!lock.try_lock_for(std::chrono::milliseconds(8))) return false;
+    syncStackTop();
     if (!context || !pageRegistered || key.empty()) return false;
     JSValue fn = JS_GetPropertyStr(context, page, "onKeyDown");
     if (!JS_IsFunction(context, fn)) {
@@ -1566,7 +2045,23 @@ void JsRuntime::refreshData() {
     if (!ok) return;
     std::string parseError;
     JsonValue parsed = parseJson(text, &parseError);
-    if (parseError.empty()) data_ = std::move(parsed);
+    if (parseError.empty()) {
+        data_ = std::move(parsed);
+        // UI 线程靠版本号判断要不要重新取一份 data 快照。
+        dataVersion_.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+JsonValue JsRuntime::dataCopy() const {
+    std::lock_guard<std::recursive_timed_mutex> lock(mutex);
+    return data_;
+}
+
+bool JsRuntime::tryDataCopy(JsonValue& out, int timeoutMs) const {
+    std::unique_lock<std::recursive_timed_mutex> lock(mutex, std::defer_lock);
+    if (!lock.try_lock_for(std::chrono::milliseconds(timeoutMs))) return false;
+    out = data_;
+    return true;
 }
 
 void JsRuntime::drainJobs() {
@@ -1588,6 +2083,10 @@ std::string JsRuntime::exceptionText() {
     JS_FreeValue(context, exception);
     if (message.empty()) message = "unknown script error";
     return message;
+}
+
+void JsRuntime::syncStackTop() {
+    if (context) JS_UpdateStackTop(JS_GetRuntime(context));
 }
 
 std::string JsRuntime::serializeJs(JSValue value, bool* ok) {
@@ -1622,7 +2121,36 @@ JSValue JsRuntime::valueFromJsonText(const std::string& text) {
 }
 
 JSValue JsRuntime::valueFromJson(const JsonValue& value) {
-    return valueFromJsonText(toJsonString(value));
+    if (!context) return JS_UNDEFINED;
+    // 结构化转换：不再经过 JSON 文本，wx:for 里每层 item 的绑定省掉一次
+    // stringify + parse。
+    switch (value.type()) {
+        case JsonValue::Type::Null: return JS_NULL;
+        case JsonValue::Type::Bool: return JS_NewBool(context, value.asBool());
+        case JsonValue::Type::Number: return JS_NewFloat64(context, value.asNumber());
+        case JsonValue::Type::String: {
+            const std::string& text = value.asString();
+            return JS_NewStringLen(context, text.c_str(), text.size());
+        }
+        case JsonValue::Type::Array: {
+            const auto& items = value.asArray();
+            JSValue array = JS_NewArray(context);
+            for (size_t i = 0; i < items.size(); ++i) {
+                JS_SetPropertyUint32(context, array, static_cast<uint32_t>(i),
+                                     valueFromJson(items[i]));
+            }
+            return array;
+        }
+        case JsonValue::Type::Object: {
+            JSValue object = JS_NewObject(context);
+            for (const auto& entry : value.asObject()) {
+                JS_SetPropertyStr(context, object, entry.first.c_str(),
+                                  valueFromJson(entry.second));
+            }
+            return object;
+        }
+    }
+    return JS_UNDEFINED;
 }
 
 JSValue JsRuntime::makeEventValue(const std::string& type,
@@ -1669,6 +2197,26 @@ void JsRuntime::installGlobals() {
                       JS_NewCFunction(context, RuntimeBridge::jsClearTimer, "clearTimeout", 1));
     JS_SetPropertyStr(context, global, "clearInterval",
                       JS_NewCFunction(context, RuntimeBridge::jsClearTimer, "clearInterval", 1));
+    JS_SetPropertyStr(context, global, "requestAnimationFrame",
+                      JS_NewCFunction(context, RuntimeBridge::jsRequestAnimationFrame,
+                                      "requestAnimationFrame", 1));
+    JS_SetPropertyStr(context, global, "cancelAnimationFrame",
+                      JS_NewCFunction(context, RuntimeBridge::jsCancelAnimationFrame,
+                                      "cancelAnimationFrame", 1));
+
+    // wx.createInnerAudioContext 的原生底层，JS 外壳见 __nx_make_audio。
+    JS_SetPropertyStr(context, global, "__nx_audio_create",
+                      JS_NewCFunction(context, RuntimeBridge::wxAudioCreate,
+                                      "__nx_audio_create", 0));
+    JS_SetPropertyStr(context, global, "__nx_audio_action",
+                      JS_NewCFunction(context, RuntimeBridge::wxAudioAction,
+                                      "__nx_audio_action", 3));
+    JS_SetPropertyStr(context, global, "__nx_audio_on",
+                      JS_NewCFunction(context, RuntimeBridge::wxAudioOn,
+                                      "__nx_audio_on", 3));
+    JS_SetPropertyStr(context, global, "__nx_audio_number",
+                      JS_NewCFunction(context, RuntimeBridge::wxAudioNumber,
+                                      "__nx_audio_number", 2));
 
     JSValue console = JS_NewObject(context);
     JS_SetPropertyStr(context, console, "log",
@@ -1748,6 +2296,10 @@ void JsRuntime::installWx() {
 
     set("request", RuntimeBridge::wxRequest, 1);
     set("createVideoContext", RuntimeBridge::wxCreateVideoContext, 1);
+    set("createCanvasContext", RuntimeBridge::wxCreateCanvasContext, 1);
+    set("getGamepadState", RuntimeBridge::wxGetGamepadState, 0);
+    set("connectSocket", RuntimeBridge::wxConnectSocket, 1);
+    set("createInnerAudioContext", RuntimeBridge::wxCreateInnerAudioContext, 0);
     set("navigateTo", RuntimeBridge::wxNavigateTo, 1);
     set("navigateBack", RuntimeBridge::wxNavigateBack, 1);
     set("redirectTo", RuntimeBridge::wxRedirectTo, 1);
@@ -1799,12 +2351,50 @@ void JsRuntime::installWx() {
     JS_FreeValue(context, global);
 }
 
-bool JsRuntime::evaluate(const std::string& expression, const JsonValue& scope,
-                         JsonValue& out, std::string& error) {
+JsRuntime::SessionStatus JsRuntime::beginEvalSession(EvalSession& session, int timeoutMs) {
+    // 上一轮如果没收尾（异常路径），先释放，避免锁泄漏。
+    if (session.ownsLock) endEvalSession(session);
+    // 树构建要连续进 JS 求值：拿不到锁就整帧跳过，绝不阻塞等脚本线程。
+    std::unique_lock<std::recursive_timed_mutex> lock(mutex, std::defer_lock);
+    if (!lock.try_lock_for(std::chrono::milliseconds(timeoutMs))) {
+        return SessionStatus::Busy;
+    }
+    syncStackTop();
+    if (!context || !pageRegistered) return SessionStatus::Unavailable;
+    // 直接用 page.data 这个活对象做作用域原型，避免把数据再序列化一份。
+    session.root = JS_GetPropertyStr(context, page, "data");
+    if (!JS_IsObject(session.root)) {
+        JS_FreeValue(context, session.root);
+        session.root = JS_UNDEFINED;
+        return SessionStatus::Unavailable;
+    }
+    session.ownsLock = true;
+    lock.release();
+    return SessionStatus::Ready;
+}
+
+void JsRuntime::endEvalSession(EvalSession& session) {
+    if (context && !JS_IsUndefined(session.root)) {
+        JS_FreeValue(context, session.root);
+    }
+    session.root = JS_UNDEFINED;
+    if (session.ownsLock) {
+        session.ownsLock = false;
+        mutex.unlock();
+    }
+}
+
+bool JsRuntime::evaluate(const std::string& expression, const EvalSession& session,
+                         const std::vector<EvalLocal>& locals, JsonValue& out,
+                         std::string& error) {
     out = JsonValue();
     error.clear();
     if (!context) {
         error = "no context";
+        return false;
+    }
+    if (JS_IsUndefined(session.root)) {
+        error = "no eval session";
         return false;
     }
 
@@ -1825,19 +2415,56 @@ bool JsRuntime::evaluate(const std::string& expression, const JsonValue& scope,
         fn = compiled;
     }
 
-    JSValue scopeValue = valueFromJson(scope);
-    JSValue result = JS_Call(context, fn, JS_UNDEFINED, 1, &scopeValue);
-    JS_FreeValue(context, scopeValue);
+    // 作用域对象：data 挂在原型链上，locals 作为自有属性覆盖同名 data 字段。
+    // 每个表达式只额外绑定少量局部变量，代价与 data 规模无关。
+    JSValue scope = JS_NewObject(context);
+    if (!JS_IsUndefined(session.root)) JS_SetPrototype(context, scope, session.root);
+    for (const auto& local : locals) {
+        if (local.name.empty()) continue;
+        JS_SetPropertyStr(context, scope, local.name.c_str(), valueFromJson(local.value));
+    }
+
+    JSValue result = JS_Call(context, fn, JS_UNDEFINED, 1, &scope);
+    JS_FreeValue(context, scope);
     if (JS_IsException(result)) {
         error = exceptionText();
         JS_FreeValue(context, result);
         return false;
     }
 
-    bool ok = false;
-    std::string text = serializeJs(result, &ok);
+    const bool converted = jsonFromJs(result, out, error);
     JS_FreeValue(context, result);
-    if (!ok) {
+    return converted;
+}
+
+bool JsRuntime::jsonFromJs(JSValue value, JsonValue& out, std::string& error) {
+    if (JS_IsUndefined(value) || JS_IsNull(value)) {
+        out = JsonValue();
+        return true;
+    }
+    if (JS_IsBool(value)) {
+        out = JsonValue::boolean(JS_ToBool(context, value) != 0);
+        return true;
+    }
+    if (JS_IsNumber(value)) {
+        double number = 0.0;
+        if (JS_ToFloat64(context, &number, value) < 0) {
+            error = "number out of range";
+            return false;
+        }
+        out = JsonValue::number(number);
+        return true;
+    }
+    if (JS_IsString(value)) {
+        const char* text = JS_ToCString(context, value);
+        out = JsonValue::string(text ? text : "");
+        if (text) JS_FreeCString(context, text);
+        return true;
+    }
+
+    // 数组/对象仍走 JSON 文本，但只对这类表达式付费。
+    const std::string text = serializeJs(value, nullptr);
+    if (text == "null") {
         out = JsonValue();
         return true;
     }
@@ -1877,6 +2504,511 @@ void JsRuntime::clearTimers() {
         timer.fn = JS_UNDEFINED;
     }
     timers.clear();
+    for (auto& frame : animationFrames) {
+        if (context) JS_FreeValue(context, frame.fn);
+        frame.fn = JS_UNDEFINED;
+    }
+    animationFrames.clear();
+}
+
+int JsRuntime::addAnimationFrame(JSValue fn) {
+    AnimationFrame frame;
+    frame.id = nextAnimationFrameId++;
+    frame.fn = JS_DupValue(context, fn);
+    animationFrames.push_back(frame);
+    return frame.id;
+}
+
+void JsRuntime::cancelAnimationFrame(int id) {
+    for (auto it = animationFrames.begin(); it != animationFrames.end(); ++it) {
+        if (it->id == id) {
+            JS_FreeValue(context, it->fn);
+            animationFrames.erase(it);
+            return;
+        }
+    }
+}
+
+void JsRuntime::pumpAnimationFrames(double nowMillisecondsValue) {
+    if (!context || animationFrames.empty()) return;
+    std::vector<JSValue> due;
+    due.reserve(animationFrames.size());
+    for (auto& frame : animationFrames) {
+        due.push_back(JS_DupValue(context, frame.fn));
+        JS_FreeValue(context, frame.fn);
+    }
+    animationFrames.clear();
+    JSValue timestamp = JS_NewFloat64(context, nowMillisecondsValue);
+    for (JSValue fn : due) {
+        callJsFunction(fn, page, 1, &timestamp, "requestAnimationFrame");
+        JS_FreeValue(context, fn);
+    }
+    JS_FreeValue(context, timestamp);
+}
+
+// 解析常见的 CSS 颜色写法；不支持的写法回退为黑色。
+static void parseCanvasColor(const std::string& input, float out[4]) {
+    out[0] = out[1] = out[2] = 0.0f;
+    out[3] = 1.0f;
+    std::string s;
+    for (char c : input) {
+        if (!std::isspace(static_cast<unsigned char>(c))) s.push_back(c);
+    }
+    if (s.empty()) return;
+    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    auto hex = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        return -1;
+    };
+
+    if (s[0] == '#') {
+        if (s.size() == 4) {
+            out[0] = hex(s[1]) * 17 / 255.0f;
+            out[1] = hex(s[2]) * 17 / 255.0f;
+            out[2] = hex(s[3]) * 17 / 255.0f;
+        } else if (s.size() == 7 || s.size() == 9) {
+            out[0] = (hex(s[1]) * 16 + hex(s[2])) / 255.0f;
+            out[1] = (hex(s[3]) * 16 + hex(s[4])) / 255.0f;
+            out[2] = (hex(s[5]) * 16 + hex(s[6])) / 255.0f;
+            if (s.size() == 9) out[3] = (hex(s[7]) * 16 + hex(s[8])) / 255.0f;
+        }
+        return;
+    }
+
+    if (s.compare(0, 4, "rgb(") == 0 || s.compare(0, 5, "rgba(") == 0) {
+        size_t open = s.find('(');
+        size_t close = s.find(')');
+        if (open == std::string::npos || close == std::string::npos || close <= open) return;
+        std::string inner = s.substr(open + 1, close - open - 1);
+        std::vector<float> values;
+        std::string token;
+        for (char c : inner + ",") {
+            if (c == ',') {
+                if (!token.empty()) values.push_back(static_cast<float>(std::atof(token.c_str())));
+                token.clear();
+            } else {
+                token.push_back(c);
+            }
+        }
+        if (values.size() >= 3) {
+            out[0] = values[0] / 255.0f;
+            out[1] = values[1] / 255.0f;
+            out[2] = values[2] / 255.0f;
+            if (values.size() >= 4) out[3] = values[3];
+        }
+        return;
+    }
+
+    struct Named {
+        const char* name;
+        float r, g, b;
+    };
+    static const Named kNamed[] = {
+        {"white", 1, 1, 1},       {"black", 0, 0, 0},     {"red", 1, 0, 0},
+        {"green", 0, 0.5f, 0},    {"lime", 0, 1, 0},      {"blue", 0, 0, 1},
+        {"yellow", 1, 1, 0},      {"orange", 1, 0.647f, 0}, {"purple", 0.5f, 0, 0.5f},
+        {"gray", 0.5f, 0.5f, 0.5f}, {"grey", 0.5f, 0.5f, 0.5f}, {"cyan", 0, 1, 1},
+        {"magenta", 1, 0, 1},     {"transparent", 0, 0, 0},
+    };
+    for (const auto& named : kNamed) {
+        if (s == named.name) {
+            out[0] = named.r;
+            out[1] = named.g;
+            out[2] = named.b;
+            if (s == "transparent") out[3] = 0.0f;
+            return;
+        }
+    }
+}
+
+int JsRuntime::openSocket(const std::string& url) {
+    const int id = nextSocketId++;
+    auto client = std::make_shared<WsClient>();
+    sockets[id] = client;
+    client->start(url);
+    return id;
+}
+
+void JsRuntime::setSocketHandler(int id, const std::string& event, JSValue handler) {
+    SocketHandlers& handlers = socketHandlers[id];
+    JSValue* target = nullptr;
+    if (event == "open") {
+        target = &handlers.onOpen;
+    } else if (event == "message") {
+        target = &handlers.onMessage;
+    } else if (event == "error") {
+        target = &handlers.onError;
+    } else if (event == "close") {
+        target = &handlers.onClose;
+    }
+    if (!target) return;
+    JS_FreeValue(context, *target);
+    *target = JS_DupValue(context, handler);
+}
+
+void JsRuntime::sendSocket(int id, const std::string& data) {
+    auto it = sockets.find(id);
+    if (it != sockets.end()) it->second->send(data);
+}
+
+void JsRuntime::closeSocket(int id) {
+    auto handlerIt = socketHandlers.find(id);
+    if (handlerIt != socketHandlers.end()) {
+        JS_FreeValue(context, handlerIt->second.onOpen);
+        JS_FreeValue(context, handlerIt->second.onMessage);
+        JS_FreeValue(context, handlerIt->second.onError);
+        JS_FreeValue(context, handlerIt->second.onClose);
+        socketHandlers.erase(handlerIt);
+    }
+    auto socketIt = sockets.find(id);
+    if (socketIt != sockets.end()) {
+        socketIt->second->stop();
+        sockets.erase(socketIt);
+    }
+}
+
+void JsRuntime::pollSockets() {
+    if (sockets.empty() || !context) return;
+
+    std::vector<int> ids;
+    ids.reserve(sockets.size());
+    for (const auto& entry : sockets) ids.push_back(entry.first);
+
+    for (int id : ids) {
+        auto socketIt = sockets.find(id);
+        auto handlerIt = socketHandlers.find(id);
+        if (socketIt == sockets.end() || handlerIt == socketHandlers.end()) continue;
+
+        std::deque<WsClient::Event> events;
+        {
+            std::lock_guard<std::mutex> lock(socketIt->second->mutex);
+            events.swap(socketIt->second->events);
+        }
+        // 回调里可能直接 close()，先把回调值取出来，避免迭代器失效。
+        JSValue openHandler = JS_DupValue(context, handlerIt->second.onOpen);
+        JSValue messageHandler = JS_DupValue(context, handlerIt->second.onMessage);
+        JSValue errorHandler = JS_DupValue(context, handlerIt->second.onError);
+        JSValue closeHandler = JS_DupValue(context, handlerIt->second.onClose);
+
+        for (const auto& event : events) {
+            JSValue handler = JS_UNDEFINED;
+            JsonValue payload = JsonValue::object();
+            if (event.type == "open") {
+                handler = openHandler;
+                payload.setMember("header", JsonValue::object());
+            } else if (event.type == "message") {
+                handler = messageHandler;
+                payload.setMember("data", JsonValue::string(event.data));
+            } else if (event.type == "error") {
+                handler = errorHandler;
+                payload.setMember("errMsg", JsonValue::string(event.error.empty()
+                                                                  ? "websocket error"
+                                                                  : event.error));
+            } else if (event.type == "close") {
+                handler = closeHandler;
+                payload.setMember("code", JsonValue::number(1000));
+                payload.setMember("reason", JsonValue::string(""));
+            }
+            if (!JS_IsFunction(context, handler)) continue;
+
+            JSValue argument = valueFromJson(payload);
+            callJsFunction(handler, page, 1, &argument, "socket");
+            JS_FreeValue(context, argument);
+
+            if (sockets.find(id) == sockets.end()) break;
+        }
+        JS_FreeValue(context, openHandler);
+        JS_FreeValue(context, messageHandler);
+        JS_FreeValue(context, errorHandler);
+        JS_FreeValue(context, closeHandler);
+    }
+}
+
+int JsRuntime::createAudioContext() {
+    const int id = nextAudioId++;
+    audios[id] = AudioInstance();
+    if (host) host->audioControl(std::to_string(id), "create");
+    return id;
+}
+
+void JsRuntime::audioAction(int id, const std::string& action, double value,
+                            const std::string& text) {
+    auto it = audios.find(id);
+    if (it == audios.end() || !host) return;
+    AudioInstance& audio = it->second;
+    const std::string key = std::to_string(id);
+
+    if (action == "src") {
+        audio.src = text;
+        audio.lastLoaded = false;
+        audio.lastPlaying = false;
+        audio.lastEnded = false;
+        audio.lastError.clear();
+        host->audioControl(key, "src", 0.0, text);
+        if (audio.autoplay) host->audioControl(key, "play");
+    } else if (action == "autoplay") {
+        audio.autoplay = value != 0.0;
+        if (audio.autoplay && !audio.src.empty() && !audio.lastPlaying) {
+            host->audioControl(key, "play");
+        }
+    } else if (action == "loop") {
+        audio.loop = value != 0.0;
+        host->audioControl(key, "loop", audio.loop ? 1.0 : 0.0);
+    } else if (action == "volume") {
+        audio.volume = value;
+        host->audioControl(key, "volume", value * 100.0);
+    } else if (action == "play") {
+        audio.lastEnded = false;
+        host->audioControl(key, "play", value);
+    } else if (action == "pause") {
+        host->audioControl(key, "pause");
+    } else if (action == "stop") {
+        audio.lastPlaying = false;
+        audio.lastEnded = false;
+        host->audioControl(key, "stop");
+        auto handlerIt = audioHandlers.find(id);
+        if (handlerIt != audioHandlers.end() && JS_IsFunction(context, handlerIt->second.onStop)) {
+            callJsFunction(handlerIt->second.onStop, page, 0, nullptr, "onStop");
+        }
+    } else if (action == "seek") {
+        host->audioControl(key, "seek", value);
+        auto handlerIt = audioHandlers.find(id);
+        if (handlerIt != audioHandlers.end() &&
+            JS_IsFunction(context, handlerIt->second.onSeeked)) {
+            callJsFunction(handlerIt->second.onSeeked, page, 0, nullptr, "onSeeked");
+        }
+    } else if (action == "destroy") {
+        host->audioControl(key, "destroy");
+        auto handlerIt = audioHandlers.find(id);
+        if (handlerIt != audioHandlers.end()) {
+            AudioHandlers& handlers = handlerIt->second;
+            for (JSValue* slot : {&handlers.onPlay, &handlers.onPause, &handlers.onStop,
+                                  &handlers.onEnded, &handlers.onCanplay, &handlers.onError,
+                                  &handlers.onSeeked, &handlers.onTimeUpdate}) {
+                JS_FreeValue(context, *slot);
+                *slot = JS_UNDEFINED;
+            }
+            audioHandlers.erase(handlerIt);
+        }
+        audios.erase(it);
+    }
+}
+
+void JsRuntime::setAudioHandler(int id, const std::string& event, JSValue handler) {
+    if (audios.find(id) == audios.end()) return;
+    AudioHandlers& handlers = audioHandlers[id];
+    JSValue* target = nullptr;
+    if (event == "play") {
+        target = &handlers.onPlay;
+    } else if (event == "pause") {
+        target = &handlers.onPause;
+    } else if (event == "stop") {
+        target = &handlers.onStop;
+    } else if (event == "ended") {
+        target = &handlers.onEnded;
+    } else if (event == "canplay") {
+        target = &handlers.onCanplay;
+    } else if (event == "error") {
+        target = &handlers.onError;
+    } else if (event == "seeked") {
+        target = &handlers.onSeeked;
+    } else if (event == "timeupdate") {
+        target = &handlers.onTimeUpdate;
+    }
+    if (!target) return;
+    JS_FreeValue(context, *target);
+    *target = JS_IsFunction(context, handler) ? JS_DupValue(context, handler) : JS_UNDEFINED;
+}
+
+double JsRuntime::audioNumber(int id, const std::string& key) const {
+    if (!host) return 0.0;
+    const JsonValue state = host->audioState(std::to_string(id));
+    const JsonValue* value = state.find(key);
+    return value ? value->asNumber() : 0.0;
+}
+
+void JsRuntime::pollAudio() {
+    if (!context || !host || audios.empty()) return;
+
+    std::vector<int> ids;
+    ids.reserve(audios.size());
+    for (const auto& entry : audios) ids.push_back(entry.first);
+
+    for (int id : ids) {
+        auto audioIt = audios.find(id);
+        if (audioIt == audios.end()) continue;
+        AudioInstance& audio = audioIt->second;
+
+        const JsonValue state = host->audioState(std::to_string(id));
+        if (!state.isObject()) continue;
+
+        const JsonValue* playingValue = state.find("playing");
+        const JsonValue* loadedValue = state.find("loaded");
+        const JsonValue* endedValue = state.find("ended");
+        const JsonValue* errorValue = state.find("error");
+        const bool playing = playingValue && playingValue->asBool();
+        const bool loaded = loadedValue && loadedValue->asBool();
+        const bool ended = endedValue && endedValue->asBool();
+        const std::string error = errorValue ? errorValue->asString() : std::string();
+
+        AudioHandlers handlers;
+        auto handlerIt = audioHandlers.find(id);
+        if (handlerIt != audioHandlers.end()) {
+            handlers.onPlay = JS_DupValue(context, handlerIt->second.onPlay);
+            handlers.onPause = JS_DupValue(context, handlerIt->second.onPause);
+            handlers.onEnded = JS_DupValue(context, handlerIt->second.onEnded);
+            handlers.onCanplay = JS_DupValue(context, handlerIt->second.onCanplay);
+            handlers.onError = JS_DupValue(context, handlerIt->second.onError);
+        }
+
+        auto fire = [&](JSValue fn, const char* name) {
+            if (JS_IsFunction(context, fn)) callJsFunction(fn, page, 0, nullptr, name);
+        };
+        if (loaded && !audio.lastLoaded) fire(handlers.onCanplay, "onCanplay");
+        if (ended && !audio.lastEnded) fire(handlers.onEnded, "onEnded");
+        if (playing && !audio.lastPlaying) fire(handlers.onPlay, "onPlay");
+        if (!playing && audio.lastPlaying && !ended) fire(handlers.onPause, "onPause");
+        if (!error.empty() && error != audio.lastError) fire(handlers.onError, "onError");
+
+        JS_FreeValue(context, handlers.onPlay);
+        JS_FreeValue(context, handlers.onPause);
+        JS_FreeValue(context, handlers.onEnded);
+        JS_FreeValue(context, handlers.onCanplay);
+        JS_FreeValue(context, handlers.onError);
+
+        // 回调里可能 destroy 了实例，重新确认再更新快照。
+        auto latest = audios.find(id);
+        if (latest == audios.end()) continue;
+        latest->second.lastLoaded = loaded;
+        latest->second.lastPlaying = playing;
+        latest->second.lastEnded = ended;
+        latest->second.lastError = error;
+    }
+}
+
+bool JsRuntime::canvasSnapshot(const std::string& id, CanvasState& out) const {
+    std::unique_lock<std::recursive_timed_mutex> lock(mutex, std::defer_lock);
+    if (!lock.try_lock_for(std::chrono::milliseconds(2))) return false;
+    auto it = canvases.find(id);
+    if (it == canvases.end()) return false;
+    out = it->second;
+    return true;
+}
+
+void JsRuntime::canvasOp(const std::string& id, const std::string& kind, JSContext* ctx,
+                         int argc, JSValueConst* argv) {
+    if (id.empty() || !ctx) return;
+    CanvasState& canvas = canvases[id];
+
+    auto num = [&](int index) { return index < argc ? numberArg(ctx, argv[index], 0.0) : 0.0; };
+    auto text = [&](int index) { return index < argc ? toStd(ctx, argv[index]) : std::string(); };
+    auto pushNumbers = [&](const char* name, std::initializer_list<double> values) {
+        CanvasCommand command;
+        command.kind = name;
+        command.nums.assign(values);
+        canvas.commands.push_back(std::move(command));
+    };
+
+    if (kind == "draw") {
+        canvas.frame = canvas.commands;
+        canvas.commands.clear();
+    } else if (kind == "setFillStyle") {
+        parseCanvasColor(text(0), canvas.fill);
+    } else if (kind == "setStrokeStyle") {
+        parseCanvasColor(text(0), canvas.stroke);
+    } else if (kind == "setLineWidth") {
+        canvas.lineWidth = static_cast<float>(std::max(0.0, num(0)));
+    } else if (kind == "setFontSize") {
+        canvas.fontSize = static_cast<float>(std::max(1.0, num(0)));
+    } else if (kind == "setTextAlign") {
+        const std::string align = text(0);
+        canvas.textAlign = align == "center" ? 1 : (align == "right" || align == "end" ? 2 : 0);
+    } else if (kind == "setGlobalAlpha") {
+        canvas.globalAlpha = static_cast<float>(std::max(0.0, std::min(1.0, num(0))));
+    } else if (kind == "fillRect" || kind == "strokeRect") {
+        const bool fill = kind == "fillRect";
+        const float* color = fill ? canvas.fill : canvas.stroke;
+        CanvasCommand command;
+        command.kind = kind;
+        command.nums = {num(0), num(1), num(2), num(3),
+                        color[0], color[1], color[2], color[3] * canvas.globalAlpha,
+                        canvas.lineWidth};
+        canvas.commands.push_back(std::move(command));
+    } else if (kind == "clearRect") {
+        pushNumbers("clearRect", {num(0), num(1), num(2), num(3)});
+    } else if (kind == "beginPath") {
+        pushNumbers("beginPath", {});
+    } else if (kind == "closePath") {
+        pushNumbers("closePath", {});
+    } else if (kind == "moveTo") {
+        pushNumbers("moveTo", {num(0), num(1)});
+    } else if (kind == "lineTo") {
+        pushNumbers("lineTo", {num(0), num(1)});
+    } else if (kind == "rect") {
+        pushNumbers("rect", {num(0), num(1), num(2), num(3)});
+    } else if (kind == "arc") {
+        pushNumbers("arc", {num(0), num(1), num(2), num(3), num(4), num(5)});
+    } else if (kind == "fill") {
+        CanvasCommand command;
+        command.kind = "fill";
+        command.nums = {canvas.fill[0], canvas.fill[1], canvas.fill[2],
+                        canvas.fill[3] * canvas.globalAlpha};
+        canvas.commands.push_back(std::move(command));
+    } else if (kind == "stroke") {
+        CanvasCommand command;
+        command.kind = "stroke";
+        command.nums = {canvas.stroke[0], canvas.stroke[1], canvas.stroke[2],
+                        canvas.stroke[3] * canvas.globalAlpha, canvas.lineWidth};
+        canvas.commands.push_back(std::move(command));
+    } else if (kind == "fillText") {
+        CanvasCommand command;
+        command.kind = "fillText";
+        command.text = text(0);
+        command.nums = {num(1), num(2), canvas.fontSize, static_cast<double>(canvas.textAlign),
+                        canvas.fill[0], canvas.fill[1], canvas.fill[2],
+                        canvas.fill[3] * canvas.globalAlpha};
+        canvas.commands.push_back(std::move(command));
+    } else if (kind == "drawImage") {
+        CanvasCommand command;
+        command.kind = "drawImage";
+        command.text = text(0);
+        command.nums = {num(1), num(2), num(3), num(4)};
+        canvas.commands.push_back(std::move(command));
+    } else if (kind == "save") {
+        CanvasState::Saved saved{};
+        for (int i = 0; i < 4; ++i) {
+            saved.fill[i] = canvas.fill[i];
+            saved.stroke[i] = canvas.stroke[i];
+        }
+        saved.lineWidth = canvas.lineWidth;
+        saved.fontSize = canvas.fontSize;
+        saved.textAlign = canvas.textAlign;
+        saved.globalAlpha = canvas.globalAlpha;
+        canvas.stack.push_back(saved);
+        pushNumbers("save", {});
+    } else if (kind == "restore") {
+        if (!canvas.stack.empty()) {
+            const CanvasState::Saved& saved = canvas.stack.back();
+            for (int i = 0; i < 4; ++i) {
+                canvas.fill[i] = saved.fill[i];
+                canvas.stroke[i] = saved.stroke[i];
+            }
+            canvas.lineWidth = saved.lineWidth;
+            canvas.fontSize = saved.fontSize;
+            canvas.textAlign = saved.textAlign;
+            canvas.globalAlpha = saved.globalAlpha;
+            canvas.stack.pop_back();
+        }
+        pushNumbers("restore", {});
+    } else if (kind == "translate") {
+        pushNumbers("translate", {num(0), num(1)});
+    } else if (kind == "scale") {
+        pushNumbers("scale", {num(0), num(1)});
+    } else if (kind == "rotate") {
+        pushNumbers("rotate", {num(0)});
+    }
 }
 
 void JsRuntime::pollNetworkStatus(double nowMillisecondsValue) {
@@ -1901,8 +3033,18 @@ void JsRuntime::pollNetworkStatus(double nowMillisecondsValue) {
 }
 
 void JsRuntime::pumpTimers(double nowMillisecondsValue) {
+    // 由逻辑线程驱动：定时器/轮询都在这里跑，慢脚本只会拖慢自己。
+    std::lock_guard<std::recursive_timed_mutex> lock(mutex);
+    syncStackTop();
     if (!context) return;
     pollNetworkStatus(nowMillisecondsValue);
+    pumpAnimationFrames(nowMillisecondsValue);
+    pollSockets();
+    // 音频状态轮询：50ms 一次足够，避免每帧都向宿主取快照。
+    if (!audios.empty() && nowMillisecondsValue - lastAudioPoll >= 50.0) {
+        lastAudioPoll = nowMillisecondsValue;
+        pollAudio();
+    }
     if (timers.empty()) return;
 
     struct Pending {

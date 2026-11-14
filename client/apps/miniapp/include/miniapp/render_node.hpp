@@ -24,6 +24,13 @@ struct RenderNode {
     std::string id;
     std::string path;  // 稳定路径，用于焦点/滚动/开关状态
     std::string bindTap;
+    // 触摸 / 长按：canvas、拖拽类交互使用。
+    std::string bindTouchStart;
+    std::string bindTouchMove;
+    std::string bindTouchEnd;
+    std::string bindTouchCancel;
+    std::string bindLongPress;
+    bool catchTouch = false;
     std::string bindChange;
     std::string bindInput;
     std::string bindConfirm;
@@ -57,6 +64,10 @@ struct RenderNode {
     Rgba progressTrack{0.24f, 0.25f, 0.28f, 1.0f};
     std::string iconType = "info";
     float iconSize = 48.0f;
+
+    // canvas：width/height 是绘图坐标系尺寸，实际显示尺寸由样式决定。
+    float canvasWidth = 300.0f;
+    float canvasHeight = 150.0f;
 
     // video
     std::string videoSrc;
@@ -116,6 +127,8 @@ struct RenderNode {
     std::vector<std::unique_ptr<RenderNode>> children;
     RenderNode* parent = nullptr;
     YGNodeRef yoga = nullptr;
+    // setData reconcile 时标记：这个节点的样式/文本变了，Yoga 需要重新应用并重算。
+    bool layoutDirty = false;
 
     float fontSize = 28.0f;
     float lineHeight = 39.2f;
@@ -140,7 +153,7 @@ struct RenderNode {
         return !isText() && !isImage() && tag != "input" && tag != "textarea" &&
                tag != "slider" && tag != "switch" && tag != "checkbox" &&
                tag != "radio" && tag != "progress" && tag != "rich-text" &&
-               tag != "icon" && tag != "video";
+               tag != "icon" && tag != "video" && tag != "canvas";
     }
 };
 

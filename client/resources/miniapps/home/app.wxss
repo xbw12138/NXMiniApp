@@ -1,162 +1,185 @@
-/* Switch 横屏首页：全屏封面 + 左下头条卡 + 右侧资讯栏 + 底部启动 Dock。 */
+/* Switch 横屏首页：App Store 式「今日」布局。
+   左侧今日精选大卡 + 资讯，右侧快捷启动与热门排行。 */
 .page {
   width: 100%;
   height: 100%;
   flex-direction: column;
-  background-color: #0a0c10;
-  color: #eef1f5;
-}
-
-/* 当前头条封面铺满整屏，作为背景层；内容层浮在上面。 */
-.wall {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.scrim {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(6, 9, 13, 0.34);
-}
-
-.stage {
-  flex: 1;
-  flex-direction: row;
-  padding: 14rpx 18rpx 16rpx 18rpx;
-  gap: 14rpx;
-}
-
-.main {
-  flex: 1;
-  flex-direction: column;
+  background-color: #06080d;
+  color: #eef2f7;
+  padding: 16rpx 22rpx 16rpx 22rpx;
 }
 
 .topbar {
   flex-direction: row;
   align-items: center;
-  height: 44rpx;
+  height: 56rpx;
   flex-shrink: 0;
 }
 
-.brand-pill {
+.brand {
   flex-direction: row;
   align-items: center;
-  height: 36rpx;
-  padding: 0 14rpx;
-  border-radius: 18rpx;
-  background-color: rgba(8, 11, 15, 0.72);
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  margin-right: 20rpx;
 }
 
-.brand-dot {
-  width: 8rpx;
-  height: 8rpx;
-  border-radius: 4rpx;
-  background-color: #17c46c;
-  margin-right: 8rpx;
-}
-
-.brand {
-  font-size: 20rpx;
+.brand-name {
+  font-size: 24rpx;
   font-weight: bold;
-  color: #f1f4f8;
+  color: #f6f9fd;
+}
+
+.topnav {
+  flex-direction: row;
+  align-items: center;
+}
+
+.nav {
+  height: 38rpx;
+  padding: 0 18rpx;
+  border-radius: 19rpx;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4rpx;
+}
+
+.nav-on {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.nav-text {
+  font-size: 19rpx;
+  color: #98a4b4;
+}
+
+.nav-text-on {
+  color: #ffffff;
+  font-weight: bold;
 }
 
 .status {
-  font-size: 15rpx;
+  font-size: 16rpx;
   color: #e0ad6a;
+  margin-left: 14rpx;
+}
+
+.date-text {
+  font-size: 17rpx;
+  color: #707c8c;
+  margin-left: 16rpx;
 }
 
 .spacer {
   flex: 1;
 }
 
-.search {
-  width: 220rpx;
-  height: 44rpx;
-  border-radius: 22rpx;
-  background-color: rgba(8, 11, 15, 0.78);
-  border: 1rpx solid rgba(255, 255, 255, 0.14);
-  align-items: center;
-  justify-content: center;
-  margin-left: 10rpx;
+.body {
+  flex: 1;
+  flex-direction: row;
+  gap: 14rpx;
+  margin-top: 12rpx;
 }
 
-.search-text {
-  font-size: 21rpx;
-  color: #b6c0cc;
-}
-
-/* 头条卡：标题压在大封面上，是整屏的视觉落点。 */
-.feature {
+.left {
+  flex: 1.62;
   flex-direction: column;
-  margin-top: 10rpx;
-  padding: 16rpx 18rpx;
-  border-radius: 18rpx;
-  background-color: rgba(9, 12, 17, 0.9);
-  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  gap: 10rpx;
 }
 
-.feature-tag {
+.right {
+  flex: 1;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+/* 精选小程序栏已移除，主图卡吃掉剩余高度。 */
+.hero-wrap {
+  height: 330rpx;
+  flex: 1;
+  border-radius: 24rpx;
+  overflow: hidden;
+  background-color: #12161f;
+  border: 1rpx solid rgba(255, 255, 255, 0.07);
+}
+
+.hero-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 24rpx;
+}
+
+.hero-scrim {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 24rpx;
+  background-color: rgba(3, 6, 11, 0.46);
+}
+
+.hero {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  padding: 22rpx 26rpx;
+}
+
+.hero-head {
   flex-direction: row;
   align-items: center;
 }
 
-.tag-pill {
-  height: 22rpx;
-  padding: 0 8rpx;
-  border-radius: 11rpx;
-  background-color: rgba(23, 196, 108, 0.18);
-  align-items: center;
-  justify-content: center;
-}
-
-.tag-text {
-  font-size: 15rpx;
-  color: #46e39a;
-}
-
-.feature-hint {
-  font-size: 15rpx;
-  color: #626d7a;
-}
-
-.feature-title-box {
-  height: 76rpx;
-  overflow: hidden;
-  margin-top: 8rpx;
-}
-
-.feature-title {
-  font-size: 30rpx;
+.hero-eyebrow {
+  font-size: 17rpx;
   font-weight: bold;
-  line-height: 38rpx;
-  color: #f6f9fc;
+  color: #6fb2ff;
 }
 
-.feature-sum-box {
-  height: 24rpx;
+.hero-title-box {
+  max-height: 100rpx;
+  overflow: hidden;
+}
+
+.hero-title {
+  font-size: 42rpx;
+  font-weight: bold;
+  line-height: 50rpx;
+  color: #ffffff;
+}
+
+.hero-sum-box {
+  height: 26rpx;
   overflow: hidden;
   margin-top: 6rpx;
 }
 
-.feature-sum {
-  font-size: 18rpx;
-  line-height: 24rpx;
-  color: #9aa6b4;
+.hero-sum {
+  font-size: 19rpx;
+  line-height: 26rpx;
+  color: rgba(236, 242, 250, 0.74);
+}
+
+.hero-foot {
+  flex-direction: row;
+  align-items: center;
+  height: 20rpx;
+  margin-top: 12rpx;
+}
+
+.hero-more {
+  font-size: 17rpx;
+  color: #6fb2ff;
 }
 
 .dots {
   flex-direction: row;
   align-items: center;
-  margin-top: 10rpx;
-  height: 8rpx;
 }
 
 .dot {
@@ -164,152 +187,276 @@
   height: 8rpx;
   border-radius: 4rpx;
   background-color: rgba(255, 255, 255, 0.3);
-  margin-right: 5rpx;
+  margin-right: 6rpx;
 }
 
 .dot-on {
-  background-color: #17c46c;
+  width: 18rpx;
+  background-color: #0a84ff;
 }
 
-/* 底部启动 Dock：最近用过的排前面，最后一个是「全部」，固定两排各 4 个。 */
-.dock {
+/* 区块标题。 */
+.section {
   flex-direction: column;
-  margin-top: 10rpx;
-  gap: 8rpx;
-}
-
-.dock-row {
-  flex-direction: row;
-  height: 96rpx;
-  gap: 8rpx;
   flex-shrink: 0;
 }
 
-.tile {
+.section-head {
+  flex-direction: row;
+  align-items: center;
+  height: 30rpx;
+  flex-shrink: 0;
+}
+
+.section-title {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #f0f4f9;
+}
+
+.section-sub {
+  font-size: 16rpx;
+  color: #6d7889;
+  margin-left: 10rpx;
+}
+
+.section-meta {
+  font-size: 16rpx;
+  color: #6d7889;
+}
+
+/* 资讯：横向三张编辑推荐卡，封面铺满、标题压在底部。 */
+.story-row {
+  flex-direction: row;
+  gap: 12rpx;
+  margin-top: 10rpx;
+}
+
+.story {
+  flex: 1;
+  height: 152rpx;
+  border-radius: 18rpx;
+  background-color: #11161e;
+  overflow: hidden;
+}
+
+.story-blank {
+  background-color: rgba(17, 22, 30, 0.35);
+}
+
+.story-img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 18rpx;
+  background-color: #1a2029;
+}
+
+.story-scrim {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 18rpx;
+  background-color: rgba(4, 7, 12, 0.42);
+}
+
+.story-body {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 14rpx;
+  overflow: hidden;
+}
+
+.story-title-box {
+  height: 28rpx;
+  overflow: hidden;
+}
+
+.story-title {
+  font-size: 21rpx;
+  font-weight: bold;
+  line-height: 28rpx;
+  color: #ffffff;
+}
+
+.story-sum-box {
+  height: 22rpx;
+  overflow: hidden;
+  margin-top: 3rpx;
+  margin-bottom: 16rpx;
+}
+
+.story-sum {
+  font-size: 15rpx;
+  line-height: 20rpx;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* 右侧面板。 */
+.panel {
+  flex-direction: column;
+  background-color: #0c1016;
+  border: 1rpx solid rgba(255, 255, 255, 0.05);
+  border-radius: 22rpx;
+  padding: 14rpx;
+  flex-shrink: 0;
+}
+
+.panel-grow {
+  flex: 1;
+}
+
+.panel-head {
+  flex-direction: row;
+  align-items: center;
+  height: 28rpx;
+  flex-shrink: 0;
+}
+
+.panel-title {
+  font-size: 23rpx;
+  font-weight: bold;
+  color: #f0f4f9;
+}
+
+.panel-hint {
+  font-size: 16rpx;
+  color: #66717f;
+}
+
+/* 快捷启动 3×2 网格。 */
+.grid-row {
+  flex-direction: row;
+  margin-top: 10rpx;
+}
+
+.grid-tile {
   flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 6rpx 2rpx;
   border-radius: 12rpx;
-  background-color: rgba(9, 12, 17, 0.88);
-  border: 1rpx solid rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
 
-.tile-blank {
-  background-color: rgba(9, 12, 17, 0.4);
-  border: 1rpx solid rgba(255, 255, 255, 0.03);
+.grid-blank {
+  opacity: 0;
 }
 
-.tile-icon {
-  width: 52rpx;
-  height: 52rpx;
-  border-radius: 12rpx;
-  margin-bottom: 4rpx;
-  background-color: #1d242c;
+.grid-icon {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 15rpx;
+  background-color: #1a2029;
 }
 
-.tile-icon-fallback {
+.grid-icon-empty {
   align-items: center;
   justify-content: center;
 }
 
-.tile-initial {
+.grid-initial {
   font-size: 26rpx;
   font-weight: bold;
-  color: #8b98a8;
+  color: #7d8a9b;
 }
 
-.tile-all {
-  font-size: 32rpx;
-  color: #7b8896;
+.grid-name-box {
+  height: 22rpx;
+  overflow: hidden;
+  margin-top: 6rpx;
 }
 
-.tile-name-box {
+.grid-name {
+  font-size: 17rpx;
+  line-height: 22rpx;
+  color: #aeb9c7;
+  text-align: center;
+}
+
+/* 热门排行。 */
+.rank-list {
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.rank {
+  flex-direction: row;
+  align-items: center;
+  height: 64rpx;
+  border-radius: 12rpx;
+  padding: 0 6rpx;
+}
+
+.rank-no {
+  width: 36rpx;
+  font-size: 21rpx;
+  font-weight: bold;
+  color: #4f5a67;
+  text-align: center;
+}
+
+.rank-no-hot {
+  color: #0a84ff;
+}
+
+.rank-icon {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 11rpx;
+  background-color: #1a2029;
+  margin-left: 8rpx;
+}
+
+.rank-icon-empty {
+  background-color: #1a2029;
+}
+
+.rank-body {
+  flex: 1;
+  flex-direction: column;
+  margin-left: 12rpx;
+  overflow: hidden;
+}
+
+.rank-name-box {
   height: 22rpx;
   overflow: hidden;
 }
 
-.tile-name {
+.rank-name {
   font-size: 19rpx;
-  line-height: 22rpx;
-  color: #c8d1dc;
-  text-align: center;
-}
-
-/* 资讯区：横向三栏，紧跟在头条卡下方。 */
-.news {
-  flex-direction: column;
-  margin-top: 12rpx;
-  padding: 10rpx 14rpx 12rpx 14rpx;
-  border-radius: 16rpx;
-  background-color: rgba(8, 11, 15, 0.9);
-  border: 1rpx solid rgba(255, 255, 255, 0.07);
-}
-
-.feed-head {
-  flex-direction: row;
-  align-items: center;
-  height: 24rpx;
-  flex-shrink: 0;
-}
-
-.feed-title {
-  font-size: 20rpx;
   font-weight: bold;
-  color: #dbe3ec;
-}
-
-.feed-hint {
-  font-size: 15rpx;
-  color: #5f6a77;
-}
-
-.news-row {
-  flex-direction: row;
-  gap: 8rpx;
-  margin-top: 8rpx;
-}
-
-.news-card {
-  flex: 1;
-  flex-direction: column;
-  padding: 10rpx 12rpx;
-  border-radius: 12rpx;
-  background-color: rgba(18, 23, 30, 0.92);
-  border: 1rpx solid rgba(255, 255, 255, 0.05);
-  overflow: hidden;
-}
-
-.news-no {
-  font-size: 16rpx;
-  font-weight: bold;
-  color: #3d4a59;
-}
-
-.news-title-box {
-  height: 44rpx;
-  overflow: hidden;
-  margin-top: 4rpx;
-}
-
-.news-title {
-  font-size: 20rpx;
   line-height: 22rpx;
-  color: #e3eaf2;
+  color: #e4ebf4;
 }
 
-.news-sum-box {
-  height: 20rpx;
+.rank-meta-box {
+  height: 18rpx;
   overflow: hidden;
-  margin-top: 4rpx;
+  margin-top: 2rpx;
 }
 
-.news-sum {
+.rank-meta {
   font-size: 15rpx;
-  line-height: 20rpx;
-  color: #6b7683;
+  line-height: 18rpx;
+  color: #6e7988;
+}
+
+.rank-arrow {
+  font-size: 22rpx;
+  color: #48525f;
 }
 
 .empty {
@@ -575,6 +722,7 @@
   height: 22rpx;
   overflow: hidden;
   margin-top: 3rpx;
+  margin-bottom: 16rpx;
 }
 
 .all-sub {
