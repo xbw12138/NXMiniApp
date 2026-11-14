@@ -91,6 +91,9 @@ struct RenderNode {
     std::string videoSubtitle;       // 外挂字幕地址（可为 SMB 路径）
     // 事件去重游标：避免每帧重复派发 loadedmetadata / seekcomplete。
     bool videoMetadataDispatched = false;
+    // 播完事件是边沿触发：同一段视频只派发一次，否则停止/加载过程中的
+    // 状态回调会反复触发 ended，页面就会连续跳到下一集。
+    bool videoEndedDispatched = false;
     bool videoWaiting = false;
     unsigned videoSeekSerial = 0;
     std::string bindPlay;

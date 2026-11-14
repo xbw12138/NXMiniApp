@@ -133,7 +133,8 @@ private:
 
         // video 播放状态（按稳定路径保存）。
         std::map<std::string, bool> videoPlaying;
-        std::map<std::string, bool> videoStarted;
+        // path -> 已经起播的 src。src 变化（含清空后重建）时需要重新 autoplay。
+        std::map<std::string, std::string> videoStarted;
         std::map<std::string, std::string> videoLoadedSrc;
         std::map<std::string, double> videoTime;
         std::map<std::string, double> videoLastUpdate;
@@ -275,6 +276,9 @@ private:
     bool performReLaunch(const std::string& url);
     void pumpSwiper(PageState& page, RenderNode& node, double now);
     void pumpVideo(PageState& page, RenderNode& node, double now);
+    // 节点被移除/替换时清掉按 path 记录的播放状态，避免同一路径的新 video
+    // 被当成「已经起播过」而卡住不播。
+    void forgetVideoState(const RenderNode& node);
     void toggleVideo(RenderNode* node);
     void startVideo(RenderNode* node, bool forceLoad);
     void stopVideo();

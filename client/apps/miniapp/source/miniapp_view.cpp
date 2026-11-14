@@ -527,6 +527,13 @@ MiniappView::MiniappView(std::string packagePath, std::string appTitleHint)
         return true;
     });
 
+    // + 键：转发给页面（播放器用来展开/收起播放列表），页面不处理时静默吞掉，
+    // 避免落到默认的 CLICK_ERROR 音效。
+    this->registerAction("播放列表", brls::BUTTON_START, [this](brls::View*) {
+        this->dispatchKeyToPage("start");
+        return true;
+    });
+
     // 十字键：先派发页面按键事件，未被消费时才移动焦点。
     // 页面内没有可移动目标时也要吞掉按键：焦点一旦逃出去就会落到容器原生控件
     // （如右上角浮层按钮），摇杆推到底会莫名选中它们。
@@ -574,10 +581,12 @@ MiniappView::MiniappView(std::string packagePath, std::string appTitleHint)
         this->handleDirection(brls::FocusDirection::RIGHT);
         return true;
     };
-    this->registerAction("上", brls::BUTTON_UP, up);
-    this->registerAction("上", brls::BUTTON_NAV_UP, navUp);
-    this->registerAction("下", brls::BUTTON_DOWN, down);
-    this->registerAction("下", brls::BUTTON_NAV_DOWN, navDown);
+    // 上下方向允许按键重复：目录列表/播放列表这类长列表按住摇杆或十字键
+    // 时能连续切换焦点，不必一格一格点。左右保持单步，避免横向滚动误触。
+    this->registerAction("上", brls::BUTTON_UP, up, false, true);
+    this->registerAction("上", brls::BUTTON_NAV_UP, navUp, false, true);
+    this->registerAction("下", brls::BUTTON_DOWN, down, false, true);
+    this->registerAction("下", brls::BUTTON_NAV_DOWN, navDown, false, true);
     this->registerAction("左", brls::BUTTON_LEFT, left);
     this->registerAction("左", brls::BUTTON_NAV_LEFT, navLeft);
     this->registerAction("右", brls::BUTTON_RIGHT, right);
@@ -1140,12 +1149,20 @@ void MiniappView::rebuildTree(PageState& page) {
 bool MiniappView::reconcileTree(RenderNode& dst, RenderNode& src) {
     bool layoutTouched = false;
     const bool wasFocusable = dst.isInteractive() && !dst.disabled;
+    // video 换地址（含先清空再重建）：重置该路径的起播/播完游标，
+    // 新 src 才能重新 autoplay，也不会继承上一集「已播完」的状态。
+    const bool videoRestarted = dst.tag == "video" && dst.videoSrc != src.videoSrc;
     if (!sameLayoutStyle(dst.style, src.style) || dst.text != src.text ||
         dst.fontSize != src.fontSize || dst.lineHeight != src.lineHeight) {
         layoutTouched = true;
         dst.layoutDirty = true;
     }
     applyRenderSnapshot(dst, src);
+    if (videoRestarted) {
+        forgetVideoState(dst);
+        dst.videoMetadataDispatched = false;
+        dst.videoEndedDispatched = false;
+    }
     // 可交互状态变了要重建焦点列表（例如按钮从 disabled 恢复）。
     if (wasFocusable != (dst.isInteractive() && !dst.disabled)) {
         layoutTouched = true;
@@ -1160,6 +1177,7 @@ bool MiniappView::reconcileTree(RenderNode& dst, RenderNode& src) {
             if (reconcileTree(live, next)) layoutTouched = true;
         } else {
             // 类型或位置变了：整棵子树换掉，交给 Yoga 重新创建。
+            forgetVideoState(live);
             freeYogaTree(live);
             dst.children[i] = std::move(src.children[i]);
             dst.children[i]->parent = &dst;
@@ -1169,6 +1187,7 @@ bool MiniappView::reconcileTree(RenderNode& dst, RenderNode& src) {
     }
     if (dst.children.size() > common) {
         for (size_t i = dst.children.size(); i > common; --i) {
+            forgetVideoState(*dst.children[i - 1]);
             freeYogaTree(*dst.children[i - 1]);
         }
         dst.children.resize(common);
@@ -2722,7 +2741,7 @@ void MiniappView::drawVideo(NVGcontext* vg, RenderNode& node, float alpha) {
     bool started = false;
     if (current) {
         auto it = current->videoStarted.find(node.path);
-        started = it != current->videoStarted.end() && it->second;
+        started = it != current->videoStarted.end() && !it->second.empty();
     }
     // 暂停时保留最后一帧（画面由直出层继续绘制），poster 只在从未起播或出错时显示。
     const bool showPoster = node.videoError || (!started && !node.videoPlaying);
@@ -3062,7 +3081,7 @@ void MiniappView::drawVideoSurface() {
     // 暂停时继续直出最后一帧，避免暂停瞬间画面变黑。
     if (!node->videoPlaying) {
         auto it = current->videoStarted.find(node->path);
-        if (it == current->videoStarted.end() || !it->second) return;
+        if (it == current->videoStarted.end() || it->second.empty()) return;
     }
     if (node->style.displayNone || node->absWidth <= 0.0f || node->absHeight <= 0.0f) {
         return;
@@ -3855,6 +3874,17 @@ RenderNode* MiniappView::findNodeById(RenderNode& node, const std::string& id) c
     return nullptr;
 }
 
+void MiniappView::forgetVideoState(const RenderNode& node) {
+    if (!current) return;
+    if (node.tag == "video") {
+        current->videoStarted.erase(node.path);
+        current->videoLoadedSrc.erase(node.path);
+        current->videoPlaying.erase(node.path);
+        current->videoTime.erase(node.path);
+    }
+    for (const auto& child : node.children) forgetVideoState(*child);
+}
+
 void MiniappView::toggleVideo(RenderNode* node) {
     if (!node || !current) return;
 
@@ -3871,7 +3901,7 @@ void MiniappView::toggleVideo(RenderNode* node) {
 
     node->videoError = false;
     node->videoErrorText.clear();
-    current->videoStarted[node->path] = true;
+    current->videoStarted[node->path] = node->videoSrc;
     // false：已有加载过的源就继续播放，避免每次暂停后点播放都从头重新 begin。
     startVideo(node, false);
 
@@ -3922,8 +3952,12 @@ void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
     }
 
     std::string& loaded = current->videoLoadedSrc[node->path];
-    // 播完后再点播放：需要重新 load 才能从 0 开始。
-    if (player.isEnded()) forceLoad = true;
+    // 播完后再点播放：需要重新 load 才能从 0 开始。先把播放器残留的 ended
+    // 状态清掉，否则加载期间的状态回调会把新视频误判成「又播完了」。
+    if (player.isEnded()) {
+        forceLoad = true;
+        player.stop();
+    }
     if (forceLoad || loaded != resolved) {
         std::string extra;
         if (node->videoInitialTime > 0.0) {
@@ -3944,6 +3978,7 @@ void MiniappView::startVideo(RenderNode* node, bool forceLoad) {
         loaded = resolved;
         activeVideoSrc = resolved;
         node->videoMetadataDispatched = false;
+        node->videoEndedDispatched = false;
     }
     if (node->videoPlaybackRate > 0.0) player.setSpeed(node->videoPlaybackRate);
     if (node->videoVolume >= 0) player.setVolume(node->videoVolume);
@@ -4084,6 +4119,12 @@ bool MiniappView::videoControl(const std::string& id, const std::string& action,
         if (node->videoPlaying) toggleVideo(node);
         node->videoTime = 0.0;
         current->videoTime[node->path] = 0.0;
+        node->videoEndedDispatched = false;
+        node->videoMetadataDispatched = false;
+        // 真正停掉播放器：只把节点标成暂停会把 mpv 的 ended 状态留着，
+        // 下一集加载时会被误判成「已播完」而直接跳集。
+        if (activeVideoPath == node->path) stopVideo();
+        current->dirty = true;
     } else if (action == "seek") {
         if (value < 0.0) value = 0.0;
         node->videoTime = value;
@@ -4363,8 +4404,10 @@ void MiniappView::enterVideoFullscreen(const std::string& path) {
         // 起播会同步初始化 MPV，不能在这里做：requestFullScreen 常来自小程序的
         // onReady，而 onReady 是在 draw() 里触发的，同步初始化会把这一帧连同界面
         // 一起卡住。推迟到下一帧 tick（此时界面已经上屏）再起播。
+        auto startedIt = current->videoStarted.find(path);
         if (!node->videoPlaying &&
-            current->videoStarted.find(path) == current->videoStarted.end()) {
+            (startedIt == current->videoStarted.end() ||
+             startedIt->second != node->videoSrc)) {
             pendingVideoStartPath = path;
         }
         dispatchVideoEvent(node, node->bindFullscreenChange, "fullscreenchange");
@@ -4710,17 +4753,19 @@ void MiniappView::pumpVideo(PageState& page, RenderNode& node, double now) {
     (void)now;
     if (node.videoSrc.empty()) return;
 
-    // autoplay：首次布局时触发一次加载，之后状态由 VideoView 回调驱动。
-    if (node.videoAutoplay && page.videoStarted.find(node.path) == page.videoStarted.end()) {
-        page.videoStarted[node.path] = true;
-        node.videoPlaying = true;
-        page.videoPlaying[node.path] = true;
-        node.videoError = false;
-        node.videoErrorText.clear();
-        page.dirty = true;
-        startVideo(&node, true);
-        if (node.videoPlaying) dispatchVideoEvent(&node, node.bindPlay, "play");
-    }
+    // autoplay：src 变化（首次布局、切集、从列表选片）时触发一次加载。
+    // 只按 path 记「已起播」会让同一路径的新 src 卡住不播，所以按 src 比较。
+    if (!node.videoAutoplay) return;
+    auto started = page.videoStarted.find(node.path);
+    if (started != page.videoStarted.end() && started->second == node.videoSrc) return;
+    page.videoStarted[node.path] = node.videoSrc;
+    node.videoPlaying = true;
+    page.videoPlaying[node.path] = true;
+    node.videoError = false;
+    node.videoErrorText.clear();
+    page.dirty = true;
+    startVideo(&node, true);
+    if (node.videoPlaying) dispatchVideoEvent(&node, node.bindPlay, "play");
 }
 
 // 由 nxkit::VideoView（wiliwili 风格播放器）的 MpvEvent 回调驱动，
@@ -4789,7 +4834,13 @@ void MiniappView::onVideoState(const nxkit::VideoState& vs) {
             dirty = true;
         }
         node->videoTime = node->videoDuration;
-        dispatchVideoEvent(node, node->bindEnded, "ended");
+        // 边沿触发：停止/重新加载时的状态回调会带着旧的 ended 反复进来。
+        if (!node->videoEndedDispatched) {
+            node->videoEndedDispatched = true;
+            dispatchVideoEvent(node, node->bindEnded, "ended");
+        }
+    } else if (!vs.ended) {
+        node->videoEndedDispatched = false;
     }
 
     if (vs.error || vs.ended) {

@@ -240,7 +240,9 @@ void VideoView::registerMpvEvent() {
                 case MpvEventEnum::MPV_STOP:
                     state.playing = false;
                     state.paused = false;
-                    state.ended = true;
+                    // stop 不是播完：切集/重置时把 ended 留着会让页面误判成
+                    // 上一段播完而自动跳下一集。
+                    state.ended = false;
                     state.loading = false;
                     state.waiting = false;
                     break;
