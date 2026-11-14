@@ -93,7 +93,8 @@
         <tr><td>GET</td><td><code>/api/v1/miniapps/{id}/download</code></td><td>下载 <code>.nxpkg</code>，始终 ZIP_STORED。</td></tr>
         <tr><td>GET</td><td><code>/api/v1/miniapps/{id}/icon</code></td><td>封面图片，可能 404。</td></tr>
         <tr><td>GET</td><td><code>/api/v1/check-updates</code></td><td>批量版本检查。</td></tr>
-        <tr><td>GET</td><td><code>/api/v1/miniapp-home</code></td><td>首页描述：<code>home</code>（首页小程序）与 <code>banners</code> / <code>news</code> / <code>featured</code> 内容位。</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/home</code></td><td>应用商店聚合页：<code>featured</code> / <code>newest</code> / <code>popular</code> / <code>categories</code>，只包含已上架的 NRO 应用。</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/miniapp-home</code></td><td>小程序首页描述：<code>home</code>（首页小程序）与 <code>banners</code> / <code>news</code> / <code>featured</code> 内容位。</td></tr>
         <tr><td>GET</td><td><code>/api/v1/content/{id}</code></td><td>单条横幅 / 资讯详情，供首页小程序渲染正文。</td></tr>
         <tr><td>POST</td><td><code>/api/v1/content/{id}/open</code></td><td>上报一次资讯曝光（点击）。body 可带 <code>{"device_id":"..."}</code>：<code>views</code>(PV) 自增，同设备首次计入 <code>uv</code>。</td></tr>
         <tr><td>POST</td><td><code>/api/v1/miniapps/{id}/open</code></td><td>上报一次小程序启动。<code>opens</code>(PV) 自增，同设备首次计入 <code>uv</code>。</td></tr>
@@ -105,6 +106,11 @@
       管理后台新增「首页内容」页：配置首页小程序 ID（写入 <code>settings.home.miniapp_id</code>），
       维护横幅与资讯（封面、跳转类型 none / miniapp / news / url），保存后
       <code>/api/v1/miniapp-home</code> 立即生效。
+    </p>
+    <p>
+      两个「首页」接口用途不同：<code>/api/v1/home</code> 是桌面应用商店（updater.nro）的聚合数据；
+      <code>/api/v1/miniapp-home</code> 是 Switch 小程序容器启动时拉取的首页，通常返回一个负责渲染界面的
+      小程序。首页小程序不受「上架」开关影响，未上架也不会从首页下发中排除。
     </p>
 
     <h2>安装与更新</h2>

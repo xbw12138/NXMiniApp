@@ -72,9 +72,10 @@
 | `video` | 部分实现 | `src` / `poster` / `autoplay` / `loop` / `muted` / `controls` / `object-fit`，点击或 A 播放暂停；通过 `nxkit::VideoView`（wiliwili 风格播放器，底层 libmpv）真实播放 |
 | `form` / `label` / `checkbox-group` / `radio-group` | 部分实现 | 容器语义，正常排版；不汇总提交 |
 | `picker` / `picker-view` | 未支持 | 退化为 `view` |
-| `canvas` / `audio` / `map` / `web-view` | 未支持 | 退化为 `view` |
+| `canvas` | 已实现 | retained-mode 2D：`wx.createCanvasContext` + `ctx.draw()` 提交帧，NanoVG 回放；`width` / `height` 为绘图坐标系 |
+| `audio` / `map` / `web-view` | 未支持 | 退化为 `view` |
 | 自定义组件 / `usingComponents` | 未支持 | 组件目录不会被读取 |
-| 事件绑定 | 已实现 | `bindtap`（含鼠标/触摸命中与冒泡）/ `bindchange` / `bindinput` / `bindconfirm` / video 的 `bindplay` 等 |
+| 事件绑定 | 已实现 | `bindtap`（含鼠标/触摸命中与冒泡）/ `bindtouchstart` / `bindtouchmove` / `bindtouchend` / `bindtouchcancel` / `bindlongpress`（500ms，含 `catchtouch*`）/ `bindchange` / `bindinput` / `bindconfirm` / video 的 `bindplay` 等 |
 | `hidden` / `wx:key` | 未支持 | `hidden` 不生效；`wx:key` 无 diff 作用 |
 
 ## 3. wx.* API
@@ -93,9 +94,14 @@
 | 设备 | `wx.getNetworkType`、`wx.getMenuButtonBoundingClientRect` | 已实现 |
 | 剪贴板 | `wx.setClipboardData`、`wx.getClipboardData` | 已实现（进程内） |
 | 媒体 | `wx.createVideoContext` | 已实现（play / pause / stop / seek；依赖 MPV 构建） |
+| 音频 | `wx.createInnerAudioContext` | 已实现（BGM / 音效；每个实例一路纯音频 mpv，支持 loop / volume / seek / play / pause / stop / destroy 与 onPlay / onPause / onStop / onEnded / onCanplay / onError / onSeeked） |
+| 画布 | `wx.createCanvasContext` | 已实现（fillRect / strokeRect / clearRect / 路径 / arc / fillText / drawImage / save / restore / translate / scale / rotate） |
+| 动画 | `requestAnimationFrame`、`cancelAnimationFrame` | 已实现（容器 tick 每帧驱动） |
+| 联机 | `wx.connectSocket` | 已实现（ws / wss，onOpen / onMessage / onError / onClose、send、close；网络线程收包，主线程按帧派发） |
+| 手柄 | `wx.getGamepadState` | 已实现（axes 四项 + 18 个按键 + pressed 列表） |
 | 更新 | `wx.getUpdateManager` | 占位（返回空实现对象） |
 | 工具 | `wx.canIUse`、`wx.nextTick` | 已实现 |
-| 振动 | `wx.vibrateShort` | 占位（宿主无振动接口） |
+| 振动 | `wx.vibrateShort` | 已实现（复用 borealis `InputManager::sendRumble`，约 180ms；桌面静默） |
 
 兼容占位（调用不报错、无实际效果）：
 
@@ -107,8 +113,8 @@
 尚未支持（调用得到 `undefined`）：
 
 `downloadFile`、`uploadFile`、`login`、`getUserInfo`、`requestPayment`、`chooseImage`、
-`previewImage`、`createInnerAudioContext`、`getFileSystemManager`、`scanCode`、`getLocation`、
-`openLocation`、`createCanvasContext`、`createSelectorQuery`、`cloud`、`shareAppMessage`、
+`previewImage`、`getFileSystemManager`、`scanCode`、`getLocation`、
+`openLocation`、`createSelectorQuery`、`cloud`、`shareAppMessage`、
 `subscribeMessage` 等。
 
 ### 用户要求这些 API 时怎么办

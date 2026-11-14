@@ -229,6 +229,18 @@ ${DEVKITPRO:-/opt/devkitpro}/devkitA64/bin/aarch64-none-elf-addr2line \
 
 也可用 `aarch64-none-elf-objdump -d --start-address=... --stop-address=...` 看崩溃指令在做什么。
 
+### 崩溃日志自动上报（1.7.3 起）
+
+容器不可能在崩溃瞬间联网，所以走「下次启动补传」：
+
+- 启动时写 `sdmc:/switch/miniapp/session.running`；正常退出删除它。
+- 下次启动发现标记还在 ⇒ 上次异常结束，把上一轮 `miniapp.log` 连同版本、`applet_type`、致命信号（`session.crash`）转存到 `sdmc:/switch/miniapp/pending/crash-<时间>.log`（最多留 5 份、末尾 1MB）。
+- 后台上传线程在启动 5s 后 POST `https://ecfun.cc/api/v1/device/logs`（`X-Device-Id` + `version` + `file`），成功即删除本地文件，失败留待下次启动（最多重试 3 轮）。
+- 后台「设备日志」页签可直接看/下载，文件名以 `crash-` 开头。
+- 路径：`session.running` / `session.crash` / `pending/` 都在 `sdmc:/switch/miniapp/`。
+
+想手动验证：拔电或强制崩溃一次，重新启动容器，等 10 秒后去后台设备日志页确认。
+
 ## 后台登录与鉴权
 
 **后台页面：密码 + TOTP 两步登录**（只需密码，无用户名），登录后下发 HttpOnly Cookie（`nxkit_admin_session`，7 天），刷新/重开浏览器免登录。

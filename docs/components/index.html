@@ -171,8 +171,22 @@
       <code>src</code> 同样支持 <code>sdmc:/...</code> 本地绝对路径。
       <code>http-headers</code> 会作为 mpv 的 <code>http-header-fields</code> 下发，
       用于需要鉴权的直链（如带 Cookie 的 m3u8 / 视频直链），格式
-      <code>"Cookie: a=b; c=d"</code>。点击画面或按 A 键播放/暂停，
-      底部控制条显示进度、时间与状态。
+      <code>"Cookie: a=b; c=d"</code>。点击画面或按 A 键播放/暂停；
+      底部控制条显示进度、时间、缓冲状态与操作提示。控件可用时的按键：
+    </p>
+    <ul>
+      <li><code>A</code>：播放 / 暂停（暂停时保留当前画面）。</li>
+      <li><code>←</code> / <code>→</code>：快退 / 快进 10 秒，长按连续加速（20/30/40/50 秒）。</li>
+      <li><code>LT</code> / <code>RT</code>：快退 / 快进 1 分钟。</li>
+      <li><code>Y</code>：进入 / 退出全屏（全屏下 B 也能退出）。</li>
+      <li><code>B</code>：返回上一页；全屏时先退出全屏。</li>
+    </ul>
+    <p>
+      只有焦点在播放器上、视频铺满内容区（播放页）或处于全屏时才拦截上述按键；
+      页面 <code>onKeyDown</code> 显式消费的键位（如直播页用方向键换台）优先，不会被抢走。
+      全屏控制层在 3 秒无操作后自动隐藏，任意按键或点击可再次唤出；暂停、缓冲、
+      播放失败时常驻显示。直播流（无时长）不显示进度条，快进/快退会提示“直播流不支持”。
+      播放失败时画面中央会给出可读原因（含 mpv 错误码，如编码不受支持、网络中断）。
     </p>
     <p>
       播放通过 <code>nxkit::VideoView</code>（wiliwili 风格播放器，底层封装 libmpv）：
@@ -200,7 +214,7 @@ ctx.seek(30);
 ctx.setPlaybackRate(1.5);
 ctx.setVolume(80);
 ctx.addSubtitle('https://example.com/demo.zh.srt');
-ctx.requestFullScreen();   // 全屏铺满内容区，按 B 退出
+ctx.requestFullScreen();   // 全屏铺满内容区，按 B 或 Y 退出
 ctx.stop();</code></pre>
     <p>
       事件语义：<code>loadedmetadata</code> 在时长/尺寸就绪时触发一次；
@@ -223,6 +237,55 @@ ctx.stop();</code></pre>
       <strong>限制：</strong>全局只有一个播放器实例，同一时间只播放一个 <code>video</code>；
       视频直出层不参与常规 NanoVG 合成，被 <code>scroll-view</code> 裁剪或完全移出屏幕时暂停绘制
       （全屏模式例外）。全屏下只有 <code>data-overlay</code> 子树、toast 与弹窗会显示在画面上层。
+    </div>
+
+    <h2 id="canvas">canvas</h2>
+    <p>
+      <code>canvas</code> 使用 retained-mode 绘制：脚本通过
+      <code>wx.createCanvasContext(id)</code> 拿到上下文，所有绘制指令先缓存，
+      调用 <code>ctx.draw()</code> 提交为当前帧，由 NanoVG 在页面合成时回放。
+      <code>width</code> / <code>height</code> 是绘图坐标系尺寸（默认 300×150），
+      实际显示尺寸由 WXSS 决定，容器按两者比例缩放。
+      默认样式为 <code>width: 100%</code>、<code>height: 300rpx</code>，背景为黑色。
+    </p>
+<pre><code>&lt;canvas id="game" class="stage" width="420" height="300"
+        bindtouchstart="onTouchStart" bindtouchmove="onTouchMove"
+        bindtouchend="onTouchEnd"&gt;&lt;/canvas&gt;</code></pre>
+<pre><code>const ctx = wx.createCanvasContext('game');
+
+function frame(ts) {
+  ctx.setFillStyle('#0b0e12');
+  ctx.fillRect(0, 0, 420, 300);
+  ctx.setFillStyle('#10dc78');
+  ctx.fillRect(player.x, player.y, 32, 32);
+  ctx.draw();                  // 提交当前帧
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);</code></pre>
+    <div class="warn">
+      <strong>限制：</strong>每帧都是全量回放，没有脏矩形优化；
+      坐标变换只支持 <code>translate</code> / <code>scale</code> / <code>rotate</code>；
+      暂不支持渐变、阴影、<code>measureText</code> 与离屏 canvas。
+    </div>
+
+    <h2 id="touch">触摸与长按事件</h2>
+    <p>
+      任意节点都可以绑定 <code>bindtouchstart</code> / <code>bindtouchmove</code> /
+      <code>bindtouchend</code> / <code>bindtouchcancel</code> 与
+      <code>bindlongpress</code>（按住 500ms 触发）。
+      事件对象包含 <code>touches</code> / <code>changedTouches</code>
+      （每项含 <code>clientX</code> / <code>clientY</code> / <code>pageX</code> / <code>pageY</code>）
+      以及相对当前节点的 <code>x</code> / <code>y</code>，canvas 可直接换算绘图坐标。
+      使用 <code>catchtouchstart</code> 等 <code>catch</code> 前缀会阻止事件继续冒泡。
+    </p>
+<pre><code>onTouchMove(e) {
+  const t = e.touches[0];
+  console.log('相对画布', e.x, e.y, '屏幕', t.clientX, t.clientY);
+}</code></pre>
+    <div class="warn">
+      <strong>说明：</strong>Switch 触摸屏、USB 鼠标与桌面鼠标共用同一套指针事件；
+      摇杆焦点导航与触摸并存，触摸触发后本次不会额外派发 <code>bindtap</code>
+      （长按同理）。
     </div>
 
     <h2 id="form-container">form / label / checkbox-group / radio-group / block</h2>

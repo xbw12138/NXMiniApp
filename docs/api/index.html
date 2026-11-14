@@ -18,7 +18,7 @@
   <main class="content">
     <h1>wx.* API 支持状态</h1>
     <p class="lead">
-      容器向页面注入全局 <code>wx</code> 对象。目前 42 个接口有真实行为，
+      容器向页面注入全局 <code>wx</code> 对象。目前 48 个接口有真实行为，
       18 个接口以空实现提供兼容。所有异步接口只支持回调风格，不返回 Promise。
     </p>
 
@@ -122,12 +122,12 @@ var url = wx.smb.streamUrl({ id: smbId, path: '/movies/a.mp4' });</code></pre>
       <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
       <tbody>
         <tr><td><code>wx.media.scan</code></td><td><code>sourceId</code>、<code>id</code>（SMB 会话 id）、<code>root</code>、<code>maxDepth</code>（可选，默认 4）、<code>maxFiles</code>（可选，默认 2000）</td><td>增量扫描并写盘索引，只收录视频文件；<code>success({ total })</code> 返回索引内文件总数</td></tr>
-        <tr><td><code>wx.media.library</code></td><td><code>sourceId</code>、<code>offset</code>（可选）、<code>limit</code>（可选，0 表示全部）</td><td>读取索引，<code>success({ total, list: [{ name, size, subtitle? }] })</code>；<code>name</code> 为共享内完整路径，<code>subtitle</code> 为同目录同名外挂字幕（.srt/.ass/.ssa/.vtt）的完整路径</td></tr>
+        <tr><td><code>wx.media.library</code></td><td><code>sourceId</code>、<code>root</code>、<code>offset</code>（可选）、<code>limit</code>（可选，0 表示全部）</td><td>读取索引，<code>success({ total, list: [{ name, size, subtitle? }] })</code>；<code>name</code> 为共享内完整路径，<code>subtitle</code> 为同目录同名外挂字幕（.srt/.ass/.ssa/.vtt）的完整路径。索引与扫描根绑定：<code>root</code> 与建索引时不一致会返回空（等重新扫描），避免换了子目录后仍展示旧目录内容</td></tr>
       </tbody>
     </table>
 <pre><code>// 先读库（有索引时立即返回），无索引或需要刷新时再触发增量扫描
 wx.media.library({
-  sourceId: source.id,
+  sourceId: source.id, root: '/',
   success(page) {
     if (page.list.length) render(page.list);
     else wx.media.scan({
@@ -147,16 +147,60 @@ wx.media.library({
         <tr><td><code>wx.showModal</code></td><td><code>title</code>、<code>content</code>、<code>showCancel</code>、<code>confirmText</code>、<code>cancelText</code></td><td>宿主弹窗；<code>success({ confirm, cancel })</code></td></tr>
         <tr><td><code>wx.setNavigationBarTitle</code></td><td><code>title</code></td><td>更新页面标题</td></tr>
         <tr><td><code>wx.nextTick</code></td><td><code>callback</code></td><td>下一帧执行</td></tr>
-        <tr><td><code>wx.vibrateShort</code></td><td><code>type</code></td><td>桌面/主机暂无振动能力，空实现</td></tr>
+        <tr><td><code>wx.vibrateShort</code></td><td><code>type</code>（<code>heavy</code> / <code>medium</code> / <code>light</code>）</td><td>Switch 上复用 borealis 输入层的震动设备（HD 震动，约 180ms 后由主线程清零）；不支持震动的设备静默降级</td></tr>
         <tr><td><code>wx.canIUse</code></td><td><code>schema</code></td><td>按当前已注入能力返回布尔值</td></tr>
       </tbody>
     </table>
+
+    <h2 id="game">游戏能力</h2>
+    <table>
+      <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.getGamepadState()</code></td><td>—</td><td>同步返回 <code>{ connected, axes: [LX, LY, RX, RY], buttons: { a, b, x, y, lb, rb, lt, rt, up, down, left, right, start, back, lsb, rsb }, pressed: [...] }</code>；摇杆取值 <code>-1..1</code>，适合在 <code>requestAnimationFrame</code> 循环里逐帧读取</td></tr>
+        <tr><td><code>requestAnimationFrame(fn)</code></td><td><code>fn(timestamp)</code></td><td>每帧回调一次（容器 tick 驱动），返回可用于 <code>cancelAnimationFrame</code> 的 id；回调里需要再次注册才会持续触发</td></tr>
+        <tr><td><code>cancelAnimationFrame(id)</code></td><td><code>id</code></td><td>取消尚未执行的帧回调</td></tr>
+        <tr><td><code>wx.connectSocket({ url })</code></td><td><code>url</code> 支持 <code>ws://</code> 与 <code>wss://</code></td><td>返回 SocketTask：<code>onOpen(cb)</code> / <code>onMessage(cb)</code> / <code>onError(cb)</code> / <code>onClose(cb)</code> / <code>send({ data })</code> / <code>close()</code>。网络线程收包，回调在主线程按帧派发</td></tr>
+      </tbody>
+    </table>
+<pre><code>// 手柄驱动的方块 + 联机回显
+const socket = wx.connectSocket({ url: 'wss://echo.websocket.events' });
+socket.onMessage(res =&gt; console.log('recv', res.data));
+
+function loop(ts) {
+  const pad = wx.getGamepadState();
+  player.x += pad.axes[0] * 4;
+  if (pad.buttons.a) jump();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);</code></pre>
+
+    <h2 id="canvas">画布</h2>
+    <table>
+      <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.createCanvasContext(id)</code></td><td><code>id</code> 对应 <code>&lt;canvas id="..."&gt;</code></td><td>返回 2D 上下文，支持 <code>setFillStyle</code> / <code>setStrokeStyle</code> / <code>setLineWidth</code> / <code>setFontSize</code> / <code>setTextAlign</code> / <code>setGlobalAlpha</code></td></tr>
+      </tbody>
+    </table>
+    <p>
+      绘制 API：<code>fillRect</code>、<code>strokeRect</code>、<code>clearRect</code>、
+      <code>beginPath</code>、<code>closePath</code>、<code>moveTo</code>、<code>lineTo</code>、
+      <code>rect</code>、<code>arc</code>、<code>fill</code>、<code>stroke</code>、
+      <code>fillText</code>、<code>drawImage</code>、<code>save</code>、<code>restore</code>、
+      <code>translate</code>、<code>scale</code>、<code>rotate</code>。
+      所有指令缓存在 JS 侧，调用 <code>ctx.draw()</code> 后才提交为当前帧，
+      由 NanoVG 按 <code>node.absWidth / canvasWidth</code> 缩放回放。
+    </p>
+<pre><code>const ctx = wx.createCanvasContext('game');
+ctx.setFillStyle('#10dc78');
+ctx.fillRect(x, y, 32, 32);
+ctx.draw();</code></pre>
 
     <h2 id="media">媒体</h2>
     <table>
       <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
       <tbody>
         <tr><td><code>wx.createVideoContext(id)</code></td><td><code>id</code> 对应 <code>&lt;video id="..."&gt;</code></td><td>返回控制器：<code>play()</code> / <code>pause()</code> / <code>stop()</code> / <code>seek(seconds)</code> / <code>requestFullScreen()</code> / <code>exitFullScreen()</code> / <code>setPlaybackRate(rate)</code> / <code>setVolume(0-100)</code> / <code>addSubtitle(url)</code></td></tr>
+        <tr><td><code>wx.createInnerAudioContext()</code></td><td>—</td><td>返回音频实例：属性 <code>src</code>、<code>autoplay</code>、<code>loop</code>、<code>volume(0-1)</code>、<code>startTime</code>、只读 <code>duration</code> / <code>currentTime</code> / <code>paused</code>；方法 <code>play()</code> / <code>pause()</code> / <code>stop()</code> / <code>seek(t)</code> / <code>destroy()</code>；事件 <code>onPlay</code> / <code>onPause</code> / <code>onStop</code> / <code>onEnded</code> / <code>onCanplay</code> / <code>onError</code> / <code>onSeeked</code></td></tr>
       </tbody>
     </table>
 <pre><code>const ctx = wx.createVideoContext('demoVideo');
@@ -166,6 +210,19 @@ ctx.setPlaybackRate(1.5);
 ctx.setVolume(60);
 ctx.requestFullScreen();
 ctx.addSubtitle('https://example.com/movie.zh.srt');</code></pre>
+<pre><code>// 音频：所有实例共用一路纯音频播放器（Switch 的音频渲染器是进程级单例，
+// 多路 mpv 同时出声会崩）。同一时刻只播一个音源；音效播完后会自动恢复
+// 被打断的循环音轨，并回到原来的播放位置。
+const bgm = wx.createInnerAudioContext();
+bgm.src = '/assets/bgm.wav';
+bgm.loop = true;
+bgm.volume = 0.4;
+bgm.play();
+
+const beep = wx.createInnerAudioContext();
+beep.src = '/assets/beep.wav';
+beep.play();                    // 打断 BGM；结束（onEnded）后 BGM 自动接着放
+beep.destroy();                 // 页面卸载时释放</code></pre>
     <p>
       <code>&lt;video&gt;</code> 支持的扩展属性：<code>initial-time</code>（起播秒数）、
       <code>playback-rate</code>（倍速，1 为正常）、<code>volume</code>（0-100）、

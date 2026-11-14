@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test ./...
+      - name: Build
+        run: go build ./...
+
+  admin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server/web/admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/web/admin/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  client:
+    # devkitPro 官方镜像自带 switch-dev 工具链与 cmake。
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        working-directory: client
+        run: |
+          cmake -S . -B build_switch -DPLATFORM_SWITCH=ON \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DPYTHON_EXECUTABLE="$(command -v python3)"
+      - name: Build NRO
+        working-directory: client
+        run: cmake --build build_switch --target miniapp.nro -j 4
