@@ -3,24 +3,76 @@
          http-headers="{{headers}}"
          controls="{{true}}" autoplay="{{true}}"
          object-fit="contain"
+         bindtap="onScreenTap"
          bindplay="onPlay" bindpause="onPause" bindended="onEnded"
-         bindloadedmetadata="onMeta"
+         bindloadedmetadata="onMeta" bindfullscreenchange="onFullscreen"
          bindtimeupdate="onTime" binderror="onError"/>
 
-  <view wx:elif="{{loading}}" class="state-box">
+  <!-- 顶部 HUD：集数与文件大小（标题由容器原生控制层绘制），3 秒无操作自动隐藏 -->
+  <view wx:if="{{videoSrc && hudVisible}}" class="hud-top" data-overlay="true">
+    <view class="spacer"></view>
+    <view wx:if="{{hudSub}}" class="hud-chip">
+      <text class="hud-chip-text">{{hudSub}}</text>
+    </view>
+  </view>
+
+  <!-- 底部 HUD：播放列表入口 + 按键提示 -->
+  <view wx:if="{{videoSrc && hudVisible}}" class="hud-bottom" data-overlay="true">
+    <view wx:if="{{playlist.length > 1}}" class="hud-btn" bindtap="openPanel">
+      <text class="hud-btn-text">播放列表</text>
+    </view>
+    <view class="hud-keys">
+      <view class="hud-key" wx:for="{{keyHints}}" wx:key="key">
+        <view class="hud-key-cap"><text class="hud-key-name">{{item.key}}</text></view>
+        <text class="hud-key-label">{{item.label}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 播放列表：+ 或 ↑ 展开、A 播放、+ / B 关闭，摇杆/十字键上下选择 -->
+  <view wx:if="{{panelOpen}}" class="panel" data-overlay="true">
+    <view class="panel-head">
+      <text class="panel-title">播放列表</text>
+      <view class="spacer"></view>
+      <text class="panel-count">{{currentIndex + 1}} / {{playlist.length}}</text>
+    </view>
+    <scroll-view class="panel-list" scroll-y="{{true}}" style="height: 338rpx;">
+      <view class="ep {{index === currentIndex ? 'ep-on' : ''}}"
+            wx:for="{{playlist}}" wx:key="path"
+            data-index="{{index}}"
+            autofocus="{{index === currentIndex}}"
+            bindtap="onPick">
+        <view class="ep-no-box">
+          <text class="ep-no">{{index + 1}}</text>
+        </view>
+        <view class="ep-main">
+          <view class="ep-name-box">
+            <text class="ep-name">{{item.title}}</text>
+          </view>
+          <text class="ep-size">{{item.sizeText}}</text>
+        </view>
+        <text wx:if="{{index === currentIndex}}" class="ep-tag">播放中</text>
+      </view>
+      <view class="panel-tip">
+        <text class="panel-tip-text">A 播放 · B 关闭</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view wx:if="{{loading}}" class="state-box">
     <view class="state-card">
       <text class="state-title">正在准备播放…</text>
       <text class="state-sub">{{statusText || '正在获取播放地址'}}</text>
     </view>
   </view>
 
-  <view wx:else class="state-box">
+  <view wx:if="{{!loading && !videoSrc}}" class="state-box" data-overlay="true">
     <view class="state-card">
-      <text class="state-title error">无法播放此视频</text>
+      <text class="state-title state-title-error">无法播放此视频</text>
       <text class="state-sub">{{statusText}}</text>
       <text class="state-hint">常见原因：HEVC 10bit / AV1 等编码不受支持，或网络、SMB 数据源断开。</text>
       <view class="actions">
-        <view class="btn primary" bindtap="onRetry">重试</view>
+        <view class="btn btn-primary" bindtap="onRetry">重试</view>
         <view class="btn" bindtap="onBack">返回列表</view>
       </view>
     </view>

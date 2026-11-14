@@ -1,4 +1,6 @@
-/* 播放页 · 全屏沉浸，进度/时间/按键提示由容器原生控制层绘制 */
+/* 播放页 · 全屏沉浸
+   画面铺满内容区，进度条 / 时间 / 标题由容器原生控制层绘制（3 秒无操作自动隐藏）；
+   本页只叠加右上角集数信息和底部按键提示。 */
 .play-page {
   width: 100%;
   height: 100%;
@@ -10,6 +12,206 @@
   height: 100%;
 }
 
+/* 顶部：只占一条窄带，避免挡住画面与原生标题 */
+.hud-top {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 44rpx;
+  padding: 0 26rpx;
+  flex-direction: row;
+  align-items: center;
+}
+
+.hud-chip {
+  height: 34rpx;
+  padding: 0 14rpx;
+  border-radius: 17rpx;
+  background-color: rgba(0, 0, 0, 0.62);
+  align-items: center;
+  justify-content: center;
+}
+
+.hud-chip-text {
+  font-size: 17rpx;
+  color: #dbe2ea;
+}
+
+/* 底部：按键提示，避开原生进度条区域 */
+.hud-bottom {
+  position: absolute;
+  left: 0;
+  bottom: 100rpx;
+  width: 100%;
+  height: 40rpx;
+  padding: 0 30rpx;
+  flex-direction: row;
+  align-items: center;
+}
+
+/* HUD 上的播放列表入口：可聚焦，摇杆选中后按 A 打开 */
+.hud-btn {
+  height: 34rpx;
+  padding: 0 16rpx;
+  margin-right: 18rpx;
+  border-radius: 17rpx;
+  background-color: rgba(255, 255, 255, 0.14);
+  align-items: center;
+  justify-content: center;
+}
+
+.hud-btn-text {
+  font-size: 17rpx;
+  color: #ffffff;
+}
+
+.hud-keys {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.hud-key {
+  flex-direction: row;
+  align-items: center;
+  margin-right: 16rpx;
+  height: 34rpx;
+  padding: 0 10rpx;
+  border-radius: 17rpx;
+  background-color: rgba(0, 0, 0, 0.58);
+}
+
+.hud-key-cap {
+  height: 24rpx;
+  padding: 0 6rpx;
+  border-radius: 5rpx;
+  background-color: #3a4048;
+  align-items: center;
+  justify-content: center;
+}
+
+.hud-key-name {
+  font-size: 15rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.hud-key-label {
+  font-size: 16rpx;
+  color: #b6bfca;
+  margin-left: 6rpx;
+}
+
+/* 播放列表：右侧抽屉 */
+.panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 440rpx;
+  height: 100%;
+  padding: 14rpx 12rpx;
+  background-color: rgba(10, 11, 14, 0.92);
+}
+
+.panel-head {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 4rpx 10rpx 12rpx;
+}
+
+.panel-title {
+  font-size: 22rpx;
+  font-weight: bold;
+  color: #f2f4f7;
+}
+
+.panel-count {
+  font-size: 17rpx;
+  color: #7d8693;
+}
+
+.panel-list {
+  flex: 1;
+}
+
+.ep {
+  width: 100%;
+  height: 52rpx;
+  padding: 0 10rpx;
+  margin-bottom: 6rpx;
+  border-radius: 10rpx;
+  background-color: #16191f;
+  flex-direction: row;
+  align-items: center;
+}
+
+.ep-on {
+  background-color: #2a1416;
+  border: 1rpx solid #ff3b30;
+}
+
+.ep-no-box {
+  width: 34rpx;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ep-no {
+  font-size: 16rpx;
+  color: #7d8693;
+}
+
+.ep-on .ep-no {
+  color: #ff6a5c;
+  font-weight: bold;
+}
+
+.ep-main {
+  flex: 1;
+  flex-direction: column;
+  margin-left: 6rpx;
+}
+
+.ep-name-box {
+  height: 23rpx;
+  overflow: hidden;
+}
+
+.ep-name {
+  font-size: 18rpx;
+  color: #e6e9ee;
+}
+
+.ep-on .ep-name {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.ep-size {
+  font-size: 15rpx;
+  color: #6f7883;
+}
+
+.ep-tag {
+  font-size: 15rpx;
+  color: #ff6a5c;
+  margin-left: 6rpx;
+  flex-shrink: 0;
+}
+
+.panel-tip {
+  padding: 4rpx 10rpx 10rpx;
+}
+
+.panel-tip-text {
+  font-size: 16rpx;
+  color: #5d6672;
+}
+
+/* 加载 / 错误态 */
 .state-box {
   position: absolute;
   left: 0;
@@ -18,6 +220,7 @@
   height: 100%;
   align-items: center;
   justify-content: center;
+  background-color: #0a0b0e;
 }
 
 .state-card {
@@ -35,7 +238,7 @@
   color: #f2f4f7;
 }
 
-.state-title.error {
+.state-title-error {
   color: #ff6b6b;
 }
 
@@ -69,7 +272,7 @@
   background-color: #2a2e35;
 }
 
-.btn.primary {
+.btn-primary {
   color: #0b0d10;
   background-color: #0fdc78;
 }

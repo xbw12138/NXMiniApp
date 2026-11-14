@@ -346,6 +346,123 @@
   margin-top: 2rpx;
 }
 
+/* SMB 目录浏览 */
+.browser {
+  margin-bottom: 18rpx;
+}
+
+.crumb-row {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin: 0 0 14rpx;
+  padding: 10rpx 16rpx;
+  border-radius: 12rpx;
+  background-color: #12151a;
+}
+
+.crumb {
+  flex-direction: row;
+  align-items: center;
+}
+
+.crumb-text {
+  font-size: 21rpx;
+  color: #8b949e;
+}
+
+.crumb-last {
+  color: #eef1f5;
+  font-weight: bold;
+}
+
+.crumb-sep {
+  font-size: 21rpx;
+  color: #4d545d;
+  margin: 0 8rpx;
+}
+
+.crumb-back {
+  margin-left: 16rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 10rpx;
+  background-color: #23262c;
+}
+
+.crumb-back-text {
+  font-size: 20rpx;
+  color: #c3cad4;
+}
+
+.file-list {
+  flex-direction: column;
+}
+
+.file-row {
+  flex-direction: row;
+  align-items: center;
+  padding: 12rpx 16rpx;
+  margin-bottom: 8rpx;
+  border-radius: 12rpx;
+  background-color: #14171c;
+  border: 1rpx solid #1e2229;
+}
+
+.file-icon {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 10rpx;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.file-icon-dir {
+  background-color: #2a2416;
+}
+
+.file-icon-video {
+  background-color: #2a1618;
+}
+
+.file-icon-text {
+  font-size: 18rpx;
+  color: #d8b062;
+}
+
+.file-icon-video .file-icon-text {
+  color: #ff7a6b;
+}
+
+.file-main {
+  flex: 1;
+  flex-direction: column;
+  margin-left: 16rpx;
+}
+
+.file-name-box {
+  height: 30rpx;
+  overflow: hidden;
+}
+
+.file-name {
+  font-size: 22rpx;
+  color: #eef1f5;
+}
+
+.file-sub {
+  font-size: 17rpx;
+  color: #6f7883;
+  margin-top: 2rpx;
+}
+
+.file-action {
+  font-size: 18rpx;
+  color: #8b949e;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}
+
 /* 无数据源引导 */
 .empty-big {
   padding: 90rpx 40rpx;

@@ -1,12 +1,12 @@
 // 每批渲染的影片数量：数据源可能返回上千条，一次性建树会卡住主线程。
 // 5 列海报墙正好 3 行，一屏加「加载更多」按钮，翻页节奏接近 TV 版。
 var PAGE_STEP = 15;
-var SCAN_POLL_MS = 1000;
-var SCAN_POLL_MAX = 240;
 var GRID_COLS = 5;
 // 每次 setData 追加的分组数。setData 会重建整棵渲染树，把后面的分组拆到
 // 后续帧补上，加载过程中摇杆依然能响应（不会像一次性建树那样整段卡住）。
 var BUILD_CHUNK = 2;
+// 单个目录最多渲染的条目数：几百个文件夹一次建树会明显卡顿，超出提示。
+var BROWSE_LIMIT = 120;
 
 // 容器的 Yoga 不支持 flex-wrap，海报墙按行切好再渲染。
 function chunkRows(list, cols) {
@@ -48,11 +48,15 @@ Page({
     sourceCount: 0,
     // 当前展示的分组（可能被数据源筛选过）
     groups: [],
+    // SMB 目录浏览：一个源一个浏览器，与海报墙并列展示
+    browsers: [],
     chips: [],
     activeSource: '',
     recent: [],
     favCount: 0,
     hero: null,
+    // 筛选到 SMB 源时收起 Hero 与「继续观看」，只留目录列表。
+    hideRecent: false,
     loading: false,
     errMsg: ''
   },
@@ -62,7 +66,6 @@ Page({
     this._groups = [];
     this._limits = {};
     this._booted = false;
-    this._scanTimer = null;
     // 递增序号：刷新/卸载时让还在排队的构建任务自动失效，避免旧数据回写。
     this._buildSeq = 0;
     // 先让首帧画出来，再做存储读取 / 网络聚合，避免启动页卡在 loading。
@@ -102,7 +105,6 @@ Page({
 
   onUnload() {
     this._buildSeq++;
-    this.stopScanWatch();
   },
 
   refresh(silent) {
@@ -116,23 +118,35 @@ Page({
       patch.errMsg = '';
     }
     this.setData(patch);
+    this._syncHeaderVisibility(sources);
 
     if (sources.length === 0) {
       this._buildSeq++;
       this._all = [];
       this._groups = [];
-      this.setData({ groups: [], chips: [], hero: null, recent: [], loading: false, errMsg: '' });
+      this.setData({ groups: [], browsers: [], chips: [], hero: null, recent: [], loading: false, errMsg: '' });
+      return;
+    }
+
+    // SMB 不参与海报墙聚合，直接走目录浏览（没有刮削信息，扫整盘也没海报）。
+    var smbSources = sources.filter(function (s) { return s.type === 'smb'; });
+    var browsers = this.syncBrowsers(smbSources);
+    if (smbSources.length === sources.length) {
+      // 只有 SMB 源时不必等聚合，直接收掉 loading。
+      this._all = [];
+      this._groups = [];
+      this.refreshRecent();
+      this.setData({ groups: [], chips: this.composeChips(browsers), loading: false, errMsg: '' });
       return;
     }
 
     var self = this;
     var seq = ++this._buildSeq;
-    app.aggregateMovies().then(function (list) {
+    app.aggregateMovies({ skipSmb: true }).then(function (list) {
       if (seq !== self._buildSeq) return;
       self._all = list || [];
       self.refreshRecent();
       self.buildGroupsChunked(seq);
-      self.watchScan(sources);
     }).catch(function (err) {
       if (seq !== self._buildSeq) return;
       self.setData({
@@ -206,26 +220,18 @@ Page({
   },
 
   finishBuild() {
-    var scanError = this._smbScanError();
-    if (scanError) {
-      // 扫描失败（子目录不存在、SMB 会话断开等）直接把原因显示出来，
-      // 否则空列表会让用户以为视频丢了。
-      this.setData({ errMsg: 'SMB 扫描失败：' + scanError });
-    } else if (!this._groups.length && this._hasSmbSource()) {
-      this.setData({ errMsg: 'SMB 媒体库首次扫描中，完成后会自动刷新…' });
+    if (!this._groups.length && !(this.data.sources || []).length) {
+      this.setData({ errMsg: '' });
+    } else if (!this._groups.length && this._noLibrarySource()) {
+      this.setData({ errMsg: '未找到影片，请检查数据源配置' });
     } else if (this.data.errMsg) {
       this.setData({ errMsg: '' });
     }
   },
 
-  _smbScanError() {
-    var app = getApp();
-    var errors = (app.globalData && app.globalData.smbScanError) || {};
-    var sources = this.data.sources || [];
-    for (var i = 0; i < sources.length; i++) {
-      if (sources[i].type === 'smb' && errors[sources[i].id]) return errors[sources[i].id];
-    }
-    return '';
+  // 只有在既没有 SMB（有目录浏览兜底）又没有影片时才提示。
+  _noLibrarySource() {
+    return !(this.data.sources || []).some(function (s) { return s.type === 'smb'; });
   },
 
   // 只为当前分页内的影片生成卡片，翻页/筛选时不用重算整库。
@@ -238,13 +244,41 @@ Page({
     g.rows = chunkRows(g.movies, GRID_COLS);
   },
 
-  composeChips() {
+  // 筛选到 SMB 源时，头部 Hero 与「继续观看」没有意义（SMB 没有刮削信息），直接收起。
+  _syncHeaderVisibility(sources) {
+    var list = sources || this.data.sources || [];
+    var active = this.data.activeSource;
+    var exists = false;
+    var smbActive = false;
+    for (var i = 0; i < list.length; i++) {
+      if (!active || list[i].id !== active) continue;
+      exists = true;
+      smbActive = list[i].type === 'smb';
+    }
+    var patch = {};
+    // 数据源被删掉后筛选条件会失配，一并回到「全部」。
+    if (active && !exists) patch.activeSource = '';
+    if (smbActive !== !!this.data.hideRecent) patch.hideRecent = smbActive;
+    if (Object.keys(patch).length) this.setData(patch);
+  },
+
+  composeChips(browserList) {
     var counts = {};
     (this._all || []).forEach(function (m) {
       counts[m.sourceId] = (counts[m.sourceId] || 0) + 1;
     });
+    var browsers = browserList || this.data.browsers || [];
     var chips = [{ id: '', label: '全部', count: (this._all || []).length }];
     (this.data.sources || []).forEach(function (s) {
+      if (s.type === 'smb') {
+        // SMB 是目录浏览，计数取当前目录的视频数，没有就显示 -1（模板里隐藏）。
+        var b = null;
+        for (var i = 0; i < browsers.length; i++) {
+          if (browsers[i].sourceId === s.id) { b = browsers[i]; break; }
+        }
+        chips.push({ id: s.id, label: s.name, count: b ? b.videoCount : -1 });
+        return;
+      }
       chips.push({ id: s.id, label: s.name, count: counts[s.id] || 0 });
     });
     return chips;
@@ -262,10 +296,7 @@ Page({
       groups = groups.filter(function (g) { return g.sourceId === id; });
     }
     this.setData({ activeSource: id, groups: groups.map(toView) });
-  },
-
-  _hasSmbSource() {
-    return (this.data.sources || []).some(function (s) { return s.type === 'smb'; });
+    this._syncHeaderVisibility();
   },
 
   onMore(e) {
@@ -286,35 +317,150 @@ Page({
     this.setData({ groups: views });
   },
 
-  // SMB 首次扫描是后台任务：轮询到扫描完成后静默刷新一次，页面会自己出现影片。
-  watchScan(sources) {
-    var smbSources = (sources || []).filter(function (s) { return s.type === 'smb'; });
-    if (!smbSources.length || this._scanTimer) return;
-    var hasSmbMovies = (this._all || []).some(function (m) { return m.sourceType === 'smb'; });
-    if (hasSmbMovies) return;
-
-    var self = this;
+  // ---------- SMB 目录浏览 ----------
+  // 建立/复用浏览器状态。返回首页或改完数据源后保持用户当前所在的目录。
+  syncBrowsers(smbSources) {
+    if (!smbSources.length) {
+      if ((this.data.browsers || []).length) this.setData({ browsers: [], chips: this.composeChips([]) });
+      return [];
+    }
     var app = getApp();
-    var mark = app.globalData.smbUpdatedAt || 0;
-    var ticks = 0;
-    // 扫描结果要等网络遍历，先给出明确提示，避免看起来像“卡住了”。
-    this.setData({ errMsg: '正在扫描 SMB 目录，完成后会自动刷新…' });
-    this._scanTimer = setInterval(function () {
-      ticks++;
-      if ((app.globalData.smbUpdatedAt || 0) > mark) {
-        self.stopScanWatch();
-        self.refresh(true);
-      } else if (ticks >= SCAN_POLL_MAX) {
-        self.stopScanWatch();
-      }
-    }, SCAN_POLL_MS);
+    var prev = {};
+    (this.data.browsers || []).forEach(function (b) { prev[b.sourceId] = b; });
+    var list = smbSources.map(function (s) {
+      var root = app.smbRootPath(s);
+      var old = prev[s.id];
+      var path = (old && old.path) ? old.path : root;
+      return {
+        sourceId: s.id,
+        sourceName: s.name,
+        rootPath: root,
+        path: path,
+        crumbs: this._crumbs(root, path),
+        loading: true,
+        error: '',
+        items: (old && old.path === path) ? old.items : [],
+        videoCount: (old && old.path === path) ? old.videoCount : 0,
+        truncated: false
+      };
+    }, this);
+    this.setData({ browsers: list });
+    var self = this;
+    list.forEach(function (b) {
+      self.loadBrowserDir(b.sourceId, b.path);
+    });
+    return list;
   },
 
-  stopScanWatch() {
-    if (this._scanTimer) {
-      clearInterval(this._scanTimer);
-      this._scanTimer = null;
+  // 面包屑：从扫描根目录到当前目录，根目录用「根目录」占位。
+  _crumbs(root, path) {
+    var crumbs = [{ label: root === '/' ? '共享根目录' : '根目录', path: root }];
+    if (!path || path === root) return crumbs;
+    var rest = path.indexOf(root) === 0 ? path.slice(root.length) : path;
+    var acc = root === '/' ? '' : root;
+    rest.split('/').forEach(function (seg) {
+      if (!seg) return;
+      acc += '/' + seg;
+      crumbs.push({ label: seg, path: acc });
+    });
+    return crumbs;
+  },
+
+  loadBrowserDir(sourceId, path) {
+    var app = getApp();
+    var source = app.getSource(sourceId);
+    if (!source) return;
+    var self = this;
+    this._patchBrowser(sourceId, {
+      path: path,
+      crumbs: this._crumbs(app.smbRootPath(source), path),
+      loading: true,
+      error: ''
+    });
+    app.smbListDir(source, path).then(function (res) {
+      // 用户可能已经切到别的目录，慢回来的旧请求直接丢弃。
+      var cur = self._browserOf(sourceId);
+      if (!cur || cur.path !== path) return;
+      var items = res.items.slice(0, BROWSE_LIMIT).map(function (it) {
+        return { path: it.path, label: it.label, kind: it.kind, sub: it.sub };
+      });
+      self._patchBrowser(sourceId, {
+        path: res.path,
+        items: items,
+        videoCount: res.files.length,
+        truncated: res.items.length > BROWSE_LIMIT,
+        loading: false,
+        error: ''
+      });
+    }).catch(function (err) {
+      var cur = self._browserOf(sourceId);
+      if (!cur || cur.path !== path) return;
+      self._patchBrowser(sourceId, {
+        loading: false,
+        items: [],
+        videoCount: 0,
+        error: (err && err.message) || '读取目录失败'
+      });
+    });
+  },
+
+  _patchBrowser(sourceId, patch) {
+    var list = (this.data.browsers || []).slice();
+    var found = false;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].sourceId !== sourceId) continue;
+      list[i] = Object.assign({}, list[i], patch);
+      found = true;
+      break;
     }
+    if (!found) return;
+    var data = { browsers: list };
+    if (patch.videoCount !== undefined) data.chips = this.composeChips(list);
+    this.setData(data);
+  },
+
+  _browserOf(sourceId) {
+    var list = this.data.browsers || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].sourceId === sourceId) return list[i];
+    }
+    return null;
+  },
+
+  onCrumb(e) {
+    var ds = e.currentTarget.dataset;
+    var b = this._browserOf(ds.source);
+    if (!b || !ds.path) return;
+    if (b.path === ds.path) return;
+    this.loadBrowserDir(ds.source, ds.path);
+  },
+
+  onBrowserUp(e) {
+    var b = this._browserOf(e.currentTarget.dataset.source);
+    if (!b) return;
+    if (b.path === b.rootPath) return;
+    var i = b.path.lastIndexOf('/');
+    this.loadBrowserDir(b.sourceId, i <= 0 ? '/' : b.path.slice(0, i));
+  },
+
+  onBrowserItem(e) {
+    var ds = e.currentTarget.dataset;
+    var b = this._browserOf(ds.source);
+    if (!b || !ds.path) return;
+    if (String(ds.kind) === 'dir') {
+      this.loadBrowserDir(b.sourceId, ds.path);
+      return;
+    }
+    // 目录里的全部视频作为播放列表：播放页可以直接切上/下一个。
+    var videos = (b.items || []).filter(function (it) { return it.kind === 'video'; });
+    getApp().savePlaylist(b.sourceId, b.path, videos);
+    var title = ds.label || '';
+    getApp().addRecent(b.sourceId + ':' + ds.path);
+    wx.navigateTo({
+      url: '/pages/play/play?sourceId=' + encodeURIComponent(b.sourceId) +
+           '&itemId=' + encodeURIComponent(ds.path) +
+           '&title=' + encodeURIComponent(title)
+    });
   },
 
   refreshRecent() {
@@ -332,7 +478,8 @@ Page({
       var idx = id.indexOf(':');
       if (idx < 0) return;
       var source = sourceMap[id.slice(0, idx)];
-      if (!source) return;
+      // SMB 没有刮削信息和海报，用「继续观看」表达不了什么，直接跳过。
+      if (!source || source.type === 'smb') return;
       var itemId = id.slice(idx + 1);
       var list = cache[source.id] || [];
       var movie = null;
@@ -340,9 +487,11 @@ Page({
         if (list[i].itemId === itemId) { movie = list[i]; break; }
       }
       var prog = progressMap[id];
+      // 缓存还没建好时用文件名兜底，避免空标题。
+      var fallback = itemId.split('/').pop().replace(/\.[^.]+$/, '');
       recent.push({
         id: id,
-        title: movie ? movie.title : '最近观看',
+        title: movie ? movie.title : fallback,
         poster: movie ? movie.poster : '',
         sourceName: movie ? movie.sourceName : source.name,
         progressText: prog ? '已看 ' + app.fmtTime(prog.seconds) : '继续观看'
@@ -382,10 +531,10 @@ Page({
     };
   },
 
-  onHeroTap(e) {
-    var id = e.currentTarget.dataset.id;
-    if (!id) return;
-    wx.navigateTo({ url: '/pages/detail/detail?id=' + id });
+  onHeroTap() {
+    var hero = this.data.hero;
+    if (!hero || !hero.id) return;
+    wx.navigateTo({ url: '/pages/detail/detail?id=' + hero.id });
   },
 
   onItem(e) {
@@ -395,6 +544,7 @@ Page({
 
   onRecent(e) {
     var id = e.currentTarget.dataset.id;
+    if (!id) return;
     wx.navigateTo({ url: '/pages/detail/detail?id=' + id });
   },
 

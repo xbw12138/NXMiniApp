@@ -578,9 +578,13 @@ App({
 
   // ---------- 聚合接口 ----------
   // 从所有已启用数据源拉取影片
-  aggregateMovies() {
+  // opts.skipSmb：SMB 没有刮削信息，首页走目录浏览，不需要再扫整盘建海报墙。
+  aggregateMovies(opts) {
     var self = this;
     var sources = self.getEnabledSources();
+    if (opts && opts.skipSmb) {
+      sources = sources.filter(function (s) { return s.type !== 'smb'; });
+    }
     if (sources.length === 0) return Promise.resolve([]);
 
     // 每个数据源错开一帧再读缓存：同步读 300 条 JSON 会阻塞输入，
@@ -1910,6 +1914,85 @@ App({
     });
   },
 
+  // ---------- SMB 目录浏览（首页目录模式） ----------
+  // SMB 拿不到刮削信息（没有元数据源，只有文件名/大小），首页改为
+  // 「目录 + 文件」浏览：进目录、返回上级，点文件直接播放同目录的整批视频。
+  smbDirPath(source, path) {
+    var p = ((path || '').trim() || this.smbRootPath(source));
+    if (p.charAt(0) !== '/') p = '/' + p;
+    return p.replace(/\/+$/, '') || '/';
+  },
+
+  // 列单层目录：返回目录项与视频文件项，不含递归扫描（切目录要秒出）。
+  smbListDir(source, path) {
+    var self = this;
+    var dir = self.smbDirPath(source, path);
+    return self.smbEnsureId(source).then(function (smbId) {
+      return new Promise(function (resolve, reject) {
+        wx.smb.listFiles({
+          id: smbId,
+          path: dir,
+          success: function (list) {
+            var dirs = [];
+            var files = [];
+            (list || []).forEach(function (e) {
+              var full = e.name || '';
+              var label = full.split('/').pop() || full;
+              if (!label || label === '.' || label === '..') return;
+              if (e.isDir) {
+                if (/^(\$RECYCLE\.BIN|System Volume Information|@eaDir|#recycle)$/i.test(label)) return;
+                dirs.push({ path: full, label: label, kind: 'dir', sub: '目录' });
+              } else if (self.isVideo(label)) {
+                files.push({
+                  path: full,
+                  label: label,
+                  kind: 'video',
+                  size: e.size || 0,
+                  sub: self.fmtSize(e.size || 0)
+                });
+              }
+            });
+            function byLabel(a, b) { return a.label < b.label ? -1 : (a.label > b.label ? 1 : 0); }
+            dirs.sort(byLabel);
+            files.sort(byLabel);
+            resolve({ path: dir, dirs: dirs, files: files, items: dirs.concat(files) });
+          },
+          fail: function (err) {
+            var msg = (err && err.errMsg) || '读取目录失败';
+            reject(new Error(String(msg).replace(/^[a-zA-Z.]*:fail\s*/, '')));
+          }
+        });
+      });
+    });
+  },
+
+  // 播放列表按目录落盘：播放页切上/下一个时不用再走一次网络列目录。
+  savePlaylist(sourceId, dir, files) {
+    var items = (files || []).slice(0, 200).map(function (f) {
+      return {
+        path: f.path,
+        title: f.label || f.path.split('/').pop(),
+        sizeText: f.sub || ''
+      };
+    });
+    try {
+      wx.setStorageSync('bmh_playlist', {
+        sourceId: sourceId, dir: dir, time: Date.now(), items: items
+      });
+    } catch (e) {}
+    return items;
+  },
+
+  getPlaylist(sourceId) {
+    try {
+      var p = wx.getStorageSync('bmh_playlist');
+      if (!p || p.sourceId !== sourceId || !p.items || !p.items.length) return null;
+      return p;
+    } catch (e) {
+      return null;
+    }
+  },
+
   // ---------- 本地存储：收藏 & 最近播放 ----------
   getFavorites() {
     try { return wx.getStorageSync('bmh_fav') || []; } catch (e) { return []; }
@@ -1955,5 +2038,13 @@ App({
   getProgress(id) {
     var map = this.getRecentProgress();
     return map[id] || null;
+  },
+
+  clearProgress(id) {
+    if (!id) return;
+    var map = this.getRecentProgress();
+    if (!map[id]) return;
+    delete map[id];
+    try { wx.setStorageSync('bmh_progress', map); } catch (e) {}
   }
 });
