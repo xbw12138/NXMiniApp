@@ -1,0 +1,7 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "backgroundColor": "#05070f",
+    "navigationBarTitleText": "星海突击"
+  }
+}

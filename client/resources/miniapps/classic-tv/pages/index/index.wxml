@@ -1,0 +1,36 @@
+<view class="page">
+  <!-- 换台：画面藏起来（opacity 0），黑底上只显示序号，画面真的出来后再收 -->
+  <view wx:if="{{hud && !panel}}" class="osd" data-overlay="true">
+    <text class="osd-no">{{chno}}</text>
+  </view>
+
+  <!-- 直播画面：铺满整屏，无任何常驻浮层。换台时只改 off 类，不摘节点，避免黑闪 -->
+  <view wx:if="{{!panel}}" class="stage">
+    <video wx:if="{{src}}" id="player" class="screen {{off ? 'screen-off' : ''}}" src="{{src}}"
+           controls="{{false}}" autoplay="{{true}}" object-fit="contain"
+           bindplay="onPlay" bindpause="onPause" bindwaiting="onWaiting"
+           bindtimeupdate="onTimeUpdate" bindprogress="onProgress"
+           bindended="onEnded" binderror="onVideoError"
+           bindfullscreenchange="onFsChange" />
+  </view>
+
+  <!-- 频道表：按 A 才出现，不分组、不搜索，只有央视 + 卫视 -->
+  <view wx:if="{{panel}}" class="panel">
+    <view class="phead">
+      <text class="ptitle">频道</text>
+      <text class="pcount">央视 {{cctvCount}} · 卫视 {{wsCount}}</text>
+      <view class="pback" bindtap="onClose">
+        <text class="pback-text">返回直播</text>
+      </view>
+    </view>
+    <scroll-view class="plist">
+      <view class="prow" wx:for="{{rows}}" wx:for-item="row">
+        <view class="cell {{cell.on ? 'cell-on' : ''}} {{cell.blank ? 'cell-blank' : ''}}"
+              wx:for="{{row}}" wx:for-item="cell" data-id="{{cell.id}}" bindtap="onPick">
+          <text class="cell-no {{cell.on ? 'cell-no-on' : ''}}">{{cell.no}}</text>
+          <text class="cell-name {{cell.on ? 'cell-name-on' : ''}}">{{cell.name}}</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</view>

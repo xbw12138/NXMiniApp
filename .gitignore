@@ -23,3 +23,6 @@ client/resources/nsp_forwarder.nsp
 
 # Trae HTML 分享包产物
 .trae-html-share-packages/
+
+# 小程序打包产物
+*.nxpkg

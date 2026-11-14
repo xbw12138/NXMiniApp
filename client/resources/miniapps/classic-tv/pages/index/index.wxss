@@ -1,0 +1,130 @@
+/* 老式电视：只有画面，换台时短暂显示一个序号 */
+
+/* 只显示数字：无背景、无边框、无其他信息 */
+.osd {
+  position: absolute;
+  top: 24rpx;
+  left: 32rpx;
+  width: 260rpx;
+  height: 92rpx;
+}
+
+.osd-no {
+  font-size: 64rpx;
+  font-weight: bold;
+  color: #ffcc66;
+  line-height: 1;
+}
+
+.stage {
+  flex: 1;
+  background-color: #000000;
+  align-items: center;
+  justify-content: center;
+}
+
+.screen {
+  width: 100%;
+  height: 100%;
+}
+
+/* 换台时把画面藏起来：容器里 opacity 0 会跳过视频直出，露出本页黑底和序号 */
+.screen-off {
+  opacity: 0;
+}
+
+/* 频道表：按 A 才出现，整屏纯黑，4 列网格 */
+.panel {
+  flex: 1;
+  flex-direction: column;
+  padding: 24rpx 24rpx 12rpx 24rpx;
+  background-color: #050505;
+}
+
+.phead {
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 18rpx;
+}
+
+.ptitle {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #f4f4f4;
+  margin-right: 18rpx;
+}
+
+.pcount {
+  flex: 1;
+  font-size: 19rpx;
+  color: #6f6f6f;
+}
+
+.pback {
+  height: 48rpx;
+  padding: 0 20rpx;
+  border-radius: 24rpx;
+  background-color: #171717;
+  border: 2rpx solid #262626;
+  align-items: center;
+  justify-content: center;
+}
+
+.pback-text {
+  font-size: 20rpx;
+  color: #cfcfcf;
+}
+
+.plist {
+  flex: 1;
+  height: 100%;
+}
+
+.prow {
+  width: 100%;
+  flex-direction: row;
+  margin-bottom: 10rpx;
+}
+
+.cell {
+  flex: 1;
+  height: 82rpx;
+  margin-right: 10rpx;
+  padding: 0 14rpx;
+  border-radius: 10rpx;
+  background-color: #101010;
+  border: 2rpx solid #1c1c1c;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.cell-on {
+  background-color: #2a2113;
+  border: 2rpx solid #ffcc66;
+}
+
+.cell-blank {
+  background-color: #050505;
+  border: 2rpx solid #050505;
+}
+
+.cell-no {
+  font-size: 17rpx;
+  color: #6a6a6a;
+}
+
+.cell-name {
+  font-size: 21rpx;
+  color: #e2e2e2;
+  margin-top: 2rpx;
+}
+
+.cell-no-on {
+  color: #d9a94f;
+}
+
+.cell-name-on {
+  color: #ffd98a;
+  font-weight: bold;
+}

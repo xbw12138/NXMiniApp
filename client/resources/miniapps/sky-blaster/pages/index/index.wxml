@@ -1,0 +1,3 @@
+<canvas id="game" class="screen" width="1280" height="720"
+        bindtouchstart="onTouchStart" bindtouchmove="onTouchMove" bindtouchend="onTouchEnd"
+        bindtouchcancel="onTouchEnd" />
