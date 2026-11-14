@@ -36,10 +36,16 @@ func resolveDeviceLog(root, id string) (string, bool) {
 func listDeviceLogs(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		root := e.Cfg.DeviceLogsDir()
+		// 设备 ID 与文件名都支持筛选，便于从大量真机日志里定位。
+		deviceFilter := strings.TrimSpace(c.Query("device"))
+		nameFilter := strings.ToLower(strings.TrimSpace(c.Query("q")))
 		items := make([]deviceLogFile, 0)
 		devices, _ := os.ReadDir(root)
 		for _, device := range devices {
 			if !device.IsDir() {
+				continue
+			}
+			if deviceFilter != "" && device.Name() != deviceFilter {
 				continue
 			}
 			files, err := os.ReadDir(filepath.Join(root, device.Name()))
@@ -48,6 +54,9 @@ func listDeviceLogs(e *api.Env) gin.HandlerFunc {
 			}
 			for _, f := range files {
 				if f.IsDir() {
+					continue
+				}
+				if nameFilter != "" && !strings.Contains(strings.ToLower(f.Name()), nameFilter) {
 					continue
 				}
 				info, err := f.Info()

@@ -47,7 +47,9 @@ func ContentJSON(item *models.ContentItem) gin.H {
 }
 
 // HomeMiniAppJSON 返回首页小程序描述；未配置或包缺失时返回 nil。
-func (e *Env) homeMiniAppJSON(device string) any {
+// 首页由后台「首页配置」单独指定，不参与商店上架状态：管理员常把首页设为未上架
+// 以免它出现在商店列表里，若这里复用 visibleTo 会导致首页版本永远无法下发。
+func (e *Env) homeMiniAppJSON() any {
 	id := e.SettingValue(SettingHomeMiniApp)
 	if id == "" {
 		return nil
@@ -56,13 +58,10 @@ func (e *Env) homeMiniAppJSON(device string) any {
 	if err := e.DB.Where("id = ?", id).Take(&m).Error; err != nil {
 		return nil
 	}
-	if !visibleTo(&m, device) {
-		return nil
-	}
 	if !DirExists(miniappstore.PackageDir(e.Cfg.DataDir, m.ID)) {
 		return nil
 	}
-	return MiniAppJSONDevice(e.Cfg, &m, device)
+	return MiniAppJSONDevice(e.Cfg, &m, "")
 }
 
 // MiniAppHome 是容器启动时调用的首页接口：返回首页小程序描述与内容 feed。
@@ -92,7 +91,7 @@ func (e *Env) MiniAppHome(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"home":       e.homeMiniAppJSON(device),
+		"home":       e.homeMiniAppJSON(),
 		"banners":    contentListJSON(banners),
 		"news":       contentListJSON(news),
 		"featured":   featured,

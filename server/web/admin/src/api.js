@@ -1,17 +1,5 @@
-const TOKEN_KEY = 'nxkit_admin_token'
-
-export function getToken() {
-  return localStorage.getItem(TOKEN_KEY) || ''
-}
-
-export function setToken(token) {
-  if (token) {
-    localStorage.setItem(TOKEN_KEY, token)
-  } else {
-    localStorage.removeItem(TOKEN_KEY)
-  }
-}
-
+// 后台默认使用 HttpOnly Cookie 会话（登录接口下发），前端不保存管理令牌。
+// 脚本/CI 仍可直接用 Authorization: Bearer <token> 调用管理接口。
 export class ApiError extends Error {
   constructor(message, status) {
     super(message)
@@ -21,10 +9,6 @@ export class ApiError extends Error {
 
 async function request(path, { method = 'GET', json, form } = {}) {
   const headers = {}
-  const token = getToken()
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
   let body
   if (json !== undefined) {
     headers['Content-Type'] = 'application/json'
@@ -35,7 +19,6 @@ async function request(path, { method = 'GET', json, form } = {}) {
   const resp = await fetch(path, { method, headers, body, credentials: 'same-origin' })
   const isLogin = path.startsWith('/api/v1/admin/login')
   if (resp.status === 401 && !isLogin) {
-    setToken('')
     window.dispatchEvent(new CustomEvent('nxkit-unauthorized'))
   }
   let data = null

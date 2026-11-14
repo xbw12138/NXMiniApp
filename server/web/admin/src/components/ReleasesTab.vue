@@ -43,6 +43,7 @@
             </td>
             <td class="actions-cell">
               <a class="btn small" :href="r.download_url">下载</a>
+              <button class="btn small" @click="editNotes(r)">改说明</button>
               <button class="btn small danger" @click="removeRelease(r)">删除</button>
             </td>
           </tr>
@@ -124,6 +125,17 @@ async function toggleFlag(r, value) {
     applyItem(updated)
   } catch (err) {
     error.value = err.message || '操作失败'
+  }
+}
+
+async function editNotes(r) {
+  const notes = window.prompt(`编辑 v${r.version} 的更新说明`, r.notes || '')
+  if (notes === null) return
+  try {
+    const updated = await api.patch(`/api/v1/admin/releases/${r.id}/flags`, { notes })
+    applyItem(updated)
+  } catch (err) {
+    error.value = err.message || '保存失败'
   }
 }
 

@@ -67,6 +67,8 @@ func (e *Env) appListJSON(query *gorm.DB) []gin.H {
 	return items
 }
 
+// Home 是桌面应用商店（updater.nro）的聚合页，只包含已上架的 NRO 应用。
+// 不要与 /api/v1/miniapp-home 混淆：后者是 Switch 小程序容器的首页描述。
 func (e *Env) Home(c *gin.Context) {
 	featured := e.appListJSON(e.DB.Where("published = ? AND featured = ?", true, true).
 		Order("downloads DESC, updated_at DESC").Limit(12))

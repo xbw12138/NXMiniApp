@@ -41,12 +41,9 @@ func uploadRelease(e *api.Env) gin.HandlerFunc {
 			api.Abort(c, http.StatusBadRequest, "版本号过长")
 			return
 		}
-		var count int64
-		e.DB.Model(&models.ContainerRelease{}).Where("version = ?", version).Count(&count)
-		if count > 0 {
-			api.Abort(c, http.StatusConflict, "该版本号已存在")
-			return
-		}
+		// 同版本号视为重传/修补：覆盖文件与说明，避免 CI 重跑因 409 中断。
+		var existing models.ContainerRelease
+		hasExisting := e.DB.Where("version = ?", version).Take(&existing).Error == nil
 		file, err := c.FormFile("file")
 		if err != nil {
 			api.Abort(c, http.StatusBadRequest, "请选择 .nro 文件")
@@ -92,6 +89,21 @@ func uploadRelease(e *api.Env) gin.HandlerFunc {
 			"published":  published,
 			"created_at": api.NowMS(),
 		}
+		if hasExisting {
+			// 重传同版本：保留原创建时间与下载量，只替换包和说明。
+			delete(record, "created_at")
+			delete(record, "downloads")
+			if err := e.DB.Model(&models.ContainerRelease{}).Where("id = ?", existing.ID).
+				Updates(record).Error; err != nil {
+				_ = os.Remove(dst)
+				api.Abort(c, http.StatusInternalServerError, "版本更新失败")
+				return
+			}
+			_ = os.Remove(filepath.Join(e.Cfg.ReleasesDir(), existing.Filename))
+			e.DB.Where("id = ?", existing.ID).Take(&existing)
+			c.JSON(http.StatusOK, api.ReleaseJSON(&existing))
+			return
+		}
 		if err := e.DB.Model(&models.ContainerRelease{}).Create(record).Error; err != nil {
 			_ = os.Remove(dst)
 			api.Abort(c, http.StatusInternalServerError, "版本创建失败")
@@ -106,9 +118,10 @@ func uploadRelease(e *api.Env) gin.HandlerFunc {
 func patchReleaseFlags(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body struct {
-			Published *bool `json:"published"`
+			Published *bool   `json:"published"`
+			Notes     *string `json:"notes"`
 		}
-		if err := c.ShouldBindJSON(&body); err != nil || body.Published == nil {
+		if err := c.ShouldBindJSON(&body); err != nil || (body.Published == nil && body.Notes == nil) {
 			api.Abort(c, http.StatusBadRequest, "请求体无效")
 			return
 		}
@@ -122,9 +135,15 @@ func patchReleaseFlags(e *api.Env) gin.HandlerFunc {
 			api.Abort(c, http.StatusNotFound, "版本不存在")
 			return
 		}
-		e.DB.Model(&models.ContainerRelease{}).Where("id = ?", r.ID).
-			Update("published", *body.Published)
-		r.Published = *body.Published
+		updates := map[string]any{}
+		if body.Published != nil {
+			updates["published"] = *body.Published
+		}
+		if body.Notes != nil {
+			updates["notes"] = strings.TrimSpace(*body.Notes)
+		}
+		e.DB.Model(&models.ContainerRelease{}).Where("id = ?", r.ID).Updates(updates)
+		e.DB.Where("id = ?", r.ID).Take(&r)
 		c.JSON(http.StatusOK, api.ReleaseJSON(&r))
 	}
 }

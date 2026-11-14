@@ -3,6 +3,8 @@ package api
 import (
 	"io/fs"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -12,12 +14,47 @@ import (
 	"nxminiapp/server/web"
 )
 
+// defaultCORSOrigins 是允许跨域访问公开 API 的来源。
+// 门户/文档/后台与 API 同源，正常情况下不会触发 CORS；
+// 这里只放行官网域名和本地开发端口，避免任意站点携带用户 Cookie 调用接口。
+var defaultCORSOrigins = []string{
+	"https://ecfun.cc",
+	"http://ecfun.cc",
+	"https://www.ecfun.cc",
+	"http://localhost:5173",
+	"http://127.0.0.1:5173",
+	"http://localhost:4173",
+}
+
 func corsMiddleware() gin.HandlerFunc {
+	allowed := map[string]bool{}
+	for _, origin := range defaultCORSOrigins {
+		allowed[origin] = true
+	}
+	// NXKIT_CORS_ORIGINS 用逗号追加额外来源（部署时可覆盖）。
+	if raw := strings.TrimSpace(os.Getenv("NXKIT_CORS_ORIGINS")); raw != "" {
+		for _, origin := range strings.Split(raw, ",") {
+			if origin = strings.TrimSpace(origin); origin != "" {
+				allowed[origin] = true
+			}
+		}
+	}
+
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "*")
-		c.Header("Access-Control-Allow-Headers", "*")
+		origin := c.GetHeader("Origin")
+		if origin != "" && allowed[origin] {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Credentials", "true")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Device-Id")
+			c.Header("Access-Control-Max-Age", "600")
+			c.Header("Vary", "Origin")
+		}
 		if c.Request.Method == http.MethodOptions {
+			if origin != "" && !allowed[origin] {
+				c.AbortWithStatus(http.StatusForbidden)
+				return
+			}
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}

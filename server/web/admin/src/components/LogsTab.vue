@@ -2,6 +2,11 @@
   <section>
     <div class="toolbar">
       <span class="muted">共 {{ items.length }} 份设备日志</span>
+      <input
+        v-model="keyword"
+        class="filter-input"
+        placeholder="按设备或文件名筛选"
+      />
       <span class="spacer"></span>
       <button class="btn" @click="reload">刷新</button>
     </div>
@@ -19,7 +24,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in items" :key="item.id">
+          <tr v-for="item in filteredItems" :key="item.id">
             <td class="mono">{{ item.device }}</td>
             <td class="mono">{{ item.name }}</td>
             <td>{{ formatBytes(item.size) }}</td>
@@ -30,8 +35,8 @@
               <button class="btn small danger" @click="remove(item)">删除</button>
             </td>
           </tr>
-          <tr v-if="!items.length">
-            <td colspan="5" class="empty">暂无日志，先在 Switch 上用 Updater 上传一次</td>
+          <tr v-if="!filteredItems.length">
+            <td colspan="5" class="empty">暂无匹配日志，先在 Switch 上用 Updater 上传一次</td>
           </tr>
         </tbody>
       </table>
@@ -51,7 +56,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api, formatBytes, formatTime } from '../api'
 
 const items = ref([])
@@ -59,6 +64,16 @@ const error = ref('')
 const viewing = ref(null)
 const content = ref('')
 const truncated = ref(false)
+const keyword = ref('')
+
+const filteredItems = computed(() => {
+  const needle = keyword.value.trim().toLowerCase()
+  if (!needle) return items.value
+  return items.value.filter(
+    (item) =>
+      item.device.toLowerCase().includes(needle) || item.name.toLowerCase().includes(needle)
+  )
+})
 
 function downloadUrl(item) {
   return `/api/v1/admin/device-logs/content?id=${encodeURIComponent(item.id)}`
@@ -101,6 +116,10 @@ onMounted(reload)
 </script>
 
 <style scoped>
+.filter-input {
+  width: 240px;
+  margin-left: 12px;
+}
 .log-modal {
   width: min(900px, 92vw);
 }

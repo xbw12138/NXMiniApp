@@ -33,7 +33,7 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { api, getToken, setToken } from './api'
+import { api } from './api'
 import LoginView from './components/LoginView.vue'
 import OverviewTab from './components/OverviewTab.vue'
 import AppsTab from './components/AppsTab.vue'
@@ -97,7 +97,6 @@ async function logout() {
   } catch (err) {
     // 会话可能已过期，忽略
   }
-  setToken('')
   stopNotifications()
   authed.value = false
 }
@@ -109,12 +108,7 @@ function onUnauthorized() {
 
 onMounted(async () => {
   window.addEventListener('nxkit-unauthorized', onUnauthorized)
-  // 优先用 Cookie 会话（无需再次输入）；旧 token 仍兼容。
-  if (getToken()) {
-    authed.value = true
-    startNotifications()
-    return
-  }
+  // 只用 Cookie 会话判断登录态，不再读写 localStorage 里的管理令牌。
   try {
     await api.get('/api/v1/admin/session')
     authed.value = true
