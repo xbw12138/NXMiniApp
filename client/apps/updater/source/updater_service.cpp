@@ -373,6 +373,48 @@ long long installedNroSize() {
     return size;
 }
 
+std::string installedContainerVersion() {
+    if (installedNroSize() <= 0) return "";
+    std::ifstream file("sdmc:/switch/miniapp.nro.version", std::ios::binary);
+    std::string value;
+    if (!file || !std::getline(file, value)) return "";
+    while (!value.empty() && (value.back() == '\r' || value.back() == '\n' || value.back() == ' ')) {
+        value.pop_back();
+    }
+    return value;
+}
+
+bool versionNewer(const std::string& latest, const std::string& current) {
+    auto parse = [](const std::string& value) {
+        std::vector<int> parts;
+        int number = 0;
+        bool hasDigit = false;
+        for (char c : value) {
+            if (c >= '0' && c <= '9') {
+                number = number * 10 + (c - '0');
+                hasDigit = true;
+            } else if (c == '.') {
+                parts.push_back(hasDigit ? number : 0);
+                number = 0;
+                hasDigit = false;
+            } else {
+                break;
+            }
+        }
+        parts.push_back(hasDigit ? number : 0);
+        return parts;
+    };
+    const std::vector<int> a = parse(latest);
+    const std::vector<int> b = parse(current);
+    const std::size_t count = std::max(a.size(), b.size());
+    for (std::size_t i = 0; i < count; i++) {
+        const int x = i < a.size() ? a[i] : 0;
+        const int y = i < b.size() ? b[i] : 0;
+        if (x != y) return x > y;
+    }
+    return false;
+}
+
 bool downloadSingle(const std::string& url, const std::string& out,
                     const std::function<void(long long, long long)>& progress,
                     std::string& error) {

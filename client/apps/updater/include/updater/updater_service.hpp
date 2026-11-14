@@ -28,6 +28,12 @@ bool fetchReleases(std::vector<ReleaseInfo>& out, std::string& error);
 /// 当前 SD 卡上 miniapp.nro 的大小（不存在时为 -1）。
 long long installedNroSize();
 
+/// 已安装容器的版本号（来自 sdmc:/switch/miniapp.nro.version）；无法确定时返回空串。
+std::string installedContainerVersion();
+
+/// 语义化版本比较：latest 是否比 current 新。逐段比较数字，缺省段按 0 处理。
+bool versionNewer(const std::string& latest, const std::string& current);
+
 /// 下载并替换 /switch/miniapp.nro。progress(downloaded, total) 可能为高频回调。
 bool installRelease(const ReleaseInfo& release,
                     const std::function<void(long long, long long)>& progress,

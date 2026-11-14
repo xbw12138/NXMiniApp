@@ -199,6 +199,19 @@ void setupWorkingDirectory() {
 void setupWorkingDirectory() {}
 #endif
 
+#ifdef __SWITCH__
+// 把当前容器版本落盘，供 updater.nro 按版本号判断是否可更新；
+// 手动用 USB 推送、没经过 updater 安装的容器也能被正确识别。
+void recordInstalledVersion() {
+#ifdef NXMINIAPP_VERSION
+    std::ofstream file("sdmc:/switch/miniapp.nro.version", std::ios::binary | std::ios::trunc);
+    if (file) file << NXMINIAPP_VERSION;
+#endif
+}
+#else
+void recordInstalledVersion() {}
+#endif
+
 
 std::string serverUrl() {
     const char* env = std::getenv("NXKIT_MINIAPP_SERVER");
@@ -241,6 +254,7 @@ int main(int, char**) {
 #else
     miniapp::crash::beginSession("unknown");
 #endif
+    recordInstalledVersion();
     std::atexit([] { miniapp::crash::endSession(); });
     setupFileLog();
     brls::Logger::info("miniapp: starting");

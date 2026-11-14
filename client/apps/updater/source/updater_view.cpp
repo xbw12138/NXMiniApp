@@ -197,8 +197,8 @@ brls::Box* makePill(const std::string& text, bool active,
 }
 
 // 容器版本行。
-brls::Box* makeReleaseRow(const ReleaseInfo& release, bool installed,
-                          std::function<bool(brls::View*)> onClick) {
+brls::Box* makeReleaseRow(const ReleaseInfo& release, const std::string& badge,
+                          NVGcolor badgeColor, std::function<bool(brls::View*)> onClick) {
     auto* row = new brls::Box(brls::Axis::ROW);
     row->setFocusable(true);
     row->setCornerRadius(12);
@@ -226,12 +226,12 @@ brls::Box* makeReleaseRow(const ReleaseInfo& release, bool installed,
     spacer->setGrow(1);
     row->addView(spacer);
 
-    if (installed) {
-        auto* badge = new brls::Label();
-        badge->setText("当前版本");
-        badge->setFontSize(14);
-        badge->setTextColor(kAccent);
-        row->addView(badge);
+    if (!badge.empty()) {
+        auto* label = new brls::Label();
+        label->setText(badge);
+        label->setFontSize(14);
+        label->setTextColor(badgeColor);
+        row->addView(label);
     }
 
     row->registerClickAction(std::move(onClick));
@@ -661,6 +661,12 @@ bool UpdaterView::appInstalled(const StoreAppInfo& app) const {
 }
 
 bool UpdaterView::appOutdated(const StoreAppInfo& app) const {
+    // 优先按版本号：只有本地版本明确且商店带版本号时才做语义化比较，
+    // 否则（USB 手动推送、旧包没有 .version）退回文件体积比较。
+    const std::string installed = installedNroVersion(app.id);
+    if (!installed.empty() && installed != "-" && !app.version.empty()) {
+        return versionNewer(app.version, installed);
+    }
     if (app.size <= 0) return false;
     const long long local = installedNroSize(app.id);
     return local > 0 && local != app.size;
@@ -787,7 +793,8 @@ void UpdaterView::loadReleases() {
         std::string error;
         const bool ok = fetchReleases(items, error);
         const long long localSize = installedNroSize();
-        postIfAlive(alive, [this, ok, items, error, localSize] {
+        const std::string localVersion = installedContainerVersion();
+        postIfAlive(alive, [this, ok, items, error, localSize, localVersion] {
             this->setBusy(false);
             if (!ok) {
                 this->releases.clear();
@@ -797,7 +804,11 @@ void UpdaterView::loadReleases() {
             }
             this->releases = items;
             this->installedSize = localSize;
-            this->setStatus("共 " + std::to_string(items.size()) + " 个已发布版本，选中后按 A 安装");
+            this->installedVersion = localVersion;
+            std::string status = "共 " + std::to_string(items.size()) + " 个已发布版本";
+            if (!localVersion.empty()) status += "，当前 v" + localVersion;
+            status += "，选中后按 A 安装";
+            this->setStatus(status);
             this->rebuildReleases();
         });
     });
@@ -809,8 +820,26 @@ void UpdaterView::rebuildReleases() {
 
     brls::View* firstRow = nullptr;
     for (const auto& release : this->releases) {
-        const bool installed = this->installedSize > 0 && release.size == this->installedSize;
-        auto* row = makeReleaseRow(release, installed, [this, release](brls::View*) {
+        std::string badge;
+        NVGcolor badgeColor = kAccent;
+        if (!this->installedVersion.empty() && !release.version.empty()) {
+            // 已知本地版本时按语义化版本判断，避免同体积的不同版本被漏掉。
+            if (release.version == this->installedVersion) {
+                badge = "当前版本";
+            } else if (versionNewer(release.version, this->installedVersion)) {
+                badge = "可更新";
+                badgeColor = kBlue;
+            }
+        } else {
+            const bool current = this->installedSize > 0 && release.size == this->installedSize;
+            if (current) {
+                badge = "当前版本";
+            } else if (this->installedSize > 0 && release.size > 0) {
+                badge = "可更新";
+                badgeColor = kBlue;
+            }
+        }
+        auto* row = makeReleaseRow(release, badge, badgeColor, [this, release](brls::View*) {
             this->install(release);
             return true;
         });
@@ -852,6 +881,7 @@ void UpdaterView::install(const ReleaseInfo& release) {
                 return;
             }
             this->installedSize = release.size;
+            this->installedVersion = release.version;
             this->setStatus("已安装 v" + release.version + "，回 Homebrew 菜单重新启动容器即可生效");
             this->rebuildReleases();
         });

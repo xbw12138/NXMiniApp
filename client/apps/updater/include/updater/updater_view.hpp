@@ -29,7 +29,7 @@ private:
     void showDetail(const StoreAppInfo& app);
     /// 是否已安装到 /switch。
     bool appInstalled(const StoreAppInfo& app) const;
-    /// 已安装文件与商店最新版本体积不一致时视为可更新。
+    /// 优先按版本号判断（本地版本未知时退回文件体积比较）。
     bool appOutdated(const StoreAppInfo& app) const;
     void openStoreActions(const StoreAppInfo& app);
     void installApp(const StoreAppInfo& app);
@@ -46,6 +46,7 @@ private:
     std::string category = "全部";
     std::string selectedId;
     long long installedSize = -1;
+    std::string installedVersion;
     bool busy = false;
 
     brls::Label* statusLabel = nullptr;
