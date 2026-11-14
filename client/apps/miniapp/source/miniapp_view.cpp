@@ -475,6 +475,8 @@ MiniappView::MiniappView(std::string packagePath, std::string appTitleHint)
     uiThreadId = std::this_thread::get_id();
     // 脚本、定时器和异步回调都在这条线程跑；创建失败时任务会退化成同步执行。
     logicThread = std::make_unique<LogicThread>();
+    // 六轴 / 红外 / NFC 等硬件服务只能在 UI 线程访问，统一由这个桥接层管理。
+    hardware = std::make_unique<HardwareManager>();
     rpxScale = kRpxBaseWidth / kRpxDesignWidth;
 #ifdef __SWITCH__
     // Switch 平台必须用 zh-Hans 作为主字体：borealis 已为它挂好
@@ -670,6 +672,7 @@ MiniappView::~MiniappView() {
     nxkit::VideoView::instance().setStateCallback(nullptr);
     brls::Logger::info("MiniappView: stopVideo");
     stopVideo();
+    if (hardware) hardware->shutdown();
     brls::Logger::info("MiniappView: cleanup {} page(s)", pages.size());
     for (auto& page : pages) {
         cleanupPage(*page);
@@ -692,6 +695,8 @@ MiniappView::~MiniappView() {
         for (const auto& entry : imageTextures) {
             if (entry.second > 0) nvgDeleteImage(vg, entry.second);
         }
+        if (irTextureId > 0) nvgDeleteImage(vg, irTextureId);
+        irTextureId = -1;
     }
     imageTextures.clear();
     imageTextureUse.clear();
@@ -2629,6 +2634,21 @@ void MiniappView::drawCanvas(NVGcontext* vg, RenderNode& node, float alpha) {
                     pathOpen = false;
                 }
             }
+        } else if (kind == "drawIrCamera") {
+            const int texture = updateIrTexture(vg);
+            if (texture > 0) {
+                nvgBeginPath(vg);
+                nvgRect(vg, static_cast<float>(n[0]), static_cast<float>(n[1]),
+                        static_cast<float>(n[2]), static_cast<float>(n[3]));
+                NVGpaint paint = nvgImagePattern(vg, static_cast<float>(n[0]),
+                                                 static_cast<float>(n[1]),
+                                                 static_cast<float>(n[2]),
+                                                 static_cast<float>(n[3]), 0.0f, texture,
+                                                 alpha);
+                nvgFillPaint(vg, paint);
+                nvgFill(vg);
+                pathOpen = false;
+            }
         } else if (kind == "save") {
             nvgSave(vg);
         } else if (kind == "restore") {
@@ -2642,6 +2662,31 @@ void MiniappView::drawCanvas(NVGcontext* vg, RenderNode& node, float alpha) {
         }
     }
     nvgRestore(vg);
+}
+
+int MiniappView::updateIrTexture(NVGcontext* vg) {
+    if (!vg || !hardware) return 0;
+    std::vector<std::uint8_t> rgba;
+    int width = 0;
+    int height = 0;
+    std::uint64_t version = 0;
+    if (!hardware->copyIrImage(rgba, width, height, version) || width <= 0 || height <= 0 ||
+        rgba.size() < static_cast<size_t>(width) * static_cast<size_t>(height) * 4) {
+        if (irTextureId > 0) {
+            nvgDeleteImage(vg, irTextureId);
+            irTextureId = -1;
+            irTextureVersion = 0;
+        }
+        return 0;
+    }
+    if (irTextureId <= 0) {
+        irTextureId = nvgCreateImageRGBA(vg, width, height, 0, rgba.data());
+        irTextureVersion = version;
+    } else if (version != irTextureVersion) {
+        nvgUpdateImage(vg, irTextureId, rgba.data());
+        irTextureVersion = version;
+    }
+    return irTextureId > 0 ? irTextureId : 0;
 }
 
 void MiniappView::drawInput(NVGcontext* vg, RenderNode& node, float alpha) {
@@ -4349,6 +4394,110 @@ JsonValue MiniappView::gamepadState() {
     return collectGamepadState();
 }
 
+JsonValue MiniappView::motionState() {
+    return hardware ? hardware->motionState() : JsonValue::object();
+}
+
+void MiniappView::rumblePlay(double lowFreq, double highFreq, double lowAmp, double highAmp,
+                             double durationMs) {
+    if (!isUiThread()) {
+        postUi([this, lowFreq, highFreq, lowAmp, highAmp, durationMs]() {
+            if (hardware) hardware->rumble(lowFreq, highFreq, lowAmp, highAmp, durationMs);
+        });
+        return;
+    }
+    if (hardware) hardware->rumble(lowFreq, highFreq, lowAmp, highAmp, durationMs);
+}
+
+void MiniappView::rumbleStop() {
+    if (!isUiThread()) {
+        postUi([this]() {
+            if (hardware) hardware->rumbleStop();
+        });
+        return;
+    }
+    if (hardware) hardware->rumbleStop();
+}
+
+bool MiniappView::irStart(const std::string& mode) {
+    // 红外服务只能在 UI 线程启动：脚本线程投递后立即返回，真实结果由 irState() 轮询。
+    if (!isUiThread()) {
+        postUi([this, mode]() {
+            if (hardware) hardware->irStart(mode);
+        });
+        return true;
+    }
+    return hardware && hardware->irStart(mode);
+}
+
+void MiniappView::irStop() {
+    if (!isUiThread()) {
+        postUi([this]() {
+            if (hardware) hardware->irStop();
+        });
+        return;
+    }
+    if (hardware) hardware->irStop();
+}
+
+JsonValue MiniappView::irState() {
+    return hardware ? hardware->irState() : JsonValue::object();
+}
+
+bool MiniappView::nfcStart() {
+    if (!isUiThread()) {
+        postUi([this]() {
+            if (hardware) hardware->nfcStart();
+        });
+        return true;
+    }
+    return hardware && hardware->nfcStart();
+}
+
+void MiniappView::nfcStop() {
+    if (!isUiThread()) {
+        postUi([this]() {
+            if (hardware) hardware->nfcStop();
+        });
+        return;
+    }
+    if (hardware) hardware->nfcStop();
+}
+
+bool MiniappView::nfcMount() {
+    if (!isUiThread()) {
+        postUi([this]() {
+            if (hardware) hardware->nfcMount();
+        });
+        return true;
+    }
+    return hardware && hardware->nfcMount();
+}
+
+bool MiniappView::nfcUnmount() {
+    if (!isUiThread()) {
+        postUi([this]() {
+            if (hardware) hardware->nfcUnmount();
+        });
+        return true;
+    }
+    return hardware && hardware->nfcUnmount();
+}
+
+JsonValue MiniappView::nfcState() {
+    return hardware ? hardware->nfcState() : JsonValue::object();
+}
+
+bool MiniappView::nfcWriteAppArea(const std::string& hexData) {
+    if (!isUiThread()) {
+        postUi([this, hexData]() {
+            if (hardware) hardware->nfcWriteAppArea(hexData);
+        });
+        return true;
+    }
+    return hardware && hardware->nfcWriteAppArea(hexData);
+}
+
 JsonValue MiniappView::collectGamepadState() {
     JsonValue state = JsonValue::object();
     auto* platform = brls::Application::getPlatform();
@@ -4637,6 +4786,11 @@ void MiniappView::tick(double now) {
     // 帧号用于纹理 LRU：本帧绘制过的纹理不允许淘汰，其余按最久未用回收。
     ++imageFrame;
     trimImageTextures();
+    // 硬件采样必须每帧推进；红外预览运行时持续重绘以刷新画面。
+    if (hardware) {
+        hardware->tick(now);
+        if (hardware->irRunning()) this->invalidate();
+    }
     if (this->pendingLoad) {
         if (this->loadDelayFrames > 0) {
             // 留一帧给加载页，确保窗口里先出现反馈再开始读包。

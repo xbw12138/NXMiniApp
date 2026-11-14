@@ -1,0 +1,54 @@
+<view class="page">
+  <view class="head">
+    <text class="title">硬件实验室</text>
+    <text class="sub">六轴 · HD 震动 · 红外 · NFC / Amiibo</text>
+  </view>
+
+  <view class="row">
+    <view class="card">
+      <text class="card-title">六轴体感</text>
+      <canvas id="level" class="level" width="260" height="150"></canvas>
+      <text class="line">{{motionText}}</text>
+      <text class="line dim">{{gyroText}}</text>
+      <text class="line dim">{{accelText}}</text>
+      <text class="line dim">{{angleText}}</text>
+    </view>
+
+    <view class="card wide">
+      <view class="card-head">
+        <text class="card-title">红外相机</text>
+        <text class="line dim">{{irStatus}}</text>
+      </view>
+      <canvas id="ir" class="ir" width="320" height="240"></canvas>
+      <view class="actions">
+        <view class="btn" bindtap="onIrImage">红外画面</view>
+        <view class="btn" bindtap="onIrGesture">手势检测</view>
+        <view class="btn ghost" bindtap="onIrStop">停止</view>
+      </view>
+      <text class="line">{{gestureText}}</text>
+    </view>
+
+    <view class="card">
+      <text class="card-title">HD 震动</text>
+      <view class="actions">
+        <view class="btn" bindtap="onRumbleLow">低频</view>
+        <view class="btn" bindtap="onRumbleHigh">高频</view>
+      </view>
+      <view class="actions">
+        <view class="btn" bindtap="onRumbleMorse">摩尔斯 SOS</view>
+        <view class="btn ghost" bindtap="onRumbleStop">停止</view>
+      </view>
+      <text class="line dim">{{rumbleText}}</text>
+
+      <text class="card-title section">NFC / Amiibo</text>
+      <view class="actions">
+        <view class="btn" bindtap="onNfcStart">开始扫描</view>
+        <view class="btn" bindtap="onNfcWrite">写回存档</view>
+        <view class="btn ghost" bindtap="onNfcStop">停止</view>
+      </view>
+      <text class="line">{{nfcStatus}}</text>
+      <text class="line dim">{{nfcInfo}}</text>
+      <text class="line dim">{{nfcArea}}</text>
+    </view>
+  </view>
+</view>

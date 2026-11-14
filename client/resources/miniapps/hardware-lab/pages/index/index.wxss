@@ -1,0 +1,105 @@
+.page {
+  padding: 14px 18px 20px;
+  background-color: #0f1117;
+}
+
+.head {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #eef1f5;
+  margin-right: 12px;
+}
+
+.sub {
+  font-size: 12px;
+  color: #7b8794;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.card {
+  width: 300px;
+  margin-right: 14px;
+  padding: 12px 14px;
+  background-color: #171c23;
+  border-radius: 10px;
+}
+
+.card.wide {
+  width: 356px;
+}
+
+.card-head {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #eef1f5;
+  margin-bottom: 8px;
+}
+
+.card-title.section {
+  margin-top: 14px;
+}
+
+.level {
+  width: 260px;
+  height: 150px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background-color: #0b0e12;
+}
+
+.ir {
+  width: 320px;
+  height: 240px;
+  border-radius: 8px;
+  background-color: #000000;
+}
+
+.line {
+  font-size: 12px;
+  color: #c6cfda;
+  margin-top: 4px;
+}
+
+.line.dim {
+  color: #7b8794;
+}
+
+.actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.btn {
+  padding: 7px 14px;
+  margin: 0 8px 8px 0;
+  font-size: 12px;
+  color: #0f1117;
+  background-color: #4cc38a;
+  border-radius: 7px;
+}
+
+.btn.ghost {
+  color: #c6cfda;
+  background-color: #232a33;
+}

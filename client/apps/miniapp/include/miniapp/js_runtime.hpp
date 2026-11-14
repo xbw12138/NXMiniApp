@@ -122,6 +122,27 @@ public:
     /// wx.getGamepadState：当前手柄按键与摇杆轴。
     virtual JsonValue gamepadState() { return JsonValue::object(); }
 
+    /// wx.nx.motion.state：六轴体感快照（陀螺仪 / 加速度 / 角度）。
+    virtual JsonValue motionState() { return JsonValue::object(); }
+
+    /// wx.nx.rumble.play / stop：自定义 HD 震动波形。
+    virtual void rumblePlay(double /*lowFreq*/, double /*highFreq*/, double /*lowAmp*/,
+                            double /*highAmp*/, double /*durationMs*/) {}
+    virtual void rumbleStop() {}
+
+    /// wx.nx.ir.*：红外相机画面（image）或聚类手部检测（gesture）。
+    virtual bool irStart(const std::string& /*mode*/) { return false; }
+    virtual void irStop() {}
+    virtual JsonValue irState() { return JsonValue::object(); }
+
+    /// wx.nx.nfc.*：NFC / Amiibo 检测与读取。
+    virtual bool nfcStart() { return false; }
+    virtual void nfcStop() {}
+    virtual bool nfcMount() { return false; }
+    virtual bool nfcUnmount() { return false; }
+    virtual bool nfcWriteAppArea(const std::string& /*hexData*/) { return false; }
+    virtual JsonValue nfcState() { return JsonValue::object(); }
+
     /// wx.createInnerAudioContext 背后的宿主能力。
     virtual bool audioControl(const std::string& id, const std::string& action,
                               double value = 0.0,

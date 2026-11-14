@@ -7,6 +7,7 @@
 #include <borealis.hpp>
 
 #include <atomic>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -17,6 +18,7 @@
 
 #include <nxkit/media/video_view.hpp>
 
+#include "miniapp/hardware.hpp"
 #include "miniapp/js_runtime.hpp"
 #include "miniapp/json.hpp"
 #include "miniapp/logic_thread.hpp"
@@ -90,6 +92,19 @@ public:
     bool videoControl(const std::string& id, const std::string& action,
                       double value, const std::string& text = std::string()) override;
     JsonValue gamepadState() override;
+    JsonValue motionState() override;
+    void rumblePlay(double lowFreq, double highFreq, double lowAmp, double highAmp,
+                    double durationMs) override;
+    void rumbleStop() override;
+    bool irStart(const std::string& mode) override;
+    void irStop() override;
+    JsonValue irState() override;
+    bool nfcStart() override;
+    void nfcStop() override;
+    bool nfcMount() override;
+    bool nfcUnmount() override;
+    bool nfcWriteAppArea(const std::string& hexData) override;
+    JsonValue nfcState() override;
     bool audioControl(const std::string& id, const std::string& action,
                       double value = 0.0,
                       const std::string& text = std::string()) override;
@@ -443,6 +458,13 @@ private:
 
     // wx.vibrateShort 的停止时刻（steadyMilliseconds），0 表示当前没有震动。
     double vibrationStopAt = 0.0;
+
+    // wx.nx 硬件桥接：只在 UI 线程 tick，脚本线程读快照。
+    std::unique_ptr<HardwareManager> hardware;
+    int irTextureId = -1;
+    std::uint64_t irTextureVersion = 0;
+    // 把最新红外帧上传为 NanoVG 纹理，返回纹理 id（0 表示暂无画面）。
+    int updateIrTexture(NVGcontext* vg);
 
     void onVideoState(const nxkit::VideoState& vs);
 };

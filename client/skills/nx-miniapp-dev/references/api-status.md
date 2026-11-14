@@ -95,10 +95,14 @@
 | 剪贴板 | `wx.setClipboardData`、`wx.getClipboardData` | 已实现（进程内） |
 | 媒体 | `wx.createVideoContext` | 已实现（play / pause / stop / seek；依赖 MPV 构建） |
 | 音频 | `wx.createInnerAudioContext` | 已实现（BGM / 音效；每个实例一路纯音频 mpv，支持 loop / volume / seek / play / pause / stop / destroy 与 onPlay / onPause / onStop / onEnded / onCanplay / onError / onSeeked） |
-| 画布 | `wx.createCanvasContext` | 已实现（fillRect / strokeRect / clearRect / 路径 / arc / fillText / drawImage / save / restore / translate / scale / rotate） |
+| 画布 | `wx.createCanvasContext` | 已实现（fillRect / strokeRect / clearRect / 路径 / arc / fillText / drawImage / drawIrCamera / save / restore / translate / scale / rotate） |
 | 动画 | `requestAnimationFrame`、`cancelAnimationFrame` | 已实现（容器 tick 每帧驱动） |
 | 联机 | `wx.connectSocket` | 已实现（ws / wss，onOpen / onMessage / onError / onClose、send、close；网络线程收包，主线程按帧派发） |
 | 手柄 | `wx.getGamepadState` | 已实现（axes 四项 + 18 个按键 + pressed 列表） |
+| 硬件 · 体感 | `wx.nx.motion.state` | 已实现（六轴：gyro rad/s、accel g、angle rad，可多控制器） |
+| 硬件 · 震动 | `wx.nx.rumble.play` / `wx.nx.rumble.stop` | 已实现（自定义低/高频 40~1250Hz、振幅 0..1、时长；可拼波形） |
+| 硬件 · 红外 | `wx.nx.ir.start` / `stop` / `state` | 已实现（`image` 320×240 画面 + `gesture` 聚类包围盒；需拆下右 Joy-Con，真机待联调） |
+| 硬件 · NFC | `wx.nx.nfc.start` / `stop` / `mount` / `unmount` / `writeAppArea` / `state` | 已实现（Amiibo 读取 UID、角色/系列/编号、应用存档区 hex；`writeAppArea` 可回写存档区；真机待联调） |
 | 更新 | `wx.getUpdateManager` | 占位（返回空实现对象） |
 | 工具 | `wx.canIUse`、`wx.nextTick` | 已实现 |
 | 振动 | `wx.vibrateShort` | 已实现（复用 borealis `InputManager::sendRumble`，约 180ms；桌面静默） |

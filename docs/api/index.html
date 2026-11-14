@@ -18,7 +18,7 @@
   <main class="content">
     <h1>wx.* API 支持状态</h1>
     <p class="lead">
-      容器向页面注入全局 <code>wx</code> 对象。目前 48 个接口有真实行为，
+      容器向页面注入全局 <code>wx</code> 对象。目前 60 个接口有真实行为，
       18 个接口以空实现提供兼容。所有异步接口只支持回调风格，不返回 Promise。
     </p>
 
@@ -174,6 +174,65 @@ function loop(ts) {
 }
 requestAnimationFrame(loop);</code></pre>
 
+    <h2 id="hardware">Switch 硬件（wx.nx）</h2>
+    <p>
+      <code>wx.nx</code> 只在本机型容器上有意义：桌面构建返回
+      <code>{ supported: false }</code>，用于页面布局预览。红外、NFC 都依赖右 Joy-Con，
+      红外相机需要把右 Joy-Con 从本体上拆下来才能取到画面（插在本体上镜头被遮挡）。
+    </p>
+    <table>
+      <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>wx.nx.motion.state()</code></td><td>—</td><td>同步返回六轴快照：<code>{ supported, connected, count, gyro: [x,y,z] (rad/s), accel: [x,y,z] (g), angle: [roll,pitch,yaw] (rad), controllers: [...] }</code>。适合在 <code>requestAnimationFrame</code> 或 <code>setInterval</code> 里轮询</td></tr>
+        <tr><td><code>wx.nx.rumble.play({ lowFreq, highFreq, lowAmp, highAmp, duration })</code></td><td>频率 Hz（40~1250），振幅 <code>0..1</code>，时长 ms（<code>0</code> 表示持续）</td><td>直接写 HD 震动设备的频率/振幅，可自行拼出波形；配合 <code>setTimeout</code> 可播摩尔斯电码</td></tr>
+        <tr><td><code>wx.nx.rumble.stop()</code></td><td>—</td><td>立即停止震动</td></tr>
+        <tr><td><code>wx.nx.ir.start(mode)</code></td><td><code>image</code> / <code>gesture</code></td><td><code>image</code>：红外画面（320×240）；<code>gesture</code>：红外聚类，返回手部/物体包围盒与像素密度。两种模式互斥</td></tr>
+        <tr><td><code>wx.nx.ir.stop()</code></td><td>—</td><td>停止红外处理并关闭服务</td></tr>
+        <tr><td><code>wx.nx.ir.state()</code></td><td>—</td><td><code>{ supported, running, mode, width, height, frameVersion, ambientNoise, blobs, hand }</code>；<code>hand</code> 为最大聚类块 <code>{ x, y, width, height, pixels, density, centroidX, centroidY }</code>，可用密度与像素数区分张手/握拳</td></tr>
+        <tr><td><code>ctx.drawIrCamera(x, y, w, h)</code></td><td>—</td><td>画布方法：把最新红外帧画进当前 <code>ctx</code>，帧率约 30fps；调用后再 <code>ctx.draw()</code></td></tr>
+        <tr><td><code>wx.nx.nfc.start()</code></td><td>—</td><td>启动 Amiibo/NFC 检测（<code>nfp:user</code>），结果通过 <code>state()</code> 轮询</td></tr>
+        <tr><td><code>wx.nx.nfc.state()</code></td><td>—</td><td><code>{ supported, running, state: idle|searching|found|mounted|unavailable|error, uid, tagType, protocol, mounted, amiibo }</code></td></tr>
+        <tr><td><code>wx.nx.nfc.mount()</code></td><td>—</td><td>挂载当前卡片并读取 Amiibo 信息与应用存档区。<code>amiibo</code> 含 <code>name</code>、<code>characterId</code>、<code>seriesId</code>、<code>numberingId</code>、<code>appAreaSize</code>、<code>appArea</code>（hex）等字段</td></tr>
+        <tr><td><code>wx.nx.nfc.unmount()</code></td><td>—</td><td>卸载当前卡片，继续检测下一张</td></tr>
+        <tr><td><code>wx.nx.nfc.writeAppArea(hex)</code></td><td>hex 字符串</td><td>把备份数据写回已挂载 Amiibo 的应用存档区并 <code>nfpFlush</code>；只写存档区，不改写角色/UID 等身份数据。写入前请确认卡片可写</td></tr>
+        <tr><td><code>wx.nx.nfc.stop()</code></td><td>—</td><td>停止检测并退出 NFC 服务</td></tr>
+      </tbody>
+    </table>
+<pre><code>// 体感 + 红外画面
+function loop() {
+  const m = wx.nx.motion.state();
+  tilt = m.angle[0];
+
+  const ir = wx.nx.ir.state();
+  if (ir.running &amp;&amp; ir.mode === 'image') {
+    ctx.drawIrCamera(0, 0, 320, 240);
+    ctx.draw();
+  }
+  requestAnimationFrame(loop);
+}
+wx.nx.ir.start('image');
+requestAnimationFrame(loop);
+
+// 红外手势：根据最大聚类块的密度做张手/握拳判定
+wx.nx.ir.start('gesture');
+setInterval(() =&gt; {
+  const hand = wx.nx.ir.state().hand;
+  if (hand &amp;&amp; hand.pixels &gt; 900) {
+    console.log(hand.density &gt; 0.62 ? '握拳' : '张开');
+  }
+}, 100);
+
+// NFC：发现卡片后挂载读取
+wx.nx.nfc.start();
+setInterval(() =&gt; {
+  const nfc = wx.nx.nfc.state();
+  if (nfc.state === 'found') wx.nx.nfc.mount();
+  if (nfc.state === 'mounted') console.log(nfc.amiibo.name, nfc.amiibo.appAreaSize);
+}, 200);
+
+// 自定义 HD 震动波形
+wx.nx.rumble.play({ lowFreq: 90, highFreq: 90, lowAmp: 1, highAmp: 0.2, duration: 700 });</code></pre>
+
     <h2 id="canvas">画布</h2>
     <table>
       <thead><tr><th>接口</th><th>参数</th><th>说明</th></tr></thead>
@@ -185,7 +244,7 @@ requestAnimationFrame(loop);</code></pre>
       绘制 API：<code>fillRect</code>、<code>strokeRect</code>、<code>clearRect</code>、
       <code>beginPath</code>、<code>closePath</code>、<code>moveTo</code>、<code>lineTo</code>、
       <code>rect</code>、<code>arc</code>、<code>fill</code>、<code>stroke</code>、
-      <code>fillText</code>、<code>drawImage</code>、<code>save</code>、<code>restore</code>、
+      <code>fillText</code>、<code>drawImage</code>、<code>drawIrCamera</code>、<code>save</code>、<code>restore</code>、
       <code>translate</code>、<code>scale</code>、<code>rotate</code>。
       所有指令缓存在 JS 侧，调用 <code>ctx.draw()</code> 后才提交为当前帧，
       由 NanoVG 按 <code>node.absWidth / canvasWidth</code> 缩放回放。

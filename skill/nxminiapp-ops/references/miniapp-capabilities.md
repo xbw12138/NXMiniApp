@@ -27,11 +27,12 @@
 
 未知标签静默降级为 `view`；没有自定义组件。
 
-## wx.* API（40+ 个真实可用）
+## wx.* API（50+ 个真实可用）
 
 - **网络**：`wx.request`（GET/POST/PUT/DELETE，回调 `success({data,statusCode,header})`）、`wx.getNetworkType`、`wx.connectSocket`（ws/wss，onOpen/onMessage/onError/onClose、send/close）
 - **界面**：`wx.showToast`、`wx.showLoading` / `wx.hideLoading`、`wx.showModal`（`success({confirm,cancel})`）、`wx.setNavigationBarTitle`、`wx.nextTick`、`wx.vibrateShort`（Switch HD 震动）、`wx.canIUse`
-- **游戏**：`wx.getGamepadState()`（axes + buttons + pressed）、`requestAnimationFrame` / `cancelAnimationFrame`、`wx.createCanvasContext(id)`（fillRect/strokeRect/clearRect/路径/arc/fillText/drawImage/变换）
+- **游戏**：`wx.getGamepadState()`（axes + buttons + pressed）、`requestAnimationFrame` / `cancelAnimationFrame`、`wx.createCanvasContext(id)`（fillRect/strokeRect/clearRect/路径/arc/fillText/drawImage/drawIrCamera/变换）
+- **硬件（wx.nx，仅 Switch）**：`wx.nx.motion.state()`（六轴）、`wx.nx.rumble.play/stop`（自定义 HD 震动波形）、`wx.nx.ir.start/stop/state`（红外画面或聚类手势）、`wx.nx.nfc.start/stop/mount/unmount/writeAppArea/state`（Amiibo 读取与存档区回写）
 - **视频**：`wx.createVideoContext(id)` → `play()` / `pause()` / `stop()` / `seek(seconds)`
 - **音频**：`wx.createInnerAudioContext()` → `src` / `autoplay` / `loop` / `volume` / `startTime`、`play()` / `pause()` / `stop()` / `seek()` / `destroy()`、`onPlay` / `onEnded` / `onError` 等
 - **存储**（按小程序隔离）：`wx.setStorageSync` / `getStorageSync` / `removeStorageSync` / `clearStorageSync` 及异步回调版；`wx.getStorageInfoSync()` → `{keys,currentSize,limitSize}`
@@ -41,6 +42,20 @@
 - **容器扩展**：`wx.miniapp.deviceId()`（容器持久化设备标识，用于服务端 PV/UV 统计）
 
 另有 18 个兼容占位接口：调用不报错也没有行为，便于从微信迁移。用 `wx.canIUse('schema')` 探测。
+
+### 硬件能力（wx.nx）
+
+`wx.nx` 是 Switch 专用命名空间，桌面构建统一返回 `supported: false`，可用于预览布局，但不能替代真机验证。
+
+| 能力 | 接口 | 说明 |
+|---|---|---|
+| 六轴体感 | `wx.nx.motion.state()` | 返回 `gyro`（rad/s）、`accel`（g）、`angle`（rad）与 `controllers` 数组；可直接做水平仪、摇一摇、空中绘图 |
+| HD 震动 | `wx.nx.rumble.play({lowFreq,highFreq,lowAmp,highAmp,duration})` / `stop()` | 频率 40~1250Hz、振幅 0~1、时长 ms；用 `setTimeout` 串起来即可做自定义波形/摩尔斯电码 |
+| 红外相机 | `wx.nx.ir.start('image')` + `ctx.drawIrCamera(x,y,w,h)` | 320×240 灰度画面，容器按约 30fps 取帧上传纹理；**必须拆下右 Joy-Con**，插在本体上镜头被遮挡 |
+| 红外手势 | `wx.nx.ir.start('gesture')` + `wx.nx.ir.state().hand` | 官方聚类结果：包围盒、像素数、密度、质心；张手/握拳需按密度与像素数自行判定 |
+| NFC / Amiibo | `wx.nx.nfc.start/state/mount/unmount/writeAppArea/stop` | 读取 UID、角色/系列/编号、Amiibo 名称与应用存档区（hex）；`writeAppArea` 只回写存档区（备份还原），不改身份数据 |
+
+两个模式互斥：`image` 与 `gesture` 不能同时运行。NFC 与 emuiibo 等会抢占 `nfp/nfc` 服务的 sysmodule 冲突，演示前先关闭。红外与 NFC 都需要右手柄，且 `mount` 后才能读到应用存档区。
 
 ## 不支持能力清单
 
@@ -59,7 +74,7 @@
 | Worker / 多线程 | 不支持；耗时任务用 `setTimeout` 分片 |
 | `wx.getUpdateManager` | 空实现；小程序更新由容器按 `version` 自动重下 |
 | 小程序菜单按钮 / 胶囊 | `getMenuButtonBoundingClientRect` 返回零矩形，布局不要依赖它 |
-| 位置、蓝牙、NFC、传感器 | 不支持（Switch 无对应能力） |
+| 位置、蓝牙 | 不支持；体感/红外/NFC 用 `wx.nx.*`（仅 Switch 真机） |
 | 自定义导航栏、下拉刷新 | 不支持，导航由容器统一处理 |
 | 桌面滚轮滚动 | 未接入；`scroll-view` 支持触屏拖动与焦点自动滚动 |
 | 部分 WXSS 特性 | 以 `docs/style/index.html` 为准；未列出的选择器/属性可能被忽略 |

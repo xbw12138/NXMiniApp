@@ -1566,6 +1566,111 @@ struct RuntimeBridge {
         return runtime->valueFromJson(runtime->host->gamepadState());
     }
 
+    // ---- wx.nx：Switch 硬件能力（六轴 / HD 震动 / 红外 / NFC） ----
+
+    static double numberField(JSContext* ctx, JSValueConst object, const char* key,
+                              double fallback) {
+        JSValue value = JS_GetPropertyStr(ctx, object, key);
+        double result = fallback;
+        if (!JS_IsUndefined(value) && !JS_IsNull(value)) {
+            if (JS_ToFloat64(ctx, &result, value) != 0) result = fallback;
+        }
+        JS_FreeValue(ctx, value);
+        return result;
+    }
+
+    static JSValue wxNxMotionState(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host) return JS_NewObject(ctx);
+        return runtime->valueFromJson(runtime->host->motionState());
+    }
+
+    static JSValue wxNxRumblePlay(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || argc <= 0 || !JS_IsObject(argv[0])) {
+            return JS_NewBool(ctx, false);
+        }
+        const double lowFreq = numberField(ctx, argv[0], "lowFreq", 160.0);
+        const double highFreq = numberField(ctx, argv[0], "highFreq", 320.0);
+        const double lowAmp = numberField(ctx, argv[0], "lowAmp", 1.0);
+        const double highAmp = numberField(ctx, argv[0], "highAmp", 1.0);
+        const double duration = numberField(ctx, argv[0], "duration", 0.0);
+        runtime->host->rumblePlay(lowFreq, highFreq, lowAmp, highAmp, duration);
+        return JS_NewBool(ctx, true);
+    }
+
+    static JSValue wxNxRumbleStop(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (runtime && runtime->host) runtime->host->rumbleStop();
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxNxIrStart(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host) return JS_NewBool(ctx, false);
+        std::string mode = "image";
+        if (argc > 0) {
+            if (JS_IsString(argv[0])) {
+                mode = toStd(ctx, argv[0]);
+            } else if (JS_IsObject(argv[0])) {
+                JSValue value = JS_GetPropertyStr(ctx, argv[0], "mode");
+                if (JS_IsString(value)) mode = toStd(ctx, value);
+                JS_FreeValue(ctx, value);
+            }
+        }
+        return JS_NewBool(ctx, runtime->host->irStart(mode));
+    }
+
+    static JSValue wxNxIrStop(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (runtime && runtime->host) runtime->host->irStop();
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxNxIrState(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host) return JS_NewObject(ctx);
+        return runtime->valueFromJson(runtime->host->irState());
+    }
+
+    static JSValue wxNxNfcStart(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host) return JS_NewBool(ctx, false);
+        return JS_NewBool(ctx, runtime->host->nfcStart());
+    }
+
+    static JSValue wxNxNfcStop(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (runtime && runtime->host) runtime->host->nfcStop();
+        return JS_UNDEFINED;
+    }
+
+    static JSValue wxNxNfcMount(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host) return JS_NewBool(ctx, false);
+        return JS_NewBool(ctx, runtime->host->nfcMount());
+    }
+
+    static JSValue wxNxNfcUnmount(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host) return JS_NewBool(ctx, false);
+        return JS_NewBool(ctx, runtime->host->nfcUnmount());
+    }
+
+    static JSValue wxNxNfcWrite(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host || argc <= 0 || !JS_IsString(argv[0])) {
+            return JS_NewBool(ctx, false);
+        }
+        return JS_NewBool(ctx, runtime->host->nfcWriteAppArea(toStd(ctx, argv[0])));
+    }
+
+    static JSValue wxNxNfcState(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+        JsRuntime* runtime = self(ctx);
+        if (!runtime || !runtime->host) return JS_NewObject(ctx);
+        return runtime->valueFromJson(runtime->host->nfcState());
+    }
+
     // ---- canvas 2D ----
 
     static JSValue wxCanvasOp(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv,
@@ -1615,6 +1720,7 @@ struct RuntimeBridge {
             {"stroke", "stroke", 0},
             {"fillText", "fillText", 3},
             {"drawImage", "drawImage", 5},
+            {"drawIrCamera", "drawIrCamera", 4},
             {"save", "save", 0},
             {"restore", "restore", 0},
             {"translate", "translate", 2},
@@ -2346,6 +2452,71 @@ void JsRuntime::installWx() {
                       JS_NewCFunction(context, RuntimeBridge::guardNative<RuntimeBridge::wxMediaLibrary>,
                                       "library", 1));
     JS_SetPropertyStr(context, wx, "media", mediaNamespace);
+
+    // wx.nx：Switch 硬件能力（六轴体感 / HD 震动 / 红外相机 / NFC-Amiibo）。
+    JSValue nxNamespace = JS_NewObject(context);
+
+    JSValue motionNamespace = JS_NewObject(context);
+    JS_SetPropertyStr(context, motionNamespace, "state",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxMotionState>,
+                                      "state", 0));
+    JS_SetPropertyStr(context, nxNamespace, "motion", motionNamespace);
+
+    JSValue rumbleNamespace = JS_NewObject(context);
+    JS_SetPropertyStr(context, rumbleNamespace, "play",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxRumblePlay>,
+                                      "play", 1));
+    JS_SetPropertyStr(context, rumbleNamespace, "stop",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxRumbleStop>,
+                                      "stop", 0));
+    JS_SetPropertyStr(context, nxNamespace, "rumble", rumbleNamespace);
+
+    JSValue irNamespace = JS_NewObject(context);
+    JS_SetPropertyStr(context, irNamespace, "start",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxIrStart>,
+                                      "start", 1));
+    JS_SetPropertyStr(context, irNamespace, "stop",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxIrStop>,
+                                      "stop", 0));
+    JS_SetPropertyStr(context, irNamespace, "state",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxIrState>,
+                                      "state", 0));
+    JS_SetPropertyStr(context, nxNamespace, "ir", irNamespace);
+
+    JSValue nfcNamespace = JS_NewObject(context);
+    JS_SetPropertyStr(context, nfcNamespace, "start",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxNfcStart>,
+                                      "start", 0));
+    JS_SetPropertyStr(context, nfcNamespace, "stop",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxNfcStop>,
+                                      "stop", 0));
+    JS_SetPropertyStr(context, nfcNamespace, "mount",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxNfcMount>,
+                                      "mount", 0));
+    JS_SetPropertyStr(context, nfcNamespace, "unmount",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxNfcUnmount>,
+                                      "unmount", 0));
+    JS_SetPropertyStr(context, nfcNamespace, "writeAppArea",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxNfcWrite>,
+                                      "writeAppArea", 1));
+    JS_SetPropertyStr(context, nfcNamespace, "state",
+                      JS_NewCFunction(context,
+                                      RuntimeBridge::guardNative<RuntimeBridge::wxNxNfcState>,
+                                      "state", 0));
+    JS_SetPropertyStr(context, nxNamespace, "nfc", nfcNamespace);
+
+    JS_SetPropertyStr(context, wx, "nx", nxNamespace);
 
     JS_SetPropertyStr(context, global, "wx", wx);
     JS_FreeValue(context, global);

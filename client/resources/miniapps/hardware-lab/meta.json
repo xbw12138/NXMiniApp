@@ -1,0 +1,9 @@
+{
+  "title": "硬件实验室",
+  "summary": "六轴体感、HD 震动波形、红外相机与 NFC-Amiibo 的容器能力演示",
+  "description": "NXMiniApp 硬件能力演示：读取 Joy-Con 六轴姿态、自定义 HD 震动频率与振幅、预览右 Joy-Con 红外相机画面、用红外聚类做挥手/握拳检测，以及读取 Amiibo 的 UID、角色信息与应用存档区。仅调用自研容器与官方硬件接口，不涉及任何游戏资源。",
+  "category": "工具",
+  "developer": "NXMiniApp",
+  "version": "1.0.0",
+  "published": true
+}
