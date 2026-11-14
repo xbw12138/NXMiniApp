@@ -42,16 +42,20 @@ func Migrate(db *gorm.DB) error {
 	return migrateReviewStatus(db)
 }
 
-// migrateReviewStatus 把旧的「published=false 即待审核」数据迁移成新状态机。
-// 用 settings 里的标记保证只执行一次，避免把后台手动下线的小程序误判为待审核。
+// migrateReviewStatus 修正早期迁移的误判：published=false 并不等于待审核，
+// 内置示例与后台手动下线的小程序也会是 false。这里把「没有待审核包」的记录
+// 恢复为已通过审核——下线状态不变，只是不再出现在待审核队列。
+// 新投稿/新版本一定带有 pending_kind 与 pending_version，不会被误伤。
 func migrateReviewStatus(db *gorm.DB) error {
-	const flag = "migration.review_status_v1"
+	const flag = "migration.review_status_v2"
 	var row models.Setting
 	if err := db.Where("`key` = ?", flag).Take(&row).Error; err == nil {
 		return nil
 	}
-	if err := db.Model(&models.MiniApp{}).Where("published = ?", false).
-		Update("review_status", models.ReviewPending).Error; err != nil {
+	if err := db.Model(&models.MiniApp{}).
+		Where("review_status = ? AND pending_version = ? AND pending_kind = ?",
+			models.ReviewPending, "", "").
+		Update("review_status", models.ReviewApproved).Error; err != nil {
 		return err
 	}
 	return db.Create(&models.Setting{Key: flag, Value: "1"}).Error
