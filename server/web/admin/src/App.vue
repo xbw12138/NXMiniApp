@@ -17,12 +17,13 @@
         :key="t.key"
         :class="['tab', { active: tab === t.key }]"
         @click="tab = t.key"
-      >{{ t.label }}<span v-if="t.key === 'miniapps' && pendingCount > 0" class="tab-badge">{{ pendingCount > 99 ? '99+' : pendingCount }}</span></button>
+      >{{ t.label }}<span v-if="t.key === 'pending' && pendingCount > 0" class="tab-badge">{{ pendingCount > 99 ? '99+' : pendingCount }}</span></button>
     </nav>
     <main>
       <OverviewTab v-if="tab === 'overview'" />
       <AppsTab v-else-if="tab === 'store'" />
       <MiniAppsTab v-else-if="tab === 'miniapps'" />
+      <PendingTab v-else-if="tab === 'pending'" @changed="refreshNotifications" />
       <HomeTab v-else-if="tab === 'home'" />
       <ReleasesTab v-else-if="tab === 'releases'" />
       <LogsTab v-else-if="tab === 'logs'" />
@@ -38,6 +39,7 @@ import LoginView from './components/LoginView.vue'
 import OverviewTab from './components/OverviewTab.vue'
 import AppsTab from './components/AppsTab.vue'
 import MiniAppsTab from './components/MiniAppsTab.vue'
+import PendingTab from './components/PendingTab.vue'
 import HomeTab from './components/HomeTab.vue'
 import ReleasesTab from './components/ReleasesTab.vue'
 import LogsTab from './components/LogsTab.vue'
@@ -47,6 +49,7 @@ const tabs = [
   { key: 'overview', label: '概览' },
   { key: 'store', label: '应用商店' },
   { key: 'miniapps', label: '小程序' },
+  { key: 'pending', label: '待审核' },
   { key: 'home', label: '首页内容' },
   { key: 'releases', label: '容器版本' },
   { key: 'logs', label: '设备日志' },

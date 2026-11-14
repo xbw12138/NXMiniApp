@@ -584,14 +584,24 @@ func refetchApp(c *gin.Context, e *api.Env, id string) {
 
 func listMiniApps(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		query := e.DB.Order("updated_at DESC")
+		// status=pending 只返回待审核投稿，status=published 只返回已上架；缺省返回全部。
+		switch c.Query("status") {
+		case "pending":
+			query = query.Where("published = ?", false)
+		case "published":
+			query = query.Where("published = ?", true)
+		}
 		rows := make([]models.MiniApp, 0)
-		e.DB.Order("updated_at DESC").Find(&rows)
+		query.Find(&rows)
 		items := make([]gin.H, 0, len(rows))
 		for i := range rows {
 			item := api.MiniAppJSON(e.Cfg, &rows[i])
 			for key, value := range api.RolloutJSON(&rows[i]) {
 				item[key] = value
 			}
+			// 投稿时间只给后台用，不进公开接口。
+			item["created_at"] = rows[i].CreatedAt
 			items = append(items, item)
 		}
 		c.JSON(http.StatusOK, gin.H{"items": items})

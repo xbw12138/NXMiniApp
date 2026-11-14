@@ -218,17 +218,6 @@ input:focus, textarea:focus {
   vertical-align: 1px;
 }
 
-.tag-pending {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: #fff4e5;
-  color: #b25e09;
-  font-size: 11px;
-  vertical-align: 1px;
-}
-
 /* login */
 .login-page {
   min-height: 100vh;
