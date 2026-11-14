@@ -36,6 +36,9 @@
               {{ m.version }}
               <div v-if="m.visible_percent < 100" class="muted">可见 {{ m.visible_percent }}%</div>
               <div v-if="m.gray_version" class="muted">灰度 {{ m.gray_version }} · {{ m.gray_percent }}%</div>
+              <div v-if="m.pending" class="muted">
+                待审 {{ m.pending.kind === 'gray' ? '灰度' : '版本' }} {{ m.pending.version }}
+              </div>
             </td>
             <td>{{ formatBytes(m.size) }}</td>
             <td>{{ m.downloads }}</td>
@@ -124,7 +127,7 @@
         <div class="card section">
           <h3>程序包</h3>
           <p class="muted">
-            当前大小：{{ formatBytes(detail.size) }}。上传 .nxpkg / .zip 包将整体替换现有内容，包根目录必须包含 app.json。
+            当前大小：{{ formatBytes(detail.size) }}。上传 .nxpkg / .zip 包将整体替换现有内容（并丢弃待审核版本），包根目录必须包含 app.json。
           </p>
           <input v-model="packageForm.version" placeholder="新版本号（可选，留空则不修改）" />
           <input
@@ -178,6 +181,19 @@
             <button class="btn" :disabled="!detail.gray_version" @click="promoteRollout">全量发布灰度版本</button>
             <button class="btn danger" :disabled="!detail.gray_version" @click="discardRollout">撤销灰度</button>
           </div>
+        </div>
+
+        <div class="card section">
+          <h3>开发者维护</h3>
+          <p v-if="detail.pending" class="muted">
+            待审核版本：{{ detail.pending.kind === 'gray' ? '灰度' : '常规' }} {{ detail.pending.version }}
+            （{{ formatBytes(detail.pending.size) }}），请到「待审核」页签处理。
+          </p>
+          <p v-if="detail.review_note && !detail.pending" class="muted">最近审核意见：{{ detail.review_note }}</p>
+          <p class="muted">
+            上传者凭开发者密钥在 /my 自助维护。密钥遗失时可重置，新密钥只显示一次，旧密钥立即失效。
+          </p>
+          <button class="btn" @click="resetKey">重置开发者密钥</button>
         </div>
 
         <div class="card section danger-zone">
@@ -463,6 +479,17 @@ async function removeMiniApp() {
     await reload()
   } catch (err) {
     drawerError.value = err.message || '删除失败'
+  }
+}
+
+async function resetKey() {
+  if (!window.confirm(`确定重置「${detail.value.title}」的开发者密钥？旧密钥会立即失效。`)) return
+  drawerError.value = ''
+  try {
+    const data = await api.post(`/api/v1/admin/miniapps/${detail.value.id}/reset-key`, {})
+    window.prompt('新的开发者密钥（只显示一次，请复制后交给上传者）：', data.dev_key || '')
+  } catch (err) {
+    drawerError.value = err.message || '重置失败'
   }
 }
 

@@ -36,6 +36,20 @@ type Version struct {
 
 func (Version) TableName() string { return "versions" }
 
+// 小程序审核状态。Published 只表示上线/下线，是否能出现在公开商店由
+// ReviewStatus 决定：只有 approved 且 published 的小程序才对外可见。
+const (
+	ReviewPending  = "pending"
+	ReviewApproved = "approved"
+	ReviewRejected = "rejected"
+)
+
+// 待审核内容的类型：stable 为常规版本，gray 为灰度版本。
+const (
+	PendingStable = "stable"
+	PendingGray   = "gray"
+)
+
 // MiniApp is an NXKit mini program; its package payload lives on disk under
 // <DATA_DIR>/miniapps/<id>/package/.
 type MiniApp struct {
@@ -53,6 +67,19 @@ type MiniApp struct {
 	Downloads   int64  `gorm:"not null;default:0"`
 	Opens       int64  `gorm:"not null;default:0"`
 	UV          int64  `gorm:"not null;default:0"`
+	// 审核状态：pending / approved / rejected，ReviewNote 为驳回理由。
+	ReviewStatus string `gorm:"size:16;not null;default:'approved';index"`
+	ReviewNote   string `gorm:"size:1000;not null;default:''"`
+	// OwnerKeyHash 是投稿人开发者密钥的 sha256；上传者凭密钥维护自己的小程序。
+	OwnerKeyHash string `gorm:"size:64;not null;default:'';index"`
+	// 待审核的新版本：更新不会覆盖线上包，先解包到 pending 目录，审核通过后再替换。
+	PendingKind        string `gorm:"size:16;not null;default:''"`
+	PendingVersion     string `gorm:"size:64;not null;default:''"`
+	PendingSize        int64  `gorm:"not null;default:0"`
+	PendingIcon        string `gorm:"size:255;not null;default:''"`
+	PendingPercent     int    `gorm:"not null;default:0"`
+	PendingWhitelist   string `gorm:"size:4000;not null;default:''"`
+	PendingSubmittedAt int64  `gorm:"not null;default:0"`
 	// 灰度发布：可见性按设备比例 + 白名单；Version 为稳定版本，GrayVersion 为灰度版本。
 	VisiblePercent   int    `gorm:"not null;default:100"`
 	VisibleWhitelist string `gorm:"size:4000;not null;default:''"`
@@ -68,10 +95,10 @@ func (MiniApp) TableName() string { return "miniapps" }
 // MiniAppOpen 记录某设备打开过某小程序，用于统计 UV（独立设备数）。
 // (miniapp_id, device_id) 唯一，同一设备重复打开只算一次 UV。
 type MiniAppOpen struct {
-	ID         uint64 `gorm:"primaryKey;autoIncrement"`
-	MiniAppID  string `gorm:"size:64;not null;index;uniqueIndex:uk_miniapp_open_app_device,priority:1"`
-	DeviceID   string `gorm:"size:64;not null;index;uniqueIndex:uk_miniapp_open_app_device,priority:2"`
-	CreatedAt  int64  `gorm:"not null;autoCreateTime:false"`
+	ID        uint64 `gorm:"primaryKey;autoIncrement"`
+	MiniAppID string `gorm:"size:64;not null;index;uniqueIndex:uk_miniapp_open_app_device,priority:1"`
+	DeviceID  string `gorm:"size:64;not null;index;uniqueIndex:uk_miniapp_open_app_device,priority:2"`
+	CreatedAt int64  `gorm:"not null;autoCreateTime:false"`
 }
 
 func (MiniAppOpen) TableName() string { return "miniapp_opens" }

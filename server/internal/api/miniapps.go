@@ -86,6 +86,8 @@ func (e *Env) ListMiniApps(c *gin.Context) {
 	}
 
 	query := e.DB.Model(&models.MiniApp{})
+	// 公开商店只展示已通过审核的小程序；published 只控制上下线。
+	query = query.Where("review_status = ? OR review_status = ''", models.ReviewApproved)
 	if category != "" {
 		query = query.Where("category = ?", category)
 	}
@@ -170,6 +172,11 @@ func (e *Env) MiniAppIcon(c *gin.Context) {
 func (e *Env) DownloadMiniApp(c *gin.Context) {
 	m := e.GetMiniApp(c, c.Param("id"))
 	if m == nil {
+		return
+	}
+	// 未通过审核的小程序不对外开放下载。
+	if !IsApproved(m) {
+		Abort(c, http.StatusNotFound, "mini app not found")
 		return
 	}
 	device := deviceID(c)

@@ -1,6 +1,6 @@
 ---
 name: nxminiapp-dev
-description: 开发、调试、打包并投稿 NXMiniApp（Nintendo Switch / 桌面端小程序容器）小程序。当用户要创建、修改或修复 NXMiniApp 小程序、把微信小程序代码移植到该容器、打包 .nxpkg/.zip，或向 NXMiniApp 商店投稿时使用。
+description: 开发、调试、打包并投稿 NXMiniApp（Nintendo Switch / 桌面端小程序容器）小程序。当用户要创建、修改或修复 NXMiniApp 小程序、把微信小程序代码移植到该容器、打包 .nxpkg/.zip、向 NXMiniApp 商店投稿，或用开发者密钥维护已上架小程序（更新版本、放量、上下线）时使用。
 ---
 
 # NXMiniApp 小程序开发
@@ -99,7 +99,60 @@ curl -X POST http://<host>/api/v1/submissions \
   -F "icon=@icon.png" -F "package=@myapp.zip"
 ```
 
-成功返回 `{ "id": "...", "message": "投稿成功，等待管理员审核上架" }`。常见失败：409（ID 被占用）、400（app.json 缺失 / 文件类型或大小不符）、429（每 IP 每小时限 10 次）。投稿后 `published=false`，商店列表不可见属正常现象，提醒用户等待审核。
+成功返回 `{ "id": "...", "dev_key": "nxdev_...", "message": "..." }`。`dev_key` 只回显这一次，**必须立即保存**，它是后续维护的凭据：
+
+```bash
+CRED=~/.config/nxminiapp/credentials.json
+mkdir -p "$(dirname "$CRED")" && chmod 700 "$(dirname "$CRED")"
+touch "$CRED" && chmod 600 "$CRED"
+# HOST=ecfun.cc ID=my-app DEV_KEY=<投稿响应里的 dev_key>
+jq --arg host "$HOST" --arg id "$ID" --arg key "$DEV_KEY" \
+  '.[$host] = ((.[$host] // {}) + {($id): $key})' "$CRED" > "$CRED.tmp" && mv "$CRED.tmp" "$CRED"
+```
+
+凭据文件形如 `{ "ecfun.cc": { "my-app": "nxdev_xxxx" } }`；不要把它提交进仓库或打印到对话里。
+
+- 同一开发者再次投稿时带上 `-H "Authorization: Bearer $KEY"`，服务端会把新小程序归到同一所有者，方便统一维护。
+- `dev_key` 遗失无法找回，只能联系管理员在后台重置（新密钥只显示一次）。
+- 常见失败：409（ID 被其他开发者占用；自己的记录可重新投稿覆盖）、400（app.json 缺失 / 文件类型或大小不符）、429（每 IP 每小时限 10 次）。
+
+新投稿与每次版本更新都要审核（`review_status=pending`）；审核通过后才会出现在商店。审核意见用 `review_note` 返回，用户也可在 `http://<host>/my` 粘贴密钥查看。
+
+### 6. 维护已上架的小程序（开发者密钥）
+
+所有接口用 `Authorization: Bearer <dev_key>`，也可在 `/my` 页面用密钥换 HttpOnly Cookie。
+
+```bash
+KEY=$(jq -r '."ecfun.cc"."my-app"' ~/.config/nxminiapp/credentials.json)
+BASE=http://<host>/api/v1/dev/miniapps
+
+# 查看自己投稿的全部小程序：审核状态、驳回理由、待审版本、放量配置、数据
+curl -s -H "Authorization: Bearer $KEY" $BASE
+
+# 上传新版本：先进入审核队列，线上继续使用旧包；通过后才替换
+curl -X POST -H "Authorization: Bearer $KEY" \
+  -F "file=@myapp.zip" -F "version=1.1.0" $BASE/my-app/package
+
+# 上传灰度版本（须已通过审核）：审核通过后只下发给命中比例/白名单的设备
+curl -X POST -H "Authorization: Bearer $KEY" \
+  -F "file=@myapp.zip" -F "version=1.2.0" -F "gray=1" \
+  -F "percent=10" -F "whitelist=device-a,device-b" $BASE/my-app/package
+
+# 调整可见比例与灰度放量（0-100，白名单逗号分隔）
+curl -X PATCH -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"visible_percent":100,"visible_whitelist":"","gray_percent":30,"gray_whitelist":""}' \
+  $BASE/my-app/rollout
+
+# 灰度转全量 / 撤销灰度
+curl -X POST -H "Authorization: Bearer $KEY" $BASE/my-app/rollout/promote
+curl -X POST -H "Authorization: Bearer $KEY" $BASE/my-app/rollout/discard
+
+# 上线 / 下线（只改变可见性，不影响审核与统计）
+curl -X PATCH -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"published":false}' $BASE/my-app/visibility
+```
+
+`/my` 页面提供同样的能力，适合手动维护；脚本/CI 用上面的接口。
 
 ## 常见错误排查
 

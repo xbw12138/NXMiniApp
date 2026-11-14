@@ -96,6 +96,18 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 	// 真机 Updater 上传容器日志（按 X-Device-Id 分目录存放）。
 	v1.POST("/device/logs", e.UploadDeviceLog)
 
+	// 上传者（开发者）自助维护接口：Bearer dev_key 或 HttpOnly Cookie。
+	dev := v1.Group("/dev")
+	dev.POST("/session", e.DevSession)
+	dev.DELETE("/session", e.DevLogout)
+	devAuth := dev.Group("", e.DevAuth())
+	devAuth.GET("/miniapps", e.DevListMiniApps)
+	devAuth.POST("/miniapps/:id/package", e.DevUploadPackage)
+	devAuth.PATCH("/miniapps/:id/rollout", e.DevUpdateRollout)
+	devAuth.POST("/miniapps/:id/rollout/promote", e.DevPromoteRollout)
+	devAuth.POST("/miniapps/:id/rollout/discard", e.DevDiscardRollout)
+	devAuth.PATCH("/miniapps/:id/visibility", e.DevSetVisibility)
+
 	r.Static("/media/icons", cfg.IconsDir())
 	r.Static("/media/screenshots", cfg.ScreenshotsDir())
 	r.Static("/media/covers", cfg.CoversDir())
@@ -103,6 +115,7 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 	// 门户首页与投稿页（嵌入静态页，优先于 SPA 兜底路由）。
 	r.GET("/", func(c *gin.Context) { servePortal(c, "index.html") })
 	r.GET("/submit", func(c *gin.Context) { servePortal(c, "submit.html") })
+	r.GET("/my", func(c *gin.Context) { servePortal(c, "my.html") })
 	r.GET("/download", func(c *gin.Context) { servePortal(c, "download.html") })
 	// 开发 Skill 直接打包下载，避免国内访问 GitHub 打不开。
 	r.GET("/skill/nxminiapp-dev.zip", func(c *gin.Context) {

@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>我的小程序 · NXMiniApp</title>
+<style>
+:root {
+  --accent: #07c160;
+  --accent-soft: #e8f8ee;
+  --text: #1f2328;
+  --text-2: #57606a;
+  --text-3: #8b949e;
+  --bg-side: #fafafa;
+  --border: #e6e8eb;
+  --code-bg: #f6f8fa;
+  --danger: #d1453b;
+  --danger-bg: #fdecea;
+  --warn: #9a6700;
+  --warn-bg: #fff8e1;
+  --radius: 10px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg-side);
+  color: var(--text);
+  font: 15px/1.7 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 12px;
+  height: 60px; padding: 0 28px;
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 16px; font-weight: 600; }
+.logo {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 7px;
+  background: linear-gradient(135deg, #0ddc78, #07a34b);
+  color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+}
+.nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.nav a { padding: 6px 12px; border-radius: 6px; color: var(--text-2); font-size: 14px; }
+.nav a:hover { background: var(--bg-side); color: var(--text); }
+.nav a.active { background: var(--accent-soft); color: #067a3f; font-weight: 600; }
+
+.wrap { max-width: 860px; margin: 0 auto; padding: 40px 24px 96px; }
+.page-head { margin-bottom: 22px; }
+.page-head h1 { margin: 0 0 6px; font-size: 26px; }
+.page-head p { margin: 0; color: var(--text-2); font-size: 14px; }
+
+.card {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 22px;
+}
+.card + .card { margin-top: 16px; }
+
+.field { margin-bottom: 14px; }
+.field label { display: block; margin-bottom: 6px; font-size: 13.5px; font-weight: 600; }
+.field input[type=text], .field input[type=number], .field textarea {
+  width: 100%; padding: 9px 11px;
+  border: 1px solid var(--border); border-radius: 8px;
+  font: inherit; font-size: 14px; color: var(--text); background: #fff;
+}
+.field input:focus, .field textarea:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(7,193,96,0.14);
+}
+.field .hint { margin-top: 5px; font-size: 12px; color: var(--text-3); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 18px; border: 1px solid var(--border); border-radius: 8px;
+  background: #fff; color: var(--text); font: inherit; font-size: 14px;
+  font-weight: 500; cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); color: #067a3f; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: #06ad57; color: #fff; }
+.btn.danger { color: var(--danger); border-color: #f0c4c0; }
+.btn.danger:hover { background: var(--danger-bg); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn.small { padding: 5px 12px; font-size: 13px; }
+
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+.err {
+  display: none; margin-top: 14px; padding: 10px 13px;
+  border-left: 3px solid var(--danger); border-radius: 0 8px 8px 0;
+  background: var(--danger-bg); color: #a33a32; font-size: 13px;
+}
+.err.show { display: block; }
+
+/* 登录 */
+.login { max-width: 520px; margin: 8vh auto 0; }
+.login h1 { margin: 0 0 6px; font-size: 24px; }
+.login p { margin: 0 0 20px; color: var(--text-2); font-size: 14px; }
+.login .actions { display: flex; gap: 10px; margin-top: 4px; }
+
+/* 小程序卡片 */
+.app { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.app + .app { margin-top: 14px; }
+.app-head { display: flex; gap: 14px; align-items: flex-start; }
+.app-icon {
+  flex: 0 0 auto; width: 52px; height: 52px; border-radius: 12px;
+  background: var(--code-bg); object-fit: cover;
+}
+.app-icon.ph {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-3); font-size: 20px; font-weight: 600;
+}
+.app-main { flex: 1 1 auto; min-width: 0; }
+.app-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app-title h2 { margin: 0; font-size: 17px; }
+.mono { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+.app-meta { margin-top: 2px; color: var(--text-3); font-size: 12.5px; }
+.badge {
+  display: inline-flex; align-items: center; padding: 1px 8px;
+  border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid transparent;
+}
+.badge.ok { background: var(--accent-soft); color: #067a3f; }
+.badge.off { background: #f1f3f5; color: var(--text-2); }
+.badge.pending { background: var(--warn-bg); color: var(--warn); }
+.badge.rejected { background: var(--danger-bg); color: var(--danger); }
+
+.app-stats { display: flex; gap: 22px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.stat .k { color: var(--text-3); font-size: 12px; }
+.stat .v { font-size: 16px; font-weight: 600; }
+
+.notice {
+  margin-top: 12px; padding: 10px 13px; border-radius: 8px; font-size: 13px;
+}
+.notice.pending { background: var(--warn-bg); color: var(--warn); }
+.notice.rejected { background: var(--danger-bg); color: #a33a32; }
+
+details.panel { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+details.panel > summary {
+  cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--text-2);
+  list-style: none; user-select: none;
+}
+details.panel > summary::-webkit-details-marker { display: none; }
+details.panel > summary::before { content: "▸ "; color: var(--text-3); }
+details.panel[open] > summary::before { content: "▾ "; }
+.panel-body { margin-top: 14px; }
+.panel-body h4 { margin: 0 0 10px; font-size: 13.5px; }
+.panel-body .group + .group { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--border); }
+.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 400; }
+.msg { margin-top: 10px; font-size: 13px; }
+.msg.ok { color: #067a3f; }
+.msg.bad { color: var(--danger); }
+.empty { padding: 40px 0; text-align: center; color: var(--text-3); }
+
+.top-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.kv { color: var(--text-2); font-size: 13px; }
+.kv code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.site-foot { margin-top: 48px; text-align: center; color: var(--text-3); font-size: 12.5px; }
+.site-foot .disc { max-width: 720px; margin: 0 auto 8px; line-height: 1.7; }
+
+@media (max-width: 720px) {
+  .wrap { padding: 28px 14px 72px; }
+  .row, .row3 { grid-template-columns: 1fr; }
+  .nav a:not(.active) { display: none; }
+  .app-stats { gap: 16px; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="/"><span class="logo">NX</span> NXMiniApp</a>
+  <nav class="nav">
+    <a href="/">首页</a>
+    <a href="/download">下载容器</a>
+    <a href="/docs/index.html">开发文档</a>
+    <a href="/submit">我要投稿</a>
+    <a class="active" href="/my">我的小程序</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <!-- 登录 -->
+  <section id="loginView" class="login card" style="display:none">
+    <h1>我的小程序</h1>
+    <p>粘贴投稿时获得的开发者密钥，即可查看投稿进度、上传新版本、调整放量并上下线。</p>
+    <div class="field">
+      <label for="keyInput">开发者密钥</label>
+      <input type="text" id="keyInput" placeholder="nxdev_..." autocomplete="off" spellcheck="false">
+      <div class="hint">密钥只在服务器保存哈希，遗失后请联系管理员重置。</div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="loginBtn">登录</button>
+      <a class="btn" href="/submit">投稿新小程序</a>
+    </div>
+    <div class="err" id="loginErr"></div>
+  </section>
+
+  <!-- 列表 -->
+  <section id="dashView" style="display:none">
+    <div class="page-head">
+      <div class="top-actions">
+        <div style="flex:1 1 auto">
+          <h1>我的小程序</h1>
+          <p>查看投稿进度与审核意见，维护已通过的小程序。</p>
+        </div>
+        <a class="btn primary" href="/submit">投稿新小程序</a>
+        <button class="btn" id="logoutBtn">退出</button>
+      </div>
+    </div>
+    <div class="err" id="dashErr"></div>
+    <div id="appList"></div>
+    <p class="empty" id="emptyHint" style="display:none">还没有投稿记录，去「投稿新小程序」提交第一个吧。</p>
+  </section>
+
+  <footer class="site-foot">
+    <p class="disc">
+      本站为非官方个人开源项目，与 Nintendo 及其关联公司无关，未获其授权、认可或赞助。站内小程序由第三方开发者上传，其内容与合法性由上传者负责，本站不对其安全性、合法性或可用性作任何担保。
+    </p>
+    <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">鲁ICP备16004009号-2</a>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var apps = [];
+  var keyInput = document.getElementById('keyInput');
+  var loginView = document.getElementById('loginView');
+  var dashView = document.getElementById('dashView');
+  var loginErr = document.getElementById('loginErr');
+  var dashErr = document.getElementById('dashErr');
+  var appList = document.getElementById('appList');
+  var emptyHint = document.getElementById('emptyHint');
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+  function fmtSize(n) {
+    n = Number(n) || 0;
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+    if (n >= 1024) return (n / 1024).toFixed(0) + ' KB';
+    return n + ' B';
+  }
+  function fmtTime(ms) {
+    if (!ms) return '-';
+    var d = new Date(Number(ms));
+    function p(v) { return String(v).padStart(2, '0'); }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function api(path, opts) {
+    opts = opts || {};
+    opts.credentials = 'same-origin';
+    return fetch(path, opts).then(function (resp) {
+      return resp.text().then(function (text) {
+        var data = {};
+        if (text) { try { data = JSON.parse(text); } catch (e) { data = {}; } }
+        if (!resp.ok) {
+          var err = new Error(data.detail || ('请求失败（' + resp.status + '）'));
+          err.status = resp.status;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  function showLogin(message) {
+    dashView.style.display = 'none';
+    loginView.style.display = 'block';
+    if (message) showErr(loginErr, message);
+  }
+  function showDash() {
+    loginView.style.display = 'none';
+    dashView.style.display = 'block';
+    loginErr.classList.remove('show');
+  }
+  function showErr(el, msg) { el.textContent = msg; el.classList.add('show'); }
+  function clearErr(el) { el.classList.remove('show'); el.textContent = ''; }
+
+  function statusBadge(m) {
+    if (m.review_status === 'pending') return '<span class="badge pending">待审核</span>';
+    if (m.review_status === 'rejected') return '<span class="badge rejected">已驳回</span>';
+    var html = m.published ? '<span class="badge ok">已上架</span>' : '<span class="badge off">已下线</span>';
+    if (m.review_note && !m.pending) html += ' <span class="badge rejected">更新被驳回</span>';
+    return html;
+  }
+
+  function render() {
+    emptyHint.style.display = apps.length ? 'none' : 'block';
+    appList.innerHTML = apps.map(renderApp).join('');
+  }
+
+  function renderApp(m) {
+    var icon = m.icon_url
+      ? '<img class="app-icon" src="' + esc(m.icon_url) + '" alt="">'
+      : '<div class="app-icon ph">' + esc((m.title || '?').slice(0, 1)) + '</div>';
+    var pending = m.pending
+      ? '<div class="notice pending">待审核' +
+        (m.pending.kind === 'gray' ? '灰度版本' : '新版本') + ' <b>' + esc(m.pending.version) + '</b>' +
+        '（' + fmtSize(m.pending.size) + '，' + fmtTime(m.pending.submitted_at) + ' 提交）</div>'
+      : '';
+    var note = m.review_note
+      ? '<div class="notice rejected">审核意见：' + esc(m.review_note) + '</div>'
+      : '';
+    var approved = m.review_status === 'approved';
+
+    var visBtn = approved
+      ? '<button class="btn small ' + (m.published ? 'danger' : 'primary') + '" data-act="visibility" data-id="' + esc(m.id) + '" data-on="' + (m.published ? '0' : '1') + '">' +
+        (m.published ? '下线' : '上线') + '</button>'
+      : '';
+
+    var uploadPanel = '<div class="group">' +
+      '<h4>上传新版本</h4>' +
+      '<div class="row">' +
+        '<div class="field"><label>版本号</label><input type="text" data-field="version" placeholder="1.1.0"></div>' +
+        '<div class="field"><label>安装包</label><input type="file" data-field="file" accept=".zip,.nxpkg"></div>' +
+      '</div>' +
+      (approved
+        ? '<label class="check"><input type="checkbox" data-field="gray"> 作为灰度版本（审核通过后只先下发给灰度设备）</label>' +
+          '<div class="row" data-gray-only style="display:none;margin-top:10px">' +
+            '<div class="field"><label>灰度比例 0-100</label><input type="number" min="0" max="100" value="10" data-field="percent"></div>' +
+            '<div class="field"><label>灰度白名单（可选）</label><input type="text" data-field="whitelist" placeholder="device-a, device-b"></div>' +
+          '</div>'
+        : '') +
+      '<div class="actions" style="margin-top:10px">' +
+        '<button class="btn primary" data-act="upload" data-id="' + esc(m.id) + '">提交审核</button>' +
+        '<span class="kv">上传后会先进入审核队列，线上版本不受影响。</span>' +
+      '</div>' +
+      '<div class="msg" data-msg></div>' +
+    '</div>';
+
+    var rolloutPanel = '';
+    if (approved && !m.pending) {
+      rolloutPanel = '<div class="group">' +
+        '<h4>放量与灰度</h4>' +
+        '<div class="row">' +
+          '<div class="field"><label>可见比例 0-100</label><input type="number" min="0" max="100" value="' + (m.visible_percent == null ? 100 : Number(m.visible_percent)) + '" data-field="visible_percent"></div>' +
+          '<div class="field"><label>可见白名单（可选）</label><input type="text" value="' + esc(m.visible_whitelist || '') + '" data-field="visible_whitelist" placeholder="device-a, device-b"></div>' +
+        '</div>' +
+        (m.gray_version
+          ? '<div class="row">' +
+              '<div class="field"><label>灰度比例 0-100</label><input type="number" min="0" max="100" value="' + Number(m.gray_percent || 0) + '" data-field="gray_percent"></div>' +
+              '<div class="field"><label>灰度白名单（可选）</label><input type="text" value="' + esc(m.gray_whitelist || '') + '" data-field="gray_whitelist" placeholder="device-a, device-b"></div>' +
+            '</div>' +
+            '<p class="kv">当前灰度版本：<code>' + esc(m.gray_version) + '</code></p>'
+          : '') +
+        '<div class="actions" style="margin-top:10px">' +
+          '<button class="btn" data-act="rollout" data-id="' + esc(m.id) + '">保存放量配置</button>' +
+          (m.gray_version
+            ? '<button class="btn primary" data-act="promote" data-id="' + esc(m.id) + '">灰度转全量</button>' +
+              '<button class="btn danger" data-act="discard" data-id="' + esc(m.id) + '">撤销灰度</button>'
+            : '') +
+        '</div>' +
+        '<div class="msg" data-msg></div>' +
+      '</div>';
+    }
+
+    return '<article class="app" data-app="' + esc(m.id) + '">' +
+      '<div class="app-head">' + icon +
+        '<div class="app-main">' +
+          '<div class="app-title"><h2>' + esc(m.title) + '</h2>' + statusBadge(m) + '</div>' +
+          '<div class="app-meta mono">' + esc(m.id) + ' · 线上版本 ' + esc(m.version) + ' · ' + fmtSize(m.size) + '</div>' +
+        '</div>' +
+        '<div class="actions">' + visBtn + '</div>' +
+      '</div>' +
+      pending + note +
+      '<div class="app-stats">' +
+        '<div class="stat"><div class="k">下载</div><div class="v">' + Number(m.downloads || 0) + '</div></div>' +
+        '<div class="stat"><div class="k">启动</div><div class="v">' + Number(m.opens || 0) + '</div></div>' +
+        '<div class="stat"><div class="k">独立设备</div><div class="v">' + Number(m.uv || 0) + '</div></div>' +
+      '</div>' +
+      '<details class="panel"><summary>更新与放量</summary><div class="panel-body">' +
+        uploadPanel + rolloutPanel +
+      '</div></details>' +
+    '</article>';
+  }
+
+  function cardOf(el) { return el.closest('.app'); }
+  function field(card, name) { return card.querySelector('[data-field="' + name + '"]'); }
+
+  function setMsg(card, text, ok) {
+    var el = card.querySelector('.msg');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'msg ' + (ok ? 'ok' : 'bad');
+  }
+
+  async function load() {
+    clearErr(dashErr);
+    try {
+      var data = await api('/api/v1/dev/miniapps');
+      apps = data.items || [];
+      showDash();
+      render();
+    } catch (err) {
+      if (err.status === 401) { showLogin(''); return; }
+      showDash();
+      showErr(dashErr, err.message || '加载失败');
+    }
+  }
+
+  async function login() {
+    clearErr(loginErr);
+    var key = keyInput.value.trim();
+    if (!key) { showErr(loginErr, '请粘贴开发者密钥'); return; }
+    var btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    try {
+      await api('/api/v1/dev/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: key })
+      });
+      keyInput.value = '';
+      await load();
+    } catch (err) {
+      showErr(loginErr, err.message || '登录失败');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function logout() {
+    try { await api('/api/v1/dev/session', { method: 'DELETE' }); } catch (e) {}
+    apps = [];
+    showLogin('');
+  }
+
+  async function upload(card, id) {
+    var file = field(card, 'file');
+    var version = field(card, 'version');
+    if (!file || !file.files || !file.files[0]) { setMsg(card, '请选择安装包', false); return; }
+    if (!version.value.trim()) { setMsg(card, '请填写版本号', false); return; }
+    var fd = new FormData();
+    fd.append('file', file.files[0]);
+    fd.append('version', version.value.trim());
+    var gray = field(card, 'gray');
+    if (gray && gray.checked) {
+      fd.append('gray', '1');
+      var percent = field(card, 'percent');
+      var whitelist = field(card, 'whitelist');
+      fd.append('percent', String(Number(percent && percent.value) || 0));
+      fd.append('whitelist', (whitelist && whitelist.value) || '');
+    }
+    setMsg(card, '正在上传…', true);
+    try {
+      await api('/api/v1/dev/miniapps/' + encodeURIComponent(id) + '/package', { method: 'POST', body: fd });
+      await load();
+    } catch (err) {
+      setMsg(card, err.message || '上传失败', false);
+    }
+  }
+
+  async function saveRollout(card, id) {
+    var grayPercent = field(card, 'gray_percent');
+    var grayWhitelist = field(card, 'gray_whitelist');
+    var body = {
+      visible_percent: Number(field(card, 'visible_percent').value) || 0,
+      visible_whitelist: field(card, 'visible_whitelist').value
+    };
+    if (grayPercent && grayWhitelist) {
+      body.gray_percent = Number(grayPercent.value) || 0;
+      body.gray_whitelist = grayWhitelist.value;
+    }
+    setMsg(card, '正在保存…', true);
+    try {
+      await api('/api/v1/dev/miniapps/' + encodeURIComponent(id) + '/rollout', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      await load();
+    } catch (err) {
+      setMsg(card, err.message || '保存失败', false);
+    }
+  }
+
+  async function toggleVisibility(card, id, on) {
+    setMsg(card, on ? '正在上线…' : '正在下线…', true);
+    try {
+      await api('/api/v1/dev/miniapps/' + encodeURIComponent(id) + '/visibility', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ published: !!on })
+      });
+      await load();
+    } catch (err) {
+      setMsg(card, err.message || '操作失败', false);
+    }
+  }
+
+  async function rolloutAction(card, id, action) {
+    var tip = action === 'promote'
+      ? '确认把当前灰度版本全量发布？所有设备都会收到该版本。'
+      : '确认撤销灰度？灰度包会被删除，设备回到稳定版本。';
+    if (!window.confirm(tip)) return;
+    setMsg(card, '正在处理…', true);
+    try {
+      await api('/api/v1/dev/miniapps/' + encodeURIComponent(id) + '/rollout/' + action, { method: 'POST' });
+      await load();
+    } catch (err) {
+      setMsg(card, err.message || '操作失败', false);
+    }
+  }
+
+  appList.addEventListener('change', function (ev) {
+    if (ev.target.matches('[data-field="gray"]')) {
+      var card = cardOf(ev.target);
+      var box = card.querySelector('[data-gray-only]');
+      if (box) box.style.display = ev.target.checked ? '' : 'none';
+    }
+  });
+
+  appList.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('[data-act]');
+    if (!btn) return;
+    var card = cardOf(btn);
+    var id = btn.getAttribute('data-id');
+    var act = btn.getAttribute('data-act');
+    if (act === 'upload') upload(card, id);
+    else if (act === 'rollout') saveRollout(card, id);
+    else if (act === 'visibility') toggleVisibility(card, id, btn.getAttribute('data-on') === '1');
+    else if (act === 'promote' || act === 'discard') rolloutAction(card, id, act);
+  });
+
+  document.getElementById('loginBtn').addEventListener('click', login);
+  keyInput.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') login();
+  });
+  document.getElementById('logoutBtn').addEventListener('click', logout);
+
+  load();
+})();
+</script>
+</body>
+</html>

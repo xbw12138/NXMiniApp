@@ -77,7 +77,8 @@ func slugID(title string) string {
 	return s
 }
 
-// SubmitMiniApp 处理免登录投稿：校验元数据与安装包，落库为待审核（published=false）。
+// SubmitMiniApp 处理免登录投稿：校验元数据与安装包，进入待审核队列。
+// 返回一次性明文 dev_key，上传者后续凭它维护自己的小程序。
 func (e *Env) SubmitMiniApp(c *gin.Context) {
 	if !submitRate.allow(c.ClientIP()) {
 		Abort(c, http.StatusTooManyRequests, "投稿过于频繁，请稍后再试")
@@ -96,10 +97,24 @@ func (e *Env) SubmitMiniApp(c *gin.Context) {
 		Abort(c, http.StatusBadRequest, "小程序 ID 仅支持小写字母、数字、- 和 _，且长度 2-64")
 		return
 	}
-	var exists models.MiniApp
-	if err := e.DB.Where("id = ?", id).Take(&exists).Error; err == nil {
-		Abort(c, http.StatusConflict, "小程序 ID 已被占用，请换一个")
-		return
+
+	// 带上开发者密钥时沿用原所有者；否则视为新开发者，签发新密钥。
+	presented, hasKey := devKeyFromRequest(c)
+	ownerHash := ""
+	if hasKey {
+		ownerHash = hashDevKey(presented)
+	}
+
+	var existing models.MiniApp
+	err := e.DB.Where("id = ?", id).Take(&existing).Error
+	reuse := false
+	if err == nil {
+		if ownerHash == "" || existing.OwnerKeyHash != ownerHash {
+			Abort(c, http.StatusConflict, "小程序 ID 已被占用，请换一个")
+			return
+		}
+		// 同一开发者重新投稿：允许覆盖自己的待审核/被驳回记录。
+		reuse = true
 	}
 
 	pkg, err := c.FormFile("package")
@@ -116,7 +131,6 @@ func (e *Env) SubmitMiniApp(c *gin.Context) {
 		return
 	}
 
-	var icon *struct{ Size int64; Filename string }
 	iconFile, iconErr := c.FormFile("icon")
 	if iconErr == nil {
 		ext := strings.ToLower(filepath.Ext(iconFile.Filename))
@@ -128,10 +142,10 @@ func (e *Env) SubmitMiniApp(c *gin.Context) {
 			Abort(c, http.StatusBadRequest, "图标大小需在 2MB 以内")
 			return
 		}
-		icon = &struct{ Size int64; Filename string }{iconFile.Size, iconFile.Filename}
 	}
 
-	// 解包到数据目录（ExtractPackage 自身会校验路径与 app.json）。
+	// 新投稿的包先落在 pending 目录，审核通过后才替换线上包。
+	pendingDir := miniappstore.PendingPackageDir(e.Cfg.DataDir, id)
 	tmp, err := os.CreateTemp("", "nxpkg-submit-*")
 	if err != nil {
 		Abort(c, http.StatusInternalServerError, "安装包保存失败")
@@ -144,16 +158,27 @@ func (e *Env) SubmitMiniApp(c *gin.Context) {
 		Abort(c, http.StatusInternalServerError, "安装包保存失败")
 		return
 	}
-	if err := miniappstore.ExtractPackage(tmpPath, miniappstore.PackageDir(e.Cfg.DataDir, id)); err != nil {
+	if err := miniappstore.ExtractPackage(tmpPath, pendingDir); err != nil {
 		Abort(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	pendingSize := miniappstore.DirSize(pendingDir)
+	// 同一时间只保留一份待审核内容，避免残留旧的灰度待审包。
+	_ = os.RemoveAll(miniappstore.PendingGrayPackageDir(e.Cfg.DataDir, id))
 
 	iconName := ""
-	if icon != nil {
-		iconName = "icon" + strings.ToLower(filepath.Ext(icon.Filename))
+	if iconFile != nil {
+		iconName = "icon" + strings.ToLower(filepath.Ext(iconFile.Filename))
+		// 已上线的记录不能立刻换图标，先存成待审核图标。
+		if reuse {
+			iconName = "icon-pending" + strings.ToLower(filepath.Ext(iconFile.Filename))
+		}
+		if err := os.MkdirAll(miniappstore.MiniAppDir(e.Cfg.DataDir, id), 0o755); err != nil {
+			Abort(c, http.StatusInternalServerError, "图标保存失败")
+			return
+		}
 		if err := c.SaveUploadedFile(iconFile, filepath.Join(miniappstore.MiniAppDir(e.Cfg.DataDir, id), iconName)); err != nil {
-			_ = os.RemoveAll(miniappstore.MiniAppDir(e.Cfg.DataDir, id))
+			_ = os.RemoveAll(pendingDir)
 			Abort(c, http.StatusInternalServerError, "图标保存失败")
 			return
 		}
@@ -168,31 +193,78 @@ func (e *Env) SubmitMiniApp(c *gin.Context) {
 		category = "其他"
 	}
 	now := NowMS()
+
+	var devKey string
+	if !reuse {
+		if hasKey {
+			devKey = presented
+		} else {
+			devKey = newDevKey()
+			ownerHash = hashDevKey(devKey)
+		}
+	}
+
 	// 用 map 显式插入：Published 带 default:true 标签，struct 插入时
 	// GORM 会省略零值 false 让数据库默认值生效，导致投稿直接上架。
 	record := map[string]interface{}{
-		"id":          id,
-		"title":       title,
-		"summary":     strings.TrimSpace(c.PostForm("summary")),
-		"description": strings.TrimSpace(c.PostForm("description")),
-		"category":    category,
-		"developer":   strings.TrimSpace(c.PostForm("developer")),
-		"version":     version,
-		"icon":        iconName,
-		"published":   false, // 投稿默认待审核，管理员上架后公开
-		"downloads":   0,
-		"created_at":  now,
-		"updated_at":  now,
+		"summary":              strings.TrimSpace(c.PostForm("summary")),
+		"description":          strings.TrimSpace(c.PostForm("description")),
+		"category":             category,
+		"developer":            strings.TrimSpace(c.PostForm("developer")),
+		"review_note":          "",
+		"owner_key_hash":       ownerHash,
+		"pending_kind":         models.PendingStable,
+		"pending_version":      version,
+		"pending_size":         pendingSize,
+		"pending_percent":      0,
+		"pending_whitelist":    "",
+		"pending_submitted_at": now,
+		"updated_at":           now,
 	}
-	if err := e.DB.Model(&models.MiniApp{}).Create(record).Error; err != nil {
-		_ = os.RemoveAll(miniappstore.MiniAppDir(e.Cfg.DataDir, id))
-		Abort(c, http.StatusInternalServerError, "投稿失败，请稍后再试")
-		return
+	if reuse && IsApproved(&existing) {
+		// 已上线的记录提交新版本：线上继续跑旧包，只挂起待审核版本。
+		record["title"] = title
+		record["pending_icon"] = iconName
+		if err := e.DB.Model(&models.MiniApp{}).Where("id = ?", id).Updates(record).Error; err != nil {
+			_ = os.RemoveAll(pendingDir)
+			Abort(c, http.StatusInternalServerError, "投稿失败，请稍后再试")
+			return
+		}
+		devKey = presented
+	} else if reuse {
+		// 待审核或被驳回的记录重新投稿：直接回到待审核队列。
+		record["title"] = title
+		record["version"] = version
+		record["published"] = false
+		record["review_status"] = models.ReviewPending
+		record["pending_icon"] = iconName
+		if err := e.DB.Model(&models.MiniApp{}).Where("id = ?", id).Updates(record).Error; err != nil {
+			_ = os.RemoveAll(pendingDir)
+			Abort(c, http.StatusInternalServerError, "投稿失败，请稍后再试")
+			return
+		}
+		devKey = presented
+	} else {
+		record["id"] = id
+		record["title"] = title
+		record["version"] = version
+		record["icon"] = iconName
+		record["pending_icon"] = ""
+		record["published"] = false
+		record["review_status"] = models.ReviewPending
+		record["downloads"] = 0
+		record["created_at"] = now
+		if err := e.DB.Model(&models.MiniApp{}).Create(record).Error; err != nil {
+			_ = os.RemoveAll(miniappstore.MiniAppDir(e.Cfg.DataDir, id))
+			Abort(c, http.StatusInternalServerError, "投稿失败，请稍后再试")
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":      id,
 		"title":   title,
-		"message": "投稿成功，等待管理员审核上架",
+		"dev_key": devKey,
+		"message": "投稿成功，等待管理员审核上架。请妥善保存开发者密钥，用于后续更新与维护。",
 	})
 }

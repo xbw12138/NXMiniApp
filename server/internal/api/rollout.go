@@ -44,8 +44,12 @@ func inWhitelist(list, device string) bool {
 	return false
 }
 
-// visibleTo 判断设备能否看到该小程序：白名单优先，其次 Published + 可见比例。
+// visibleTo 判断设备能否看到该小程序：先看审核状态，再看白名单与可见比例。
 func visibleTo(app *models.MiniApp, device string) bool {
+	// 未通过审核的小程序（含待审核、已驳回）对任何设备都不可见。
+	if !IsApproved(app) {
+		return false
+	}
 	if inWhitelist(app.VisibleWhitelist, device) {
 		return true
 	}

@@ -41,6 +41,17 @@ func GrayPackageDir(dataDir, id string) string {
 	return filepath.Join(MiniAppDir(dataDir, id), "package-gray")
 }
 
+// PendingPackageDir 存放等待审核的稳定版本包。审核通过前线上继续使用
+// PackageDir，驳回时整目录删除，不会影响已上线的版本。
+func PendingPackageDir(dataDir, id string) string {
+	return filepath.Join(MiniAppDir(dataDir, id), "package-pending")
+}
+
+// PendingGrayPackageDir 存放等待审核的灰度版本包。
+func PendingGrayPackageDir(dataDir, id string) string {
+	return filepath.Join(MiniAppDir(dataDir, id), "package-pending-gray")
+}
+
 func fileExists(p string) bool {
 	info, err := os.Stat(p)
 	return err == nil && !info.IsDir()
@@ -358,18 +369,19 @@ func Seed(db *gorm.DB, dataDir, seedDir string) error {
 
 		now := time.Now().UnixMilli()
 		row := models.MiniApp{
-			ID:          id,
-			Title:       metaString(meta, "title", id),
-			Summary:     metaString(meta, "summary", ""),
-			Description: metaString(meta, "description", ""),
-			Category:    metaString(meta, "category", "示例"),
-			Developer:   metaString(meta, "developer", ""),
-			Version:     metaString(meta, "version", "1.0.0"),
-			Icon:        icon,
-			Published:   metaBool(meta, "published", true),
-			Downloads:   0,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			ID:           id,
+			Title:        metaString(meta, "title", id),
+			Summary:      metaString(meta, "summary", ""),
+			Description:  metaString(meta, "description", ""),
+			Category:     metaString(meta, "category", "示例"),
+			Developer:    metaString(meta, "developer", ""),
+			Version:      metaString(meta, "version", "1.0.0"),
+			Icon:         icon,
+			Published:    metaBool(meta, "published", true),
+			ReviewStatus: models.ReviewApproved,
+			Downloads:    0,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		}
 		if err := db.Create(&row).Error; err != nil {
 			return err

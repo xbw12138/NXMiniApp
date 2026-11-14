@@ -240,6 +240,30 @@ a { color: var(--accent); text-decoration: none; }
   font-size: 14px;
   color: var(--text);
 }
+.devkey-box {
+  margin: 0 auto 20px;
+  max-width: 520px;
+  padding: 14px 16px;
+  border: 1px solid #f0d9a0;
+  border-radius: 9px;
+  background: #fffaf0;
+  text-align: left;
+}
+.devkey-title { margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #9a6700; }
+.devkey-row { display: flex; align-items: center; gap: 10px; }
+.devkey-row code {
+  flex: 1 1 auto;
+  overflow-x: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.devkey-hint { margin-top: 8px; font-size: 12.5px; color: var(--text-2); }
+.result .btn.small { padding: 6px 14px; font-size: 13px; box-shadow: none; }
 .result .btns { display: flex; justify-content: center; gap: 12px; }
 .result .btn.ghost {
   background: #fff;
@@ -317,6 +341,7 @@ a { color: var(--accent); text-decoration: none; }
     <a href="/download">下载容器</a>
     <a href="/docs/index.html">开发文档</a>
     <a class="active" href="/submit">我要投稿</a>
+    <a href="/my">我的小程序</a>
   </nav>
 </header>
 
@@ -410,8 +435,16 @@ a { color: var(--accent); text-decoration: none; }
       <h2>投稿成功</h2>
       <p>你的小程序已进入审核队列，通过后自动上架。</p>
       <div class="app-id" id="resultId"></div>
+      <div class="devkey-box">
+        <div class="devkey-title">开发者密钥（只显示这一次，请立即保存）</div>
+        <div class="devkey-row">
+          <code id="resultKey"></code>
+          <button type="button" class="btn ghost small" id="copyKey">复制</button>
+        </div>
+        <div class="devkey-hint">凭该密钥可在「我的小程序」查看审核进度、上传新版本、调整放量与上下线。</div>
+      </div>
       <div class="btns">
-        <a class="btn" href="/">返回首页</a>
+        <a class="btn" href="/my">前往我的小程序</a>
         <a class="btn ghost" href="/docs/index.html">查看开发文档</a>
       </div>
     </div>
@@ -481,6 +514,22 @@ a { color: var(--accent); text-decoration: none; }
   }
   function clearErr() { errBox.classList.remove("show"); errBox.textContent = ""; }
 
+  document.getElementById("copyKey").addEventListener("click", function () {
+    var text = document.getElementById("resultKey").textContent || "";
+    var btn = this;
+    function done() { btn.textContent = "已复制"; setTimeout(function () { btn.textContent = "复制"; }, 1600); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () {});
+      return;
+    }
+    var range = document.createRange();
+    range.selectNodeContents(document.getElementById("resultKey"));
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    try { document.execCommand("copy"); done(); } catch (err) {}
+  });
+
   form.addEventListener("submit", function (ev) {
     ev.preventDefault();
     clearErr();
@@ -520,6 +569,7 @@ a { color: var(--accent); text-decoration: none; }
       .then(function (res) {
         if (res.ok && res.data.id) {
           document.getElementById("resultId").textContent = "ID：" + res.data.id;
+          document.getElementById("resultKey").textContent = res.data.dev_key || "";
           form.style.display = "none";
           document.querySelector(".tips").style.display = "none";
           document.getElementById("resultBox").classList.add("show");

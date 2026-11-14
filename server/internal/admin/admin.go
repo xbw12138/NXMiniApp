@@ -3,6 +3,7 @@
 package admin
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -52,8 +53,11 @@ func Register(r *gin.Engine, e *api.Env) {
 	auth.POST("/miniapps/:id/rollout/package", uploadGrayMiniAppPackage(e))
 	auth.POST("/miniapps/:id/rollout/promote", promoteMiniAppRollout(e))
 	auth.POST("/miniapps/:id/rollout/discard", discardMiniAppRollout(e))
+	auth.POST("/miniapps/:id/review", reviewMiniApp(e))
+	auth.POST("/miniapps/:id/reset-key", resetMiniAppKey(e))
 	auth.POST("/miniapps/:id/icon", uploadMiniAppIcon(e))
 	auth.POST("/miniapps/:id/package", uploadMiniAppPackage(e))
+	auth.GET("/miniapps/:id/pending/download", downloadPendingMiniApp(e))
 	auth.GET("/releases", listReleases(e))
 	auth.POST("/releases", uploadRelease(e))
 	auth.PATCH("/releases/:id/flags", patchReleaseFlags(e))
@@ -146,13 +150,17 @@ func stats(e *api.Env) gin.HandlerFunc {
 func notifications(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var pending int64
-		if err := e.DB.Model(&models.MiniApp{}).Where("published = ?", false).Count(&pending).Error; err != nil {
+		if err := e.DB.Model(&models.MiniApp{}).Where(pendingReviewQuery).
+			Count(&pending).Error; err != nil {
 			api.Abort(c, http.StatusInternalServerError, "读取待审数量失败")
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"pending_miniapps": pending})
 	}
 }
+
+// pendingReviewQuery 匹配「首次投稿待审核」或「已有线上版本、新版本待审核」。
+const pendingReviewQuery = "review_status = 'pending' OR pending_version <> '' OR pending_kind <> ''"
 
 func listApps(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -585,12 +593,13 @@ func refetchApp(c *gin.Context, e *api.Env, id string) {
 func listMiniApps(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		query := e.DB.Order("updated_at DESC")
-		// status=pending 只返回待审核投稿，status=published 只返回已上架；缺省返回全部。
+		// status=pending 只返回待审核（含待审核的新版本）；
+		// status=published 返回已通过审核的小程序（无论当前是否上线）。
 		switch c.Query("status") {
 		case "pending":
-			query = query.Where("published = ?", false)
+			query = query.Where(pendingReviewQuery)
 		case "published":
-			query = query.Where("published = ?", true)
+			query = query.Where("review_status = ? OR review_status = ''", models.ReviewApproved)
 		}
 		rows := make([]models.MiniApp, 0)
 		query.Find(&rows)
@@ -602,7 +611,7 @@ func listMiniApps(e *api.Env) gin.HandlerFunc {
 	}
 }
 
-// adminMiniAppJSON 在公开字段基础上补充后台专用字段（投稿时间、是否受保护）。
+// adminMiniAppJSON 在公开字段基础上补充后台专用字段（审核、待审版本、是否受保护）。
 func adminMiniAppJSON(e *api.Env, m *models.MiniApp) gin.H {
 	item := api.MiniAppJSON(e.Cfg, m)
 	for key, value := range api.RolloutJSON(m) {
@@ -610,6 +619,10 @@ func adminMiniAppJSON(e *api.Env, m *models.MiniApp) gin.H {
 	}
 	item["created_at"] = m.CreatedAt
 	item["protected"] = m.ID == miniappstore.HomeID
+	item["review_status"] = api.ReviewStatusOf(m)
+	item["review_note"] = m.ReviewNote
+	item["pending"] = api.PendingJSON(m)
+	item["owner_bound"] = m.OwnerKeyHash != ""
 	return item
 }
 
@@ -672,6 +685,7 @@ func createMiniApp(e *api.Env) gin.HandlerFunc {
 			Developer:      strings.TrimSpace(body.Developer),
 			Version:        version,
 			Published:      published,
+			ReviewStatus:   models.ReviewApproved,
 			Featured:       featured,
 			CreatedAt:      now,
 			UpdatedAt:      now,
@@ -817,6 +831,36 @@ func uploadMiniAppIcon(e *api.Env) gin.HandlerFunc {
 	}
 }
 
+// downloadPendingMiniApp 打包下载待审核的安装包，供管理员审核校验。
+func downloadPendingMiniApp(e *api.Env) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		m := e.GetMiniApp(c, c.Param("id"))
+		if m == nil {
+			return
+		}
+		dir := miniappstore.PendingPackageDir(e.Cfg.DataDir, m.ID)
+		if m.PendingKind == models.PendingGray {
+			dir = miniappstore.PendingGrayPackageDir(e.Cfg.DataDir, m.ID)
+		}
+		if !api.DirExists(dir) {
+			api.Abort(c, http.StatusNotFound, "待审核的安装包不存在")
+			return
+		}
+		var buf bytes.Buffer
+		if err := miniappstore.WriteStoredZip(&buf, dir); err != nil {
+			api.Abort(c, http.StatusInternalServerError, "打包失败")
+			return
+		}
+		version := m.PendingVersion
+		if version == "" {
+			version = m.Version
+		}
+		c.Header("Content-Disposition",
+			"attachment; filename=\""+m.ID+"-"+version+"-pending.nxpkg\"")
+		c.Data(http.StatusOK, "application/zip", buf.Bytes())
+	}
+}
+
 func uploadMiniAppPackage(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		m := e.GetMiniApp(c, c.Param("id"))
@@ -853,7 +897,21 @@ func uploadMiniAppPackage(e *api.Env) gin.HandlerFunc {
 			return
 		}
 
-		updates := map[string]any{"updated_at": api.NowMS()}
+		// 管理员直接上传会覆盖线上包，同时丢弃未完成的待审核版本。
+		_ = os.RemoveAll(miniappstore.PendingPackageDir(e.Cfg.DataDir, m.ID))
+		_ = os.RemoveAll(miniappstore.PendingGrayPackageDir(e.Cfg.DataDir, m.ID))
+		updates := map[string]any{
+			"updated_at":           api.NowMS(),
+			"review_status":        models.ReviewApproved,
+			"review_note":          "",
+			"pending_kind":         "",
+			"pending_version":      "",
+			"pending_size":         0,
+			"pending_icon":         "",
+			"pending_percent":      0,
+			"pending_whitelist":    "",
+			"pending_submitted_at": 0,
+		}
 		if version != "" {
 			updates["version"] = version
 		}
@@ -940,12 +998,23 @@ func uploadGrayMiniAppPackage(e *api.Env) gin.HandlerFunc {
 			return
 		}
 
-		e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(map[string]any{
+		updates := map[string]any{
 			"gray_version":   version,
 			"gray_percent":   api.ClampPercent(c.PostForm("percent")),
 			"gray_whitelist": api.NormalizeDevices(c.PostForm("whitelist")),
 			"updated_at":     api.NowMS(),
-		})
+		}
+		// 管理员直接上传灰度包时，丢弃同类型的待审核灰度版本。
+		if m.PendingKind == models.PendingGray {
+			_ = os.RemoveAll(miniappstore.PendingGrayPackageDir(e.Cfg.DataDir, m.ID))
+			updates["pending_kind"] = ""
+			updates["pending_version"] = ""
+			updates["pending_size"] = 0
+			updates["pending_percent"] = 0
+			updates["pending_whitelist"] = ""
+			updates["pending_submitted_at"] = 0
+		}
+		e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(updates)
 		refetchMiniApp(c, e, m.ID)
 	}
 }
@@ -961,24 +1030,10 @@ func promoteMiniAppRollout(e *api.Env) gin.HandlerFunc {
 			api.Abort(c, http.StatusBadRequest, "当前没有灰度版本")
 			return
 		}
-		grayDir := miniappstore.GrayPackageDir(e.Cfg.DataDir, m.ID)
-		if info, err := os.Stat(grayDir); err != nil || !info.IsDir() {
-			api.Abort(c, http.StatusBadRequest, "灰度包不存在")
+		if err := api.PromoteGray(e.Cfg, e.DB, m); err != nil {
+			api.Abort(c, http.StatusBadRequest, err.Error())
 			return
 		}
-		stableDir := miniappstore.PackageDir(e.Cfg.DataDir, m.ID)
-		_ = os.RemoveAll(stableDir)
-		if err := os.Rename(grayDir, stableDir); err != nil {
-			api.Abort(c, http.StatusInternalServerError, "全量发布失败")
-			return
-		}
-		e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(map[string]any{
-			"version":        m.GrayVersion,
-			"gray_version":   "",
-			"gray_percent":   0,
-			"gray_whitelist": "",
-			"updated_at":     api.NowMS(),
-		})
 		refetchMiniApp(c, e, m.ID)
 	}
 }
@@ -990,14 +1045,176 @@ func discardMiniAppRollout(e *api.Env) gin.HandlerFunc {
 		if m == nil {
 			return
 		}
-		_ = os.RemoveAll(miniappstore.GrayPackageDir(e.Cfg.DataDir, m.ID))
+		if err := api.DiscardGray(e.Cfg, e.DB, m); err != nil {
+			api.Abort(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+		refetchMiniApp(c, e, m.ID)
+	}
+}
+
+// reviewMiniApp 审核待发布内容：通过后把 pending 包替换为线上包；
+// 驳回时保留线上版本（如果有），并记录驳回理由。
+func reviewMiniApp(e *api.Env) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		m := e.GetMiniApp(c, c.Param("id"))
+		if m == nil {
+			return
+		}
+		var body struct {
+			Approve bool   `json:"approve"`
+			Note    string `json:"note"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			api.Abort(c, http.StatusBadRequest, "参数错误")
+			return
+		}
+
+		now := api.NowMS()
+		if body.Approve {
+			updates, err := approvePending(e, m, now)
+			if err != nil {
+				api.Abort(c, http.StatusBadRequest, err.Error())
+				return
+			}
+			if err := e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(updates).Error; err != nil {
+				api.Abort(c, http.StatusInternalServerError, "审核失败")
+				return
+			}
+			refetchMiniApp(c, e, m.ID)
+			return
+		}
+
+		note := strings.TrimSpace(body.Note)
+		if note == "" {
+			api.Abort(c, http.StatusBadRequest, "请填写驳回理由")
+			return
+		}
+		rejectPending(e, m)
+		updates := map[string]any{
+			"review_note":          note,
+			"pending_kind":         "",
+			"pending_version":      "",
+			"pending_size":         0,
+			"pending_icon":         "",
+			"pending_percent":      0,
+			"pending_whitelist":    "",
+			"pending_submitted_at": 0,
+			"updated_at":           now,
+		}
+		// 已有线上版本时只驳回本次更新，线上保持原样。
+		if !api.IsApproved(m) || !api.DirExists(miniappstore.PackageDir(e.Cfg.DataDir, m.ID)) {
+			updates["review_status"] = models.ReviewRejected
+			updates["published"] = false
+		}
+		e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(updates)
+		refetchMiniApp(c, e, m.ID)
+	}
+}
+
+// approvePending 把待审核包替换为线上包，返回需要写回数据库的字段。
+func approvePending(e *api.Env, m *models.MiniApp, now int64) (map[string]any, error) {
+	updates := map[string]any{
+		"review_status":        models.ReviewApproved,
+		"review_note":          "",
+		"pending_kind":         "",
+		"pending_version":      "",
+		"pending_size":         0,
+		"pending_icon":         "",
+		"pending_percent":      0,
+		"pending_whitelist":    "",
+		"pending_submitted_at": 0,
+		"updated_at":           now,
+	}
+	// 首次通过审核才自动上架；已上线的版本更新保持原来的上下线状态。
+	if !api.IsApproved(m) {
+		updates["published"] = true
+	}
+
+	if m.PendingKind != "" || m.PendingVersion != "" {
+		version := strings.TrimSpace(m.PendingVersion)
+		switch m.PendingKind {
+		case models.PendingGray:
+			src := miniappstore.PendingGrayPackageDir(e.Cfg.DataDir, m.ID)
+			if !api.DirExists(src) {
+				return nil, fmt.Errorf("待审核的灰度包不存在")
+			}
+			if !api.DirExists(miniappstore.PackageDir(e.Cfg.DataDir, m.ID)) {
+				return nil, fmt.Errorf("缺少线上稳定版本，不能发布灰度")
+			}
+			dst := miniappstore.GrayPackageDir(e.Cfg.DataDir, m.ID)
+			_ = os.RemoveAll(dst)
+			if err := os.Rename(src, dst); err != nil {
+				return nil, fmt.Errorf("灰度包发布失败")
+			}
+			updates["gray_version"] = version
+			updates["gray_percent"] = m.PendingPercent
+			updates["gray_whitelist"] = m.PendingWhitelist
+		default:
+			src := miniappstore.PendingPackageDir(e.Cfg.DataDir, m.ID)
+			if !api.DirExists(src) {
+				// 旧数据：投稿包仍在 package 目录，只需补版本号。
+				if api.DirExists(miniappstore.PackageDir(e.Cfg.DataDir, m.ID)) {
+					if version != "" {
+						updates["version"] = version
+					}
+					break
+				}
+				return nil, fmt.Errorf("待审核的安装包不存在")
+			}
+			dst := miniappstore.PackageDir(e.Cfg.DataDir, m.ID)
+			_ = os.RemoveAll(dst)
+			if err := os.Rename(src, dst); err != nil {
+				return nil, fmt.Errorf("安装包发布失败")
+			}
+			if version != "" {
+				updates["version"] = version
+			}
+		}
+	}
+
+	// 待审核图标随版本一起生效。
+	if m.PendingIcon != "" {
+		src := filepath.Join(miniappstore.MiniAppDir(e.Cfg.DataDir, m.ID), m.PendingIcon)
+		if api.FileExists(src) {
+			name := "icon" + strings.ToLower(filepath.Ext(m.PendingIcon))
+			if m.Icon != "" && m.Icon != name {
+				_ = os.Remove(filepath.Join(miniappstore.MiniAppDir(e.Cfg.DataDir, m.ID), m.Icon))
+			}
+			if err := os.Rename(src, filepath.Join(miniappstore.MiniAppDir(e.Cfg.DataDir, m.ID), name)); err == nil {
+				updates["icon"] = name
+			}
+		}
+	}
+	return updates, nil
+}
+
+// rejectPending 删除待审核的包与图标，不影响线上版本。
+func rejectPending(e *api.Env, m *models.MiniApp) {
+	_ = os.RemoveAll(miniappstore.PendingPackageDir(e.Cfg.DataDir, m.ID))
+	_ = os.RemoveAll(miniappstore.PendingGrayPackageDir(e.Cfg.DataDir, m.ID))
+	if m.PendingIcon != "" {
+		_ = os.Remove(filepath.Join(miniappstore.MiniAppDir(e.Cfg.DataDir, m.ID), m.PendingIcon))
+	}
+}
+
+// resetMiniAppKey 重置开发者密钥，明文只在本次响应中返回一次。
+func resetMiniAppKey(e *api.Env) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		m := e.GetMiniApp(c, c.Param("id"))
+		if m == nil {
+			return
+		}
+		key := api.NewDevKey()
 		e.DB.Model(&models.MiniApp{}).Where("id = ?", m.ID).Updates(map[string]any{
-			"gray_version":   "",
-			"gray_percent":   0,
-			"gray_whitelist": "",
+			"owner_key_hash": api.HashDevKey(key),
 			"updated_at":     api.NowMS(),
 		})
-		refetchMiniApp(c, e, m.ID)
+		c.JSON(http.StatusOK, gin.H{
+			"id":      m.ID,
+			"dev_key": key,
+			"message": "开发者密钥已重置，请复制并交给上传者；旧密钥立即失效。",
+		})
 	}
 }
 
