@@ -596,16 +596,21 @@ func listMiniApps(e *api.Env) gin.HandlerFunc {
 		query.Find(&rows)
 		items := make([]gin.H, 0, len(rows))
 		for i := range rows {
-			item := api.MiniAppJSON(e.Cfg, &rows[i])
-			for key, value := range api.RolloutJSON(&rows[i]) {
-				item[key] = value
-			}
-			// 投稿时间只给后台用，不进公开接口。
-			item["created_at"] = rows[i].CreatedAt
-			items = append(items, item)
+			items = append(items, adminMiniAppJSON(e, &rows[i]))
 		}
 		c.JSON(http.StatusOK, gin.H{"items": items})
 	}
+}
+
+// adminMiniAppJSON 在公开字段基础上补充后台专用字段（投稿时间、是否受保护）。
+func adminMiniAppJSON(e *api.Env, m *models.MiniApp) gin.H {
+	item := api.MiniAppJSON(e.Cfg, m)
+	for key, value := range api.RolloutJSON(m) {
+		item[key] = value
+	}
+	item["created_at"] = m.CreatedAt
+	item["protected"] = m.ID == miniappstore.HomeID
+	return item
 }
 
 func createMiniApp(e *api.Env) gin.HandlerFunc {
@@ -734,6 +739,11 @@ func deleteMiniApp(e *api.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		m := e.GetMiniApp(c, c.Param("id"))
 		if m == nil {
+			return
+		}
+		// 内置首页是容器启动后的默认入口，删除会导致首页不可用，必须在接口层拦住。
+		if m.ID == miniappstore.HomeID {
+			api.Abort(c, http.StatusBadRequest, "内置首页小程序受保护，不能删除")
 			return
 		}
 		e.DB.Where("id = ?", m.ID).Delete(&models.MiniApp{})
@@ -998,9 +1008,6 @@ func refetchMiniApp(c *gin.Context, e *api.Env, id string) {
 		api.Abort(c, http.StatusNotFound, "mini app not found")
 		return
 	}
-	item := api.MiniAppJSON(e.Cfg, &fresh)
-	for key, value := range api.RolloutJSON(&fresh) {
-		item[key] = value
-	}
+	item := adminMiniAppJSON(e, &fresh)
 	c.JSON(http.StatusOK, item)
 }

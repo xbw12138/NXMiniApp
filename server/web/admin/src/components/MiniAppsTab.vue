@@ -182,8 +182,14 @@
 
         <div class="card section danger-zone">
           <h3>危险操作</h3>
+          <p v-if="detail.protected" class="muted">内置首页小程序受保护，不能删除。</p>
           <div>
-            <button class="btn danger" @click="removeMiniApp">删除该小程序</button>
+            <button
+              class="btn danger"
+              :disabled="detail.protected"
+              :title="detail.protected ? '内置首页小程序受保护，不能删除' : ''"
+              @click="removeMiniApp"
+            >删除该小程序</button>
           </div>
         </div>
       </div>

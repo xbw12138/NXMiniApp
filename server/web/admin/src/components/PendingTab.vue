@@ -38,7 +38,7 @@
             <td>
               <button class="btn small" @click="openDetail(m)">详情</button>
               <button class="btn small primary" :disabled="busy === m.id" @click="approve(m)">通过上架</button>
-              <button class="btn small danger" :disabled="busy === m.id" @click="remove(m)">删除</button>
+              <button class="btn small danger" :disabled="busy === m.id || m.protected" :title="m.protected ? '内置首页小程序受保护，不能删除' : ''" @click="remove(m)">删除</button>
             </td>
           </tr>
           <tr v-if="!items.length && !loading">
@@ -63,7 +63,7 @@
         <p v-if="detailError" class="error">{{ detailError }}</p>
         <div class="actions">
           <button class="btn ghost" @click="detail = null">关闭</button>
-          <button class="btn danger" :disabled="busy === detail.id" @click="remove(detail)">删除</button>
+          <button class="btn danger" :disabled="busy === detail.id || detail.protected" :title="detail.protected ? '内置首页小程序受保护，不能删除' : ''" @click="remove(detail)">删除</button>
           <button class="btn primary" :disabled="busy === detail.id" @click="approve(detail)">通过上架</button>
         </div>
       </div>
@@ -132,6 +132,10 @@ async function approve(m) {
 }
 
 async function remove(m) {
+  if (m.protected) {
+    error.value = '内置首页小程序受保护，不能删除'
+    return
+  }
   if (!window.confirm(`确定删除投稿「${m.title}」吗？该操作不可恢复。`)) return
   busy.value = m.id
   error.value = ''
