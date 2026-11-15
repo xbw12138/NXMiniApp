@@ -72,6 +72,9 @@ struct HardwareManager::Impl {
 
     bool irActive = false;
     bool irImageMode = true;
+    int irFailCount = 0;
+    bool irFirstPoll = true;
+    double irWarmupUntil = -1.0;
     IrsIrCameraHandle irHandle = {};
     double irLastPoll = 0.0;
     std::vector<std::uint8_t> irGray;
@@ -131,7 +134,8 @@ void HardwareManager::tick(double nowMs) {
     impl->lastTick = nowMs;
     if (delta < 0.0 || delta > 200.0) delta = 0.0;
 
-    if (impl->motionWanted) impl->pollMotion();
+    // 红外与六轴共用右手柄传感器，红外运行期间暂停六轴采样。
+    if (impl->motionWanted && !impl->irActive) impl->pollMotion();
     if (impl->rumbleActive) {
         if (impl->rumbleRemainingMs > 0.0) {
             impl->rumbleRemainingMs -= delta;
@@ -277,6 +281,15 @@ std::string resultText(Result rc) {
     char buffer[32];
     std::snprintf(buffer, sizeof(buffer), "0x%08x", static_cast<unsigned>(R_VALUE(rc)));
     return buffer;
+}
+
+// 崩溃前的最后几步必须落盘：写到独立文件，避免被 brls 的日志缓冲覆盖。
+void debugLine(const char* text) {
+    FILE* file = std::fopen("sdmc:/switch/miniapp/ir_debug.log", "a");
+    if (!file) return;
+    std::fprintf(file, "%s\n", text);
+    std::fflush(file);
+    std::fclose(file);
 }
 
 std::string hexBytes(const void* data, size_t size) {
@@ -448,28 +461,89 @@ bool HardwareManager::Impl::startIr(const std::string& mode) {
         return false;
     }
 
+    // 只探测真正连着的无线右手柄，避免向 hid 逐个请求不存在的手柄。
+    std::vector<HidNpadIdType> candidates;
+    for (u32 i = 0; i < 8; ++i) {
+        const HidNpadIdType id = static_cast<HidNpadIdType>(i);
+        const u32 style = hidGetNpadStyleSet(id);
+        if (style & (HidNpadStyleTag_NpadJoyRight | HidNpadStyleTag_NpadJoyDual)) {
+            candidates.push_back(id);
+        }
+    }
+    if (candidates.empty()) {
+        irError = "no wireless right Joy-Con (detach it from the console)";
+        debugLine("miniapp ir: no right Joy-Con candidate");
+        irsExit();
+        JsonValue state = makeFlagState(irError.c_str());
+        state.setMember("supported", JsonValue::boolean(true));
+        state.setMember("running", JsonValue::boolean(false));
+        std::lock_guard<std::mutex> lock(mutex);
+        irState = std::move(state);
+        return false;
+    }
+
+    // 拆装 Joy-Con 后 irs 的状态需要一小段时间才刷新，短暂轮询等待 Available。
     bool found = false;
-    std::string lastStatus;
-    for (int i = 0; i < 8; ++i) {
-        IrsIrCameraHandle handle = {};
-        rc = irsGetIrCameraHandle(&handle, static_cast<HidNpadIdType>(i));
-        if (R_FAILED(rc)) {
-            lastStatus = resultText(rc);
-            continue;
+    std::string statusText;
+    int cameraIndex = -1;
+    constexpr int kStatusAttempts = 20;
+    for (int attempt = 0; attempt < kStatusAttempts && !found; ++attempt) {
+        statusText.clear();
+        for (HidNpadIdType id : candidates) {
+            IrsIrCameraHandle handle = {};
+            rc = irsGetIrCameraHandle(&handle, id);
+            if (R_FAILED(rc)) continue;
+            IrsIrCameraStatus status = IrsIrCameraStatus_Unconnected;
+            if (R_FAILED(irsGetIrCameraStatus(handle, &status))) continue;
+            if (status == IrsIrCameraStatus_Available) {
+                irHandle = handle;
+                cameraIndex = static_cast<int>(id);
+                found = true;
+                break;
+            }
+            if (!statusText.empty()) statusText += " ";
+            statusText += "No" + std::to_string(static_cast<int>(id) + 1) + "=";
+            statusText += status == IrsIrCameraStatus_Unsupported ? "unsupported" : "unconnected";
         }
-        IrsIrCameraStatus status = IrsIrCameraStatus_Unconnected;
-        if (R_FAILED(irsGetIrCameraStatus(handle, &status))) continue;
-        if (status == IrsIrCameraStatus_Available) {
-            irHandle = handle;
-            found = true;
-            break;
-        }
-        lastStatus = status == IrsIrCameraStatus_Unsupported ? "unsupported" : "unconnected";
+        if (!found && attempt + 1 < kStatusAttempts) svcSleepThread(50000000L);
     }
 
     if (!found) {
         irError = "IR camera not available";
-        if (!lastStatus.empty()) irError += " (" + lastStatus + ")";
+        if (!statusText.empty()) irError += " (" + statusText + ")";
+        debugLine("miniapp ir: camera not available");
+        irsExit();
+        JsonValue state = makeFlagState(irError.c_str());
+        state.setMember("supported", JsonValue::boolean(true));
+        state.setMember("running", JsonValue::boolean(false));
+        std::lock_guard<std::mutex> lock(mutex);
+        irState = std::move(state);
+        return false;
+    }
+    debugLine("miniapp ir: camera available");
+
+    // 六轴与红外共用右手柄 MCU，先停六轴再启动红外，避免 hid 内部会话冲突。
+    stopMotion();
+    debugLine("miniapp ir: sixaxis stopped");
+    {
+        char buffer[96];
+        std::snprintf(buffer, sizeof(buffer), "miniapp ir: applet type=%d aruid=0x%llx",
+                      static_cast<int>(appletGetAppletType()),
+                      static_cast<unsigned long long>(appletGetAppletResourceUserId()));
+        debugLine(buffer);
+    }
+
+    // 手柄红外 MCU 固件落后于系统要求时，启动取帧会让 hid 进入固件更新流程并触发断言。
+    bool firmwareUpdateNeeded = false;
+    rc = irsCheckFirmwareUpdateNecessity(irHandle, &firmwareUpdateNeeded);
+    {
+        char buffer[96];
+        std::snprintf(buffer, sizeof(buffer), "miniapp ir: fw check rc=0x%08x need=%d",
+                      static_cast<unsigned>(R_VALUE(rc)), firmwareUpdateNeeded ? 1 : 0);
+        debugLine(buffer);
+    }
+    if (R_SUCCEEDED(rc) && firmwareUpdateNeeded) {
+        irError = "IR camera firmware update required (System Settings > Controllers and Sensors > Update Controllers)";
         irsExit();
         JsonValue state = makeFlagState(irError.c_str());
         state.setMember("supported", JsonValue::boolean(true));
@@ -494,7 +568,26 @@ bool HardwareManager::Impl::startIr(const std::string& mode) {
         irsGetDefaultImageTransferProcessorConfig(&config);
         config.format = IrsImageTransferProcessorFormat_320x240;
         irGray.assign(kIrTransferBytes, 0);
+        debugLine("miniapp ir: run image processor begin");
         rc = irsRunImageTransferProcessor(irHandle, &config, irGray.size());
+        {
+            char buffer[96];
+            std::snprintf(buffer, sizeof(buffer), "miniapp ir: run image processor rc=0x%08x size=0x%zx",
+                          static_cast<unsigned>(R_VALUE(rc)), irGray.size());
+            debugLine(buffer);
+        }
+    }
+
+    if (R_SUCCEEDED(rc) && !gesture) {
+        // 处理器可能启动了但相机没出帧，先确认它的运行状态。
+        svcSleepThread(300000000L);
+        IrsImageProcessorStatus processorStatus = IrsImageProcessorStatus_Stopped;
+        const Result statusRc = irsGetImageProcessorStatus(irHandle, &processorStatus);
+        char buffer[96];
+        std::snprintf(buffer, sizeof(buffer), "miniapp ir: processor status rc=0x%08x status=%d",
+                      static_cast<unsigned>(R_VALUE(statusRc)),
+                      static_cast<int>(processorStatus));
+        debugLine(buffer);
     }
 
     if (R_FAILED(rc)) {
@@ -511,6 +604,9 @@ bool HardwareManager::Impl::startIr(const std::string& mode) {
 
     irActive = true;
     irLastPoll = 0.0;
+    irFirstPoll = true;
+    irFailCount = 0;
+    irWarmupUntil = -1.0;
 
     JsonValue state = JsonValue::object();
     state.setMember("supported", JsonValue::boolean(true));
@@ -531,6 +627,9 @@ void HardwareManager::Impl::stopIr() {
     irsExit();
     irActive = false;
     irLastPoll = 0.0;
+    irFirstPoll = true;
+    irFailCount = 0;
+    irWarmupUntil = -1.0;
     irBlobs.clear();
     irHand = JsonValue::object();
 
@@ -548,10 +647,39 @@ void HardwareManager::Impl::pollIr(double nowMs) {
 
     if (irImageMode) {
         if (irGray.empty()) return;
+        // 处理器的传输内存建立后需要一小段时间才有第一帧，太早取状态容易触发底层异常。
+        if (irWarmupUntil < 0.0) irWarmupUntil = nowMs + 150.0;
+        if (nowMs < irWarmupUntil) return;
+
         IrsImageTransferProcessorState state = {};
+        if (irFirstPoll) {
+            irFirstPoll = false;
+            debugLine("miniapp ir: get-state begin");
+        }
+        // out 缓冲长度必须与格式的图像字节数一致；传输内存本身按页对齐会大一点。
         const Result rc =
-            irsGetImageTransferProcessorState(irHandle, irGray.data(), irGray.size(), &state);
-        if (R_FAILED(rc)) return;
+            irsGetImageTransferProcessorState(irHandle, irGray.data(), kIrImageBytes, &state);
+        if (R_FAILED(rc)) {
+            // 刚启动时前几帧可能还没就绪，先重试；真的取不到才拆会话。
+            if (++irFailCount < 10) return;
+            char buffer[96];
+            std::snprintf(buffer, sizeof(buffer), "miniapp ir: get-state rc=0x%08x",
+                          static_cast<unsigned>(R_VALUE(rc)));
+            debugLine(buffer);
+            debugLine("miniapp ir: stop processor");
+            irsStopImageProcessor(irHandle);
+            debugLine("miniapp ir: processor stopped");
+            irsExit();
+            debugLine("miniapp ir: irs exited");
+            irActive = false;
+            JsonValue failed = makeFlagState(("IR frame error " + resultText(rc)).c_str());
+            failed.setMember("supported", JsonValue::boolean(true));
+            failed.setMember("running", JsonValue::boolean(false));
+            std::lock_guard<std::mutex> lock(mutex);
+            irState = std::move(failed);
+            return;
+        }
+        irFailCount = 0;
 
         std::uint8_t maxValue = 0;
         for (size_t i = 0; i < kIrImageBytes; ++i) maxValue = std::max(maxValue, irGray[i]);
@@ -591,7 +719,25 @@ void HardwareManager::Impl::pollIr(double nowMs) {
     IrsClusteringProcessorState state = {};
     s32 total = 0;
     const Result rc = irsGetClusteringProcessorStates(irHandle, &state, 1, &total);
-    if (R_FAILED(rc) || total <= 0) return;
+    if (R_FAILED(rc)) {
+        char buffer[96];
+        std::snprintf(buffer, sizeof(buffer), "miniapp ir: clustering rc=0x%08x",
+                      static_cast<unsigned>(R_VALUE(rc)));
+        debugLine(buffer);
+        debugLine("miniapp ir: stop processor");
+        irsStopImageProcessor(irHandle);
+        debugLine("miniapp ir: processor stopped");
+        irsExit();
+        debugLine("miniapp ir: irs exited");
+        irActive = false;
+        JsonValue failed = makeFlagState(("IR clustering error " + resultText(rc)).c_str());
+        failed.setMember("supported", JsonValue::boolean(true));
+        failed.setMember("running", JsonValue::boolean(false));
+        std::lock_guard<std::mutex> lock(mutex);
+        irState = std::move(failed);
+        return;
+    }
+    if (total <= 0) return;
 
     std::vector<JsonValue> blobs;
     JsonValue hand = JsonValue::object();

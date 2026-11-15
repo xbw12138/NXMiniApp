@@ -198,6 +198,12 @@ requestAnimationFrame(loop);</code></pre>
         <tr><td><code>wx.nx.nfc.stop()</code></td><td>—</td><td>停止检测并退出 NFC 服务</td></tr>
       </tbody>
     </table>
+    <div class="warn">
+      红外要求原装右手柄且相机可用：右柄必须从滑轨拆下、保持无线连接。若界面或
+      <code>wx.nx.ir.state().error</code> 出现 <code>0x000140cd</code>，表示处理器已启动但相机一帧都没返回，
+      通常是第三方/维修过的右手柄（没有红外相机）或相机排线松动；此时按不可用处理，容器会自动停止红外会话，
+      不会影响系统稳定。
+    </div>
 <pre><code>// 体感 + 红外画面
 function loop() {
   const m = wx.nx.motion.state();
