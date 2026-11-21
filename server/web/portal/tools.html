@@ -303,7 +303,7 @@ td code { white-space: nowrap; }
 
       <h3>方式二：手动安装</h3>
       <p>下载安装包解压到 SD 卡根目录（目录已建好）：</p>
-      <pre><code>curl -LO https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-sysmodule-sd.zip
+      <pre><code>curl -LO https://ecfun.cc/downloads/swlink-sysmodule-sd.zip
 unzip swlink-sysmodule-sd.zip -d /Volumes/&lt;你的 SD 卡&gt;</code></pre>
       <p>装完后应存在：</p>
       <pre><code>SD:/atmosphere/contents/00FF0000A53B5A57/
@@ -318,9 +318,9 @@ unzip swlink-sysmodule-sd.zip -d /Volumes/&lt;你的 SD 卡&gt;</code></pre>
       <h2><span class="num">05</span>macOS 客户端</h2>
       <p class="sub">免编译直接下载，内置 SDL2 / libusb / ffmpeg</p>
       <div class="actions">
-        <a class="btn primary" href="https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-app-macos.zip">下载 SwLink.app</a>
-        <a class="btn ghost" href="https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-cli-macos-x64.zip">下载 swlink-cli</a>
-        <a class="btn ghost" href="https://github.com/xbw12138/SwitchTools" target="_blank" rel="noopener">源码与教程</a>
+        <a class="btn primary" href="/downloads/swlink-app-macos.zip">下载 SwLink.app</a>
+        <a class="btn ghost" href="/downloads/swlink-cli-macos-x64.zip">下载 swlink-cli</a>
+        <a class="btn ghost" href="/downloads/swlink-sysmodule-sd.zip">SwLink 安装包</a>
       </div>
       <pre><code>unzip swlink-app-macos.zip
 xattr -dr com.apple.quarantine SwLink.app   # 首次运行需放行
@@ -337,7 +337,7 @@ open SwLink.app</code></pre>
       <h2><span class="num">06</span>命令行 swlink-cli</h2>
       <p class="sub">批量操作 SD 卡、推送 NRO，适合脚本与自动化</p>
       <p>免编译版本已内置 libusb，解压后两个文件必须放在同一目录：</p>
-      <pre><code>curl -LO https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-cli-macos-x64.zip
+      <pre><code>curl -LO https://ecfun.cc/downloads/swlink-cli-macos-x64.zip
 unzip swlink-cli-macos-x64.zip -d swlink-cli
 xattr -dr com.apple.quarantine swlink-cli
 
@@ -382,19 +382,24 @@ xattr -dr com.apple.quarantine swlink-cli
         （Trae / Claude Code 等）后，AI 能按规范帮你列出目录、批量上传、推送 NRO，
         并在「找不到设备」时按顺序排查数据线、sysmodule 与端口占用。
       </p>
-      <h3>安装</h3>
-      <pre><code># 仓库内路径
-git clone https://github.com/xbw12138/SwitchTools.git
-mkdir -p your-project/.trae/skills/swlink-cli
-cp SwitchTools/.trae/skills/swlink-cli/SKILL.md \
-   your-project/.trae/skills/swlink-cli/</code></pre>
+      <h3>下载与安装</h3>
+      <p>压缩包已包含 <code>SKILL.md</code>、协议说明、排障手册与冒烟测试脚本：</p>
+      <pre><code>curl -LO https://ecfun.cc/downloads/swlink-cli-skill.zip
+unzip swlink-cli-skill.zip -d your-project/.trae/skills/
+
+# 安装后目录结构
+your-project/.trae/skills/swlink-cli/
+├── SKILL.md
+├── references/{protocol.md, troubleshooting.md}
+└── scripts/smoke-test.sh</code></pre>
+      <p>也可以放到全局 skills 目录（如 <code>~/.trae-cn/skills/</code>），对所有项目生效。</p>
       <h3>可以这样问</h3>
       <pre><code>"用 swlink-cli 把 switch/ 下的 hbmenu.nro 备份到本地"
 "列出 SD 卡根目录，找出所有大于 100MB 的文件"
 "连不上 Switch，按 skill 的排查流程帮我定位"</code></pre>
       <div class="actions">
-        <a class="btn ghost" href="https://github.com/xbw12138/SwitchTools/blob/main/.trae/skills/swlink-cli/SKILL.md" target="_blank" rel="noopener">查看 SKILL.md</a>
-        <a class="btn ghost" href="https://github.com/xbw12138/SwitchTools/tree/main/skills/swlink-cli/references" target="_blank" rel="noopener">协议与排障手册</a>
+        <a class="btn primary" href="/downloads/swlink-cli-skill.zip">下载 Skill</a>
+        <a class="btn ghost" href="/downloads/swlink-cli-macos-x64.zip">下载 swlink-cli</a>
       </div>
     </section>
 
