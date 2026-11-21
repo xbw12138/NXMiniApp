@@ -609,8 +609,10 @@ unzip nxminiapp-dev.zip -d \
       <h3>装一次，之后一键升级</h3>
       <p>
         在容器「应用商店」里安装 SwLink（系统模块），重启主机生效：
-        USB 画面/声音串流（720p30 H.264）、SD 卡文件浏览与上传下载、同一 Wi-Fi 下无线串流。
-        当前 <strong>1.1.0</strong> 已修复 HOS 23.0.1 下模块被静默拒绝加载，以及锁屏/休眠唤醒后卡死的问题。
+        USB 画面/声音串流（720p30 H.264）、SD 卡文件浏览与上传下载、同一 Wi-Fi 下无线串流；
+        Wi-Fi 模式同样能读写 SD 卡（独立的 TCP 12347 通道，不占串流带宽）。
+        当前 <strong>1.2.0</strong> 已新增局域网文件通道，并修复 HOS 23.0.1 下模块被静默拒绝加载、
+        以及锁屏/休眠唤醒后卡死的问题。
       </p>
       <p>
         电脑端配套 macOS 客户端（内置全部依赖）与命令行工具 <code>swlink-cli</code>，二者共用同一套 USB 协议。
@@ -633,7 +635,7 @@ swlink-cli put ./hbmenu.nro /switch/hbmenu.nro
 swlink-cli get /switch/miniapp/miniapp.log ./miniapp.log
 
 # 无线串流：App 内点「无线连接」，自动发现局域网主机
-# 文件传输仍走 USB（CLI 无 --wifi，需插线）</pre>
+# 无线文件：文件页按需连 TCP 12347，与串流互不影响</pre>
   </div>
 </section>
 
