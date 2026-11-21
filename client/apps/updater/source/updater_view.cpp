@@ -104,9 +104,15 @@ std::string truncate(const std::string& text, std::size_t limit) {
 // 系统模块只在开机时加载，装完必须重启主机。
 void rebootConsole() {
 #ifdef __SWITCH__
-    spsmInitialize();
-    spsmShutdown(true);
-    spsmExit();
+    if (R_SUCCEEDED(spsmInitialize())) {
+        const Result rc = spsmShutdown(true);
+        spsmExit();
+        if (R_SUCCEEDED(rc)) return;
+    }
+    auto* dialog = new brls::Dialog("无法自动重启，请长按电源键重启主机。");
+    dialog->addButton("知道了", [] {});
+    dialog->setCancelable(true);
+    dialog->open();
 #endif
 }
 
