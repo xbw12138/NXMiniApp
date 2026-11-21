@@ -50,6 +50,8 @@ struct StoreAppInfo {
     std::string description;
     std::string category;
     std::string developer;
+    /// upload / container / sysmodule；sysmodule 为解压到 SD 根目录的系统模块包。
+    std::string source;
     std::string iconUrl;
     std::string version;
     std::string iconPath;  // 本地缓存路径，由 fetchIcon 填充
@@ -77,6 +79,17 @@ bool installStoreApp(const StoreAppInfo& app,
 
 /// 删除 /switch/<id>.nro。
 bool removeStoreApp(const std::string& id, std::string& error);
+
+/// 已安装的系统模块包版本；未安装返回空串，缺少版本记录返回 "-"。
+std::string installedSysmoduleVersion(const std::string& id);
+
+/// 下载系统模块 zip 并解压到 SD 根目录（包内为相对 SD 根的路径）。
+bool installSysmoduleApp(const StoreAppInfo& app,
+                         const std::function<void(long long, long long)>& progress,
+                         std::string& error);
+
+/// 按安装记录删除系统模块包解压出的文件。
+bool removeSysmoduleApp(const std::string& id, std::string& error);
 
 /// 下载应用图标到本地缓存，返回本地路径（失败返回空串）。
 std::string fetchIcon(const std::string& id, const std::string& iconUrl);

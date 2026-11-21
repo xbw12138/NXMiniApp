@@ -235,7 +235,7 @@ func createApp(e *api.Env) gin.HandlerFunc {
 			category = "其他"
 		}
 		source := strings.TrimSpace(body.Source)
-		if source != api.SourceContainer {
+		if source != api.SourceContainer && source != api.SourceSysmodule {
 			source = api.SourceUpload
 		}
 		now := api.NowMS()
@@ -320,7 +320,7 @@ func updateApp(e *api.Env) gin.HandlerFunc {
 		}
 		if body.Source != nil {
 			source := strings.TrimSpace(*body.Source)
-			if source != api.SourceContainer {
+			if source != api.SourceContainer && source != api.SourceSysmodule {
 				source = api.SourceUpload
 			}
 			updates["source"] = source
@@ -504,7 +504,14 @@ func uploadVersion(e *api.Env) gin.HandlerFunc {
 			api.Abort(c, http.StatusBadRequest, "请选择安装包文件")
 			return
 		}
-		if strings.ToLower(filepath.Ext(file.Filename)) != ".nro" {
+		isSysmodule := app.Source == api.SourceSysmodule
+		ext := strings.ToLower(filepath.Ext(file.Filename))
+		if isSysmodule {
+			if ext != ".zip" {
+				api.Abort(c, http.StatusBadRequest, "系统模块包必须是 .zip 文件")
+				return
+			}
+		} else if ext != ".nro" {
 			api.Abort(c, http.StatusBadRequest, "安装包必须是 .nro 文件")
 			return
 		}
@@ -515,9 +522,33 @@ func uploadVersion(e *api.Env) gin.HandlerFunc {
 			return
 		}
 
-		name := fmt.Sprintf("%s-%s-%s.nro", api.SlugFor(app.ID), api.SlugFor(version), api.RandomHex(4))
+		fileExt := ".nro"
+		if isSysmodule {
+			fileExt = ".zip"
+		}
+		name := fmt.Sprintf("%s-%s-%s%s", api.SlugFor(app.ID), api.SlugFor(version), api.RandomHex(4), fileExt)
 		dst := filepath.Join(e.Cfg.FilesDir(), name)
-		if err := c.SaveUploadedFile(file, dst); err != nil {
+		if isSysmodule {
+			// 后台允许上传普通压缩包，落盘前统一重打包成 ZIP_STORED，
+			// 容器端才能直接解压到 SD 根目录。
+			tmp, err := os.CreateTemp("", "sysmodule-upload-*")
+			if err != nil {
+				api.Abort(c, http.StatusInternalServerError, "安装包保存失败")
+				return
+			}
+			tmpPath := tmp.Name()
+			_ = tmp.Close()
+			defer os.Remove(tmpPath)
+			if err := c.SaveUploadedFile(file, tmpPath); err != nil {
+				api.Abort(c, http.StatusInternalServerError, "安装包保存失败")
+				return
+			}
+			if err := miniappstore.RepackStoredZip(tmpPath, dst); err != nil {
+				_ = os.Remove(dst)
+				api.Abort(c, http.StatusBadRequest, err.Error())
+				return
+			}
+		} else if err := c.SaveUploadedFile(file, dst); err != nil {
 			api.Abort(c, http.StatusInternalServerError, "安装包保存失败")
 			return
 		}

@@ -16,6 +16,9 @@ import (
 const (
 	SourceUpload    = "upload"
 	SourceContainer = "container"
+	// SourceSysmodule 表示系统模块包（zip，SD 根目录相对），
+	// 客户端解压到 SD 卡根目录，用于 atmosphere/contents 下的 sysmodule。
+	SourceSysmodule = "sysmodule"
 )
 
 // LatestContainerRelease 返回最新的已发布容器版本（列表首个即最新）。

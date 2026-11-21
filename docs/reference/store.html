@@ -83,6 +83,19 @@
   -F "file=@hello.zip" -F "version=0.2.0" \
   http://127.0.0.1:8080/api/v1/admin/miniapps/hello/package</code></pre>
 
+    <h2>NRO 应用商店（updater.nro）</h2>
+    <p>
+      管理后台「应用」页维护 <code>/api/v1/apps</code> 条目，<code>source</code> 决定安装方式：
+    </p>
+    <table>
+      <thead><tr><th style="width:20%">source</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>upload</code></td><td>上传 <code>.nro</code> 版本，客户端下载到 <code>/switch/&lt;id&gt;.nro</code>。</td></tr>
+        <tr><td><code>container</code></td><td>跟随「容器版本」最新已发布的 NRO，无需单独上传。</td></tr>
+        <tr><td><code>sysmodule</code></td><td>系统模块包 <code>.zip</code>，包内路径相对 SD 根目录（如 <code>atmosphere/contents/&lt;titleid&gt;/...</code>）。客户端下载后解压到 SD 根目录并提示重启主机；后台上传时会自动重打包为 ZIP_STORED。</td></tr>
+      </tbody>
+    </table>
+
     <h2>公共接口</h2>
     <table>
       <thead><tr><th style="width:16%">方法</th><th style="width:42%">路径</th><th>说明</th></tr></thead>

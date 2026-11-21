@@ -150,6 +150,82 @@ func WriteStoredZip(w io.Writer, root string) error {
 	return zw.Close()
 }
 
+// RepackStoredZip rewrites an arbitrary zip archive as ZIP_STORED so the
+// Switch client can unpack it without deflate support. Entries with absolute
+// paths or ".." segments are rejected.
+func RepackStoredZip(srcPath, dstPath string) error {
+	zr, err := zip.OpenReader(srcPath)
+	if err != nil {
+		return errors.New("无法读取压缩包，文件可能已损坏")
+	}
+	defer zr.Close()
+
+	out, err := os.Create(dstPath)
+	if err != nil {
+		return err
+	}
+	zw := zip.NewWriter(out)
+	ok := false
+	defer func() {
+		if !ok {
+			_ = zw.Close()
+			_ = out.Close()
+			_ = os.Remove(dstPath)
+		}
+	}()
+
+	for _, f := range zr.File {
+		name := strings.ReplaceAll(f.Name, "\\", "/")
+		if strings.HasPrefix(name, "/") || (len(name) > 1 && name[1] == ':') {
+			return fmt.Errorf("包内包含非法路径: %s", f.Name)
+		}
+		cleaned := path.Clean(name)
+		if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+			return fmt.Errorf("包内包含非法路径: %s", f.Name)
+		}
+		if strings.HasSuffix(name, "/") || f.FileInfo().IsDir() {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		data, err := io.ReadAll(rc)
+		_ = rc.Close()
+		if err != nil {
+			return err
+		}
+		hdr := &zip.FileHeader{
+			Name:               cleaned,
+			Method:             zip.Store,
+			ReaderVersion:      20,
+			CRC32:              crc32.ChecksumIEEE(data),
+			CompressedSize64:   uint64(len(data)),
+			UncompressedSize64: uint64(len(data)),
+		}
+		hdr.SetModTime(f.Modified)
+		if !isASCII(cleaned) {
+			hdr.Flags |= 0x800 // UTF-8 encoded entry name
+		}
+		entry, err := zw.CreateRaw(hdr)
+		if err != nil {
+			return err
+		}
+		if _, err := entry.Write(data); err != nil {
+			return err
+		}
+	}
+
+	if err := zw.Close(); err != nil {
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	ok = true
+	return nil
+}
+
 // ExtractPackage replaces destDir with the contents of the zip archive at
 // zipPath. Entries with absolute paths or ".." segments are rejected, and the
 // archive must contain app.json at its root.

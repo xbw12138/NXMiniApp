@@ -204,13 +204,19 @@ func (e *Env) DownloadApp(c *gin.Context) {
 
 	e.DB.Model(&models.StoreApp{}).Where("id = ?", id).Update("downloads", gorm.Expr("downloads + 1"))
 
+	// 系统模块包按 zip 下发，客户端解压到 SD 根目录；其余仍是 NRO。
+	ext := ".nro"
+	if app.Source == SourceSysmodule {
+		ext = ".zip"
+	}
 	c.Header("X-Version", target.Version)
 	c.Header("X-SHA256", target.SHA256)
 	c.Header("X-File-Size", strconv.FormatInt(target.Size, 10))
+	c.Header("X-Source", app.Source)
 	c.Header("Cache-Control", "no-store")
 	c.Header("Content-Type", "application/octet-stream")
 	c.Header("Content-Disposition",
-		fmt.Sprintf("attachment; filename=\"%s-%s.nro\"", id, SlugFor(target.Version)))
+		fmt.Sprintf("attachment; filename=\"%s-%s%s\"", id, SlugFor(target.Version), ext))
 	c.File(path)
 }
 

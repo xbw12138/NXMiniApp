@@ -37,7 +37,7 @@
             <td>{{ app.title }}</td>
             <td class="mono">{{ app.id }}</td>
             <td>{{ app.category }}</td>
-            <td>{{ app.source === 'container' ? '容器版本' : '上传' }}</td>
+            <td>{{ sourceLabel(app.source) }}</td>
             <td>{{ app.downloads }}</td>
             <td>
               <label class="switch">
@@ -86,8 +86,13 @@
           <select v-model="createForm.source">
             <option value="upload">上传 NRO 版本</option>
             <option value="container">跟随容器最新版本</option>
+            <option value="sysmodule">系统模块包（zip，解压到 SD 根目录）</option>
           </select>
         </label>
+        <p v-if="createForm.source === 'sysmodule'" class="muted">
+          系统模块包按 SD 根目录相对路径打包（如 atmosphere/contents/&lt;titleid&gt;/...），
+          客户端安装时会解压到 SD 卡根目录，安装后需重启主机生效。
+        </p>
         <div class="row">
           <label class="check"><input type="checkbox" v-model="createForm.published" /> 立即发布</label>
           <label class="check"><input type="checkbox" v-model="createForm.featured" /> 精选</label>
@@ -119,10 +124,14 @@
             <select v-model="infoForm.source">
               <option value="upload">上传 NRO 版本</option>
               <option value="container">跟随容器最新版本</option>
+              <option value="sysmodule">系统模块包（zip，解压到 SD 根目录）</option>
             </select>
           </label>
           <p v-if="infoForm.source === 'container'" class="muted">
             该应用直接下发「容器版本」中最新已发布的 NRO，无需在此单独上传。
+          </p>
+          <p v-if="infoForm.source === 'sysmodule'" class="muted">
+            系统模块包（.zip）按 SD 根目录相对路径打包，客户端解压到 SD 根目录，安装后需重启主机生效。
           </p>
           <button class="btn primary" :disabled="savingInfo">{{ savingInfo ? '保存中…' : '保存' }}</button>
         </form>
@@ -191,13 +200,13 @@
             <input
               ref="versionFileInput"
               type="file"
-              accept=".nro"
+              :accept="detail.source === 'sysmodule' ? '.zip' : '.nro'"
               hidden
               @change="onVersionFile"
             />
             <div class="row">
               <button type="button" class="btn" @click="versionFileInput && versionFileInput.click()">
-                {{ versionForm.file ? versionForm.file.name : '选择 .nro 文件' }}
+                {{ versionForm.file ? versionForm.file.name : (detail.source === 'sysmodule' ? '选择 .zip 文件' : '选择 .nro 文件') }}
               </button>
               <button class="btn primary" :disabled="!versionForm.file || uploadingVersion">
                 {{ uploadingVersion ? '上传中…' : '上传版本' }}
@@ -244,6 +253,12 @@ const shotInput = ref(null)
 const versionFileInput = ref(null)
 const versionForm = ref({ version: '', changelog: '', file: null })
 const uploadingVersion = ref(false)
+
+function sourceLabel(source) {
+  if (source === 'container') return '容器版本'
+  if (source === 'sysmodule') return '系统模块'
+  return '上传'
+}
 
 function emptyCreateForm() {
   return {

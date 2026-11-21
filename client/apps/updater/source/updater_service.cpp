@@ -632,6 +632,159 @@ std::string iconCachePath(const std::string& id, const std::string& iconUrl) {
     return std::string(kStoreIconDir) + "/" + safeName(id) + ext;
 }
 
+// ---- 系统模块包（zip 解压到 SD 根目录） ----
+
+constexpr const char* kSysmoduleMetaDir = "sdmc:/switch/miniapp/sysmodules";
+
+std::string sysmoduleVersionPath(const std::string& id) {
+    return std::string(kSysmoduleMetaDir) + "/" + safeName(id) + ".version";
+}
+
+std::string sysmoduleFilesPath(const std::string& id) {
+    return std::string(kSysmoduleMetaDir) + "/" + safeName(id) + ".files";
+}
+
+std::string parentPath(const std::string& path) {
+    const size_t slash = path.find_last_of('/');
+    return slash == std::string::npos ? std::string(".") : path.substr(0, slash);
+}
+
+uint16_t readU16(const std::string& data, size_t offset) {
+    return static_cast<uint16_t>(static_cast<unsigned char>(data[offset])) |
+           (static_cast<uint16_t>(static_cast<unsigned char>(data[offset + 1])) << 8);
+}
+
+uint32_t readU32(const std::string& data, size_t offset) {
+    return static_cast<uint32_t>(static_cast<unsigned char>(data[offset])) |
+           (static_cast<uint32_t>(static_cast<unsigned char>(data[offset + 1])) << 8) |
+           (static_cast<uint32_t>(static_cast<unsigned char>(data[offset + 2])) << 16) |
+           (static_cast<uint32_t>(static_cast<unsigned char>(data[offset + 3])) << 24);
+}
+
+// 校验压缩包内路径，返回相对 SD 根的安全路径。
+bool safeZipEntry(std::string& name, std::string& relative) {
+    for (char& c : name) {
+        if (c == '\\') c = '/';
+    }
+    if (name.empty() || name[0] == '/') return false;
+    if (name.find(':') != std::string::npos) return false;
+
+    relative.clear();
+    size_t start = 0;
+    while (start <= name.size()) {
+        const size_t slash = name.find('/', start);
+        const std::string part =
+            name.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
+        if (!part.empty() && part != ".") {
+            if (part == "..") return false;
+            if (!relative.empty()) relative += "/";
+            relative += part;
+        }
+        if (slash == std::string::npos) break;
+        start = slash + 1;
+    }
+    return !relative.empty();
+}
+
+// 删除空目录，但保留 SD 根目录下的一级目录（如 /atmosphere）。
+void removeEmptyParents(const std::string& path) {
+    std::string current = path;
+    while (true) {
+        const size_t slash = current.find_last_of('/');
+        if (slash == std::string::npos) break;
+        current = current.substr(0, slash);
+        if (current.size() <= 5) break;
+        if (current.find('/', 5) == std::string::npos) break;
+        rmdir(current.c_str());
+    }
+}
+
+// 解压服务端重打包好的 ZIP_STORED 到 sdmc:/，记录相对路径供卸载使用。
+bool unzipStoredToSd(const std::string& archive, std::vector<std::string>& files,
+                     std::string& error) {
+    long long archiveSize = 0;
+    if (!fileSize(archive, archiveSize) || archiveSize <= 0) {
+        error = "安装包为空";
+        return false;
+    }
+    if (archiveSize > (64LL << 20)) {
+        error = "安装包过大";
+        return false;
+    }
+    std::ifstream input(archive, std::ios::binary);
+    if (!input) {
+        error = "无法读取安装包";
+        return false;
+    }
+    std::string data((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    input.close();
+
+    size_t position = 0;
+    while (position + 4 <= data.size()) {
+        const uint32_t signature = readU32(data, position);
+        if (signature == 0x02014b50 || signature == 0x06054b50) break;
+        if (signature != 0x04034b50) {
+            error = "不是合法的系统模块包";
+            return false;
+        }
+        if (position + 30 > data.size()) {
+            error = "安装包目录损坏";
+            return false;
+        }
+
+        const uint16_t flags = readU16(data, position + 6);
+        const uint16_t method = readU16(data, position + 8);
+        const uint32_t compressed = readU32(data, position + 18);
+        const uint32_t uncompressed = readU32(data, position + 22);
+        const uint16_t nameLength = readU16(data, position + 26);
+        const uint16_t extraLength = readU16(data, position + 28);
+        if (position + 30 + nameLength + extraLength + compressed > data.size()) {
+            error = "安装包数据不完整";
+            return false;
+        }
+        if ((flags & 0x0008) != 0 || method != 0 || compressed != uncompressed) {
+            error = "安装包必须使用 ZIP_STORED";
+            return false;
+        }
+
+        std::string name = data.substr(position + 30, nameLength);
+        const size_t dataStart = position + 30 + nameLength + extraLength;
+        position = dataStart + compressed;
+
+        const bool isDirectory = !name.empty() && name.back() == '/';
+        std::string relative;
+        if (!safeZipEntry(name, relative)) {
+            error = "安装包包含非法路径: " + name;
+            return false;
+        }
+        const std::string full = "sdmc:/" + relative;
+        if (isDirectory) {
+            makeDirs(full);
+            continue;
+        }
+        makeDirs(parentPath(full));
+        std::FILE* file = std::fopen(full.c_str(), "wb");
+        if (!file) {
+            error = "写入 SD 卡失败（磁盘满或写保护）: " + relative;
+            return false;
+        }
+        const bool written = std::fwrite(data.data() + dataStart, 1, compressed, file) == compressed;
+        std::fflush(file);
+        std::fclose(file);
+        if (!written) {
+            error = "写入 SD 卡失败: " + relative;
+            return false;
+        }
+        files.push_back(relative);
+    }
+
+    if (files.empty()) {
+        error = "安装包里没有文件";
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 std::string installedNroPath(const std::string& id) {
@@ -692,6 +845,7 @@ bool fetchStoreApps(std::vector<StoreAppInfo>& out, std::string& error) {
             app.description = item.value("description", "");
             app.category = item.value("category", "");
             app.developer = item.value("developer", "");
+            app.source = item.value("source", "upload");
             app.iconUrl = absoluteUrl(item.value("icon_url", ""));
             app.featured = item.value("featured", false);
             app.downloads = item.value("downloads", 0LL);
@@ -778,6 +932,118 @@ bool removeStoreApp(const std::string& id, std::string& error) {
     }
     std::remove(versionPath(id).c_str());
     brls::Logger::info("updater: removed nro {}", id);
+    return true;
+}
+
+std::string installedSysmoduleVersion(const std::string& id) {
+    std::ifstream versionFile(sysmoduleVersionPath(id), std::ios::binary);
+    if (!versionFile) return "";
+    std::string value;
+    if (!std::getline(versionFile, value)) return "-";
+    while (!value.empty() && (value.back() == '\r' || value.back() == '\n' || value.back() == ' ')) {
+        value.pop_back();
+    }
+    return value;
+}
+
+bool installSysmoduleApp(const StoreAppInfo& app,
+                         const std::function<void(long long, long long)>& progress,
+                         std::string& error) {
+    makeDirs("sdmc:/switch/miniapp");
+    const std::string tmp = std::string("sdmc:/switch/miniapp/") + safeName(app.id) + ".zip";
+    std::remove(tmp.c_str());
+
+    const std::string url =
+        serverUrl() + "/api/v1/apps/" + app.id + "/download?version=latest";
+    bool ok = false;
+    if (app.size > 4 * 1024 * 1024) {
+        ok = downloadParallel(url, tmp, app.size, progress, error);
+    }
+    if (!ok) {
+        std::remove(tmp.c_str());
+        std::string singleError;
+        if (!downloadSingle(url, tmp, progress, singleError)) {
+            std::remove(tmp.c_str());
+            if (error.empty()) error = singleError;
+            return false;
+        }
+        error.clear();
+    }
+
+    long long downloaded = 0;
+    if (!fileSize(tmp, downloaded) || downloaded <= 0) {
+        std::remove(tmp.c_str());
+        error = "下载文件为空";
+        return false;
+    }
+    if (app.size > 0 && downloaded != app.size) {
+        std::remove(tmp.c_str());
+        error = "文件大小不符（" + humanize(downloaded) + " / " + humanize(app.size) + "）";
+        return false;
+    }
+
+    std::vector<std::string> files;
+    if (!unzipStoredToSd(tmp, files, error)) {
+        std::remove(tmp.c_str());
+        return false;
+    }
+    std::remove(tmp.c_str());
+
+    makeDirs(kSysmoduleMetaDir);
+    {
+        std::ofstream manifest(sysmoduleFilesPath(app.id), std::ios::binary | std::ios::trunc);
+        if (!manifest) {
+            error = "无法写入安装记录";
+            return false;
+        }
+        for (const auto& relative : files) manifest << relative << "\n";
+    }
+    {
+        std::ofstream versionFile(sysmoduleVersionPath(app.id),
+                                  std::ios::binary | std::ios::trunc);
+        if (!versionFile) {
+            error = "无法写入版本记录";
+            return false;
+        }
+        versionFile << app.version;
+    }
+    brls::Logger::info("updater: installed sysmodule {} {} ({} files)", app.id, app.version,
+                       files.size());
+    return true;
+}
+
+bool removeSysmoduleApp(const std::string& id, std::string& error) {
+    if (installedSysmoduleVersion(id).empty()) {
+        error = "未安装";
+        return false;
+    }
+    std::ifstream manifest(sysmoduleFilesPath(id), std::ios::binary);
+    if (!manifest) {
+        error = "缺少安装记录，请手动删除";
+        return false;
+    }
+    std::string line;
+    bool failed = false;
+    while (std::getline(manifest, line)) {
+        while (!line.empty() && (line.back() == '\r' || line.back() == '\n' || line.back() == ' ')) {
+            line.pop_back();
+        }
+        if (line.empty()) continue;
+        const std::string full = "sdmc:/" + line;
+        if (std::remove(full.c_str()) != 0 && access(full.c_str(), F_OK) == 0) {
+            failed = true;
+            continue;
+        }
+        removeEmptyParents(full);
+    }
+    manifest.close();
+    if (failed) {
+        error = "部分文件正在使用，重启主机后再卸载";
+        return false;
+    }
+    std::remove(sysmoduleFilesPath(id).c_str());
+    std::remove(sysmoduleVersionPath(id).c_str());
+    brls::Logger::info("updater: removed sysmodule {}", id);
     return true;
 }
 

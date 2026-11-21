@@ -13,6 +13,10 @@
 #include <new>
 #include <string>
 
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
+
 namespace updater {
 
 namespace {
@@ -95,6 +99,15 @@ std::string truncate(const std::string& text, std::size_t limit) {
     // 避免把 UTF-8 多字节字符截断。
     while (cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80) --cut;
     return text.substr(0, cut) + "…";
+}
+
+// 系统模块只在开机时加载，装完必须重启主机。
+void rebootConsole() {
+#ifdef __SWITCH__
+    spsmInitialize();
+    spsmShutdown(true);
+    spsmExit();
+#endif
 }
 
 /// 商店卡片：图标 + 标题 + 分类/体积 + 状态角标。
@@ -657,10 +670,18 @@ void UpdaterView::rebuildCards() {
 }
 
 bool UpdaterView::appInstalled(const StoreAppInfo& app) const {
+    if (app.source == "sysmodule") {
+        return !installedSysmoduleVersion(app.id).empty();
+    }
     return !installedNroPath(app.id).empty();
 }
 
 bool UpdaterView::appOutdated(const StoreAppInfo& app) const {
+    if (app.source == "sysmodule") {
+        const std::string installed = installedSysmoduleVersion(app.id);
+        if (installed.empty() || installed == "-" || app.version.empty()) return false;
+        return versionNewer(app.version, installed);
+    }
     // 优先按版本号：只有本地版本明确且商店带版本号时才做语义化比较，
     // 否则（USB 手动推送、旧包没有 .version）退回文件体积比较。
     const std::string installed = installedNroVersion(app.id);
@@ -691,12 +712,15 @@ void UpdaterView::showDetail(const StoreAppInfo& app) {
     std::string info = app.version.empty() ? "版本未知" : "v" + app.version;
     if (app.size > 0) info += "   ·   " + formatSize(app.size);
     if (app.downloads > 0) info += "   ·   " + std::to_string(app.downloads) + " 次下载";
+    const bool isSysmodule = app.source == "sysmodule";
+    if (isSysmodule) info += "   ·   系统模块";
     this->detailInfo->setText(info);
 
     const bool installed = this->appInstalled(app);
-    const std::string installedVersion = installedNroVersion(app.id);
+    const std::string installedVersion =
+        isSysmodule ? installedSysmoduleVersion(app.id) : installedNroVersion(app.id);
     if (!installed) {
-        this->detailBadge->setText(app.featured ? "★ 精选推荐" : "未安装");
+        this->detailBadge->setText(app.featured ? "★ 精选推荐" : (isSysmodule ? "未安装 · 需重启生效" : "未安装"));
         this->detailBadge->setTextColor(app.featured ? kGold : kTextDim);
         this->actionButton->setText("安装");
         this->removeButton->setVisibility(brls::Visibility::GONE);
@@ -710,8 +734,9 @@ void UpdaterView::showDetail(const StoreAppInfo& app) {
         this->actionButton->setText("更新");
         this->removeButton->setVisibility(brls::Visibility::VISIBLE);
     } else {
+        const std::string target = isSysmodule ? "SD 卡" : "/switch";
         this->detailBadge->setText(installedVersion.empty() || installedVersion == "-"
-                                       ? "已安装到 /switch"
+                                       ? "已安装到 " + target
                                        : "已安装 v" + installedVersion + "（已是最新）");
         this->detailBadge->setTextColor(kAccent);
         this->actionButton->setText("重新安装");
@@ -742,25 +767,44 @@ void UpdaterView::openStoreActions(const StoreAppInfo& app) {
 
 void UpdaterView::installApp(const StoreAppInfo& app) {
     if (this->busy) return;
+    const bool isSysmodule = app.source == "sysmodule";
     const std::string name = app.title.empty() ? app.id : app.title;
     this->setBusy(true);
     this->setStatus("开始下载 " + name + "…");
     auto alive = this->alive;
-    runAsync([this, alive, app, name] {
+    runAsync([this, alive, app, name, isSysmodule] {
         std::string error;
-        const bool ok = installStoreApp(app, [this, alive, name](long long done, long long total) {
+        auto progress = [this, alive, name](long long done, long long total) {
             if (total <= 0) return;
             const int percent = static_cast<int>(done * 100 / total);
             postIfAlive(alive, [this, name, percent] {
                 this->setStatus("下载 " + name + " " + std::to_string(percent) + "%");
             });
-        }, error);
-        postIfAlive(alive, [this, ok, error, app, name] {
+        };
+        const bool ok = isSysmodule ? installSysmoduleApp(app, progress, error)
+                                    : installStoreApp(app, progress, error);
+        postIfAlive(alive, [this, ok, error, app, name, isSysmodule] {
             this->setBusy(false);
-            this->setStatus(ok ? "已安装 " + name + "，NRO 位于 /switch/" + app.id + ".nro"
-                               : "安装失败：" + error);
+            if (!ok) {
+                this->setStatus("安装失败：" + error);
+                this->rebuildStore();
+                return;
+            }
+            if (isSysmodule) {
+                this->setStatus("已安装 " + name + "，重启主机后生效");
+                this->rebuildStore();
+                this->showDetail(app);
+                auto* dialog = new brls::Dialog(
+                    "系统模块已写入 SD 卡，需要重启主机才能生效。是否现在重启？");
+                dialog->addButton("稍后重启", [] {});
+                dialog->addButton("立即重启", [] { rebootConsole(); });
+                dialog->setCancelable(true);
+                dialog->open();
+                return;
+            }
+            this->setStatus("已安装 " + name + "，NRO 位于 /switch/" + app.id + ".nro");
             this->rebuildStore();
-            if (ok) this->showDetail(app);
+            this->showDetail(app);
         });
     });
 }
@@ -773,7 +817,8 @@ void UpdaterView::removeApp(const StoreAppInfo& app) {
     auto alive = this->alive;
     runAsync([this, alive, app, name] {
         std::string error;
-        const bool ok = removeStoreApp(app.id, error);
+        const bool ok = app.source == "sysmodule" ? removeSysmoduleApp(app.id, error)
+                                                   : removeStoreApp(app.id, error);
         postIfAlive(alive, [this, ok, error, app, name] {
             this->setBusy(false);
             this->setStatus(ok ? "已卸载 " + name : "卸载失败：" + error);
