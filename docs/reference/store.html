@@ -93,6 +93,7 @@
         <tr><td><code>upload</code></td><td>上传 <code>.nro</code> 版本，客户端下载到 <code>/switch/&lt;id&gt;.nro</code>。</td></tr>
         <tr><td><code>container</code></td><td>跟随「容器版本」最新已发布的 NRO，无需单独上传。</td></tr>
         <tr><td><code>sysmodule</code></td><td>系统模块包 <code>.zip</code>，包内路径相对 SD 根目录（如 <code>atmosphere/contents/&lt;titleid&gt;/...</code>）。客户端下载后解压到 SD 根目录并提示重启主机；后台上传时会自动重打包为 ZIP_STORED。</td></tr>
+        <tr><td><code>client</code></td><td>官网直接下载的客户端文件（如 <code>updater.nro</code>），固定文件名下发，不出现在商店列表。官网的 <code>/downloads/updater.nro</code> 会转发到最新上传的版本。</td></tr>
       </tbody>
     </table>
 

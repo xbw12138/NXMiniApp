@@ -235,7 +235,7 @@ func createApp(e *api.Env) gin.HandlerFunc {
 			category = "其他"
 		}
 		source := strings.TrimSpace(body.Source)
-		if source != api.SourceContainer && source != api.SourceSysmodule {
+		if source != api.SourceContainer && source != api.SourceSysmodule && source != api.SourceClient {
 			source = api.SourceUpload
 		}
 		now := api.NowMS()
@@ -320,7 +320,7 @@ func updateApp(e *api.Env) gin.HandlerFunc {
 		}
 		if body.Source != nil {
 			source := strings.TrimSpace(*body.Source)
-			if source != api.SourceContainer && source != api.SourceSysmodule {
+			if source != api.SourceContainer && source != api.SourceSysmodule && source != api.SourceClient {
 				source = api.SourceUpload
 			}
 			updates["source"] = source

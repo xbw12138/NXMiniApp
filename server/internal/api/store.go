@@ -46,7 +46,7 @@ func (e *Env) categoryItems() []gin.H {
 	rows := make([]categoryRow, 0)
 	e.DB.Model(&models.StoreApp{}).
 		Select("category, COUNT(*) AS count").
-		Where("published = ?", true).
+		Where("published = ? AND source <> ?", true, SourceClient).
 		Group("category").
 		Order("count DESC, category ASC").
 		Scan(&rows)
@@ -70,11 +70,11 @@ func (e *Env) appListJSON(query *gorm.DB) []gin.H {
 // Home 是桌面应用商店（updater.nro）的聚合页，只包含已上架的 NRO 应用。
 // 不要与 /api/v1/miniapp-home 混淆：后者是 Switch 小程序容器的首页描述。
 func (e *Env) Home(c *gin.Context) {
-	featured := e.appListJSON(e.DB.Where("published = ? AND featured = ?", true, true).
+	featured := e.appListJSON(e.DB.Where("published = ? AND featured = ? AND source <> ?", true, true, SourceClient).
 		Order("downloads DESC, updated_at DESC").Limit(12))
-	newest := e.appListJSON(e.DB.Where("published = ?", true).
+	newest := e.appListJSON(e.DB.Where("published = ? AND source <> ?", true, SourceClient).
 		Order("updated_at DESC").Limit(12))
-	popular := e.appListJSON(e.DB.Where("published = ?", true).
+	popular := e.appListJSON(e.DB.Where("published = ? AND source <> ?", true, SourceClient).
 		Order("downloads DESC, updated_at DESC").Limit(12))
 	c.JSON(http.StatusOK, gin.H{
 		"featured":   featured,
@@ -93,7 +93,8 @@ func (e *Env) ListApps(c *gin.Context) {
 		pageSize = 100
 	}
 
-	query := e.DB.Model(&models.StoreApp{}).Where("published = ?", true)
+	query := e.DB.Model(&models.StoreApp{}).
+		Where("published = ? AND source <> ?", true, SourceClient)
 	if q != "" {
 		needle := "%" + q + "%"
 		query = query.Where("title LIKE ? OR summary LIKE ? OR developer LIKE ?", needle, needle, needle)
@@ -209,14 +210,18 @@ func (e *Env) DownloadApp(c *gin.Context) {
 	if app.Source == SourceSysmodule {
 		ext = ".zip"
 	}
+	filename := fmt.Sprintf("%s-%s%s", id, SlugFor(target.Version), ext)
+	if app.Source == SourceClient {
+		// 官网下载的客户端文件保持固定文件名，便于直接放到 SD 卡。
+		filename = id + ext
+	}
 	c.Header("X-Version", target.Version)
 	c.Header("X-SHA256", target.SHA256)
 	c.Header("X-File-Size", strconv.FormatInt(target.Size, 10))
 	c.Header("X-Source", app.Source)
 	c.Header("Cache-Control", "no-store")
 	c.Header("Content-Type", "application/octet-stream")
-	c.Header("Content-Disposition",
-		fmt.Sprintf("attachment; filename=\"%s-%s%s\"", id, SlugFor(target.Version), ext))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	c.File(path)
 }
 

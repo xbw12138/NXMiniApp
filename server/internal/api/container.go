@@ -19,6 +19,9 @@ const (
 	// SourceSysmodule 表示系统模块包（zip，SD 根目录相对），
 	// 客户端解压到 SD 卡根目录，用于 atmosphere/contents 下的 sysmodule。
 	SourceSysmodule = "sysmodule"
+	// SourceClient 表示官网直接下载的客户端文件（如 updater.nro），
+	// 不出现在应用商店列表中，仅通过下载接口分发。
+	SourceClient = "client"
 )
 
 // LatestContainerRelease 返回最新的已发布容器版本（列表首个即最新）。

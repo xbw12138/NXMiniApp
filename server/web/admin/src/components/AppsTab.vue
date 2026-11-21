@@ -87,11 +87,15 @@
             <option value="upload">上传 NRO 版本</option>
             <option value="container">跟随容器最新版本</option>
             <option value="sysmodule">系统模块包（zip，解压到 SD 根目录）</option>
+            <option value="client">客户端文件（官网下载，不在商店展示）</option>
           </select>
         </label>
         <p v-if="createForm.source === 'sysmodule'" class="muted">
           系统模块包按 SD 根目录相对路径打包（如 atmosphere/contents/&lt;titleid&gt;/...），
           客户端安装时会解压到 SD 卡根目录，安装后需重启主机生效。
+        </p>
+        <p v-if="createForm.source === 'client'" class="muted">
+          客户端文件（.nro）只在下载接口提供，不出现在商店列表中；固定文件名下载，适合 updater.nro 等官网资源。
         </p>
         <div class="row">
           <label class="check"><input type="checkbox" v-model="createForm.published" /> 立即发布</label>
@@ -125,6 +129,7 @@
               <option value="upload">上传 NRO 版本</option>
               <option value="container">跟随容器最新版本</option>
               <option value="sysmodule">系统模块包（zip，解压到 SD 根目录）</option>
+              <option value="client">客户端文件（官网下载，不在商店展示）</option>
             </select>
           </label>
           <p v-if="infoForm.source === 'container'" class="muted">
@@ -132,6 +137,9 @@
           </p>
           <p v-if="infoForm.source === 'sysmodule'" class="muted">
             系统模块包（.zip）按 SD 根目录相对路径打包，客户端解压到 SD 根目录，安装后需重启主机生效。
+          </p>
+          <p v-if="infoForm.source === 'client'" class="muted">
+            客户端文件（.nro）仅通过下载接口提供，固定文件名下载，不出现在商店列表中。
           </p>
           <button class="btn primary" :disabled="savingInfo">{{ savingInfo ? '保存中…' : '保存' }}</button>
         </form>
@@ -257,6 +265,7 @@ const uploadingVersion = ref(false)
 function sourceLabel(source) {
   if (source === 'container') return '容器版本'
   if (source === 'sysmodule') return '系统模块'
+  if (source === 'client') return '客户端文件'
   return '上传'
 }
 
