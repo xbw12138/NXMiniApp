@@ -445,6 +445,7 @@ a { color: var(--accent); text-decoration: none; }
   <nav class="nav">
     <a class="active" href="/">首页</a>
     <a href="/download">下载容器</a>
+    <a href="/tools">配套工具</a>
     <a href="/docs/index.html">开发文档</a>
     <a href="/my">我的小程序</a>
     <a href="/admin">管理后台</a>
@@ -529,8 +530,8 @@ a { color: var(--accent); text-decoration: none; }
 </section>
 
 <section class="section">
-  <h2>Switch 应用商店启动器</h2>
-  <p class="sub">独立 updater.nro：原生卡片墙商店 + 容器一键更新，不依赖电脑</p>
+  <h2>Switch 应用商店与 SwLink</h2>
+  <p class="sub">机内商店装应用，电脑端看画面、读写 SD 卡 —— 完整用法、CLI 与 Skill 见「配套工具」</p>
   <div class="launcher">
     <div class="shot">
       <img src="/docs/assets/updater-desktop.png" alt="Switch 应用商店启动器界面截图" loading="lazy">
@@ -538,14 +539,20 @@ a { color: var(--accent); text-decoration: none; }
     <div class="txt">
       <h3>装一次，之后全程免插线</h3>
       <p>
-        updater.nro 在 Switch 上提供完整的商店界面：应用卡片墙、分类筛选、详情面板与一键安装。
-        同时负责容器更新——先备份旧 NRO，多段并行下载新版本，校验通过后替换，失败自动回滚。
+        updater.nro 在 Switch 上提供原生卡片墙商店：应用浏览、分类筛选、详情面板与一键安装，
+        并负责容器更新——备份旧版、并行下载、校验通过后替换，失败自动回滚。
+      </p>
+      <p>
+        商店里的系统模块 <b>SwLink</b> 把画面与声音串流到 Mac（720p30），也能直接读写 SD 卡：
+        USB 与同一 Wi-Fi 都支持，无线文件走独立的 TCP 12347，与串流互不影响。
+        电脑端配套 SwLink.app 与 swlink-cli，另有 AI Skill 可直接用自然语言操作。
       </p>
       <div class="actions">
-        <a class="btn primary" href="/downloads/updater.nro" download="updater.nro">下载 updater.nro</a>
-        <a class="btn ghost" href="https://github.com/xbw12138/NXMiniApp/tree/main/client/apps/updater" target="_blank" rel="noopener">在 GitHub 查看</a>
+        <a class="btn primary" href="/tools">查看配套工具介绍</a>
+        <a class="btn ghost" href="/downloads/updater.nro" download="updater.nro">下载 updater.nro</a>
+        <a class="btn ghost" href="https://github.com/xbw12138/SwitchTools" target="_blank" rel="noopener">SwLink 源码</a>
       </div>
-      <div class="meta">约 14 MB · 放到 sdmc:/switch/ · 首次需插线推送，之后容器更新可全在机内完成</div>
+      <div class="meta">约 14 MB · 放到 sdmc:/switch/ · 首次需插线推送，之后商店与容器更新都能在机内完成</div>
     </div>
   </div>
 </section>
@@ -602,44 +609,6 @@ unzip nxminiapp-dev.zip -d \
 </section>
 
 <section class="section">
-  <h2>SwLink：串流与 SD 卡文件传输</h2>
-  <p class="sub">商店里的系统模块，装完即可在 Mac 上看到 Switch 画面并管理 SD 卡</p>
-  <div class="skill">
-    <div class="txt">
-      <h3>装一次，之后一键升级</h3>
-      <p>
-        在容器「应用商店」里安装 SwLink（系统模块），重启主机生效：
-        USB 画面/声音串流（720p30 H.264）、SD 卡文件浏览与上传下载、同一 Wi-Fi 下无线串流；
-        Wi-Fi 模式同样能读写 SD 卡（独立的 TCP 12347 通道，不占串流带宽）。
-        当前 <strong>1.2.0</strong> 已新增局域网文件通道，并修复 HOS 23.0.1 下模块被静默拒绝加载、
-        以及锁屏/休眠唤醒后卡死的问题。
-      </p>
-      <p>
-        电脑端配套 macOS 客户端（内置全部依赖）与命令行工具 <code>swlink-cli</code>，二者共用同一套 USB 协议。
-      </p>
-      <div class="actions">
-        <a class="btn primary" href="https://github.com/xbw12138/SwitchTools/releases" target="_blank" rel="noopener">下载 macOS 客户端</a>
-        <a class="btn ghost" href="https://github.com/xbw12138/SwitchTools" target="_blank" rel="noopener">源码与教程</a>
-        <a class="btn ghost" href="https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-sysmodule-sd.zip">SD 卡手动安装包</a>
-      </div>
-    </div>
-    <pre class="code"># 安装：商店 → SwLink → 安装 → 重启主机
-
-# macOS 客户端（免编译）
-curl -LO https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-app-macos.zip
-unzip swlink-app-macos.zip && open SwLink.app
-
-# 命令行读写 SD 卡
-swlink-cli ls /switch
-swlink-cli put ./hbmenu.nro /switch/hbmenu.nro
-swlink-cli get /switch/miniapp/miniapp.log ./miniapp.log
-
-# 无线串流：App 内点「无线连接」，自动发现局域网主机
-# 无线文件：文件页按需连 TCP 12347，与串流互不影响</pre>
-  </div>
-</section>
-
-<section class="section">
   <h2>社区交流</h2>
   <p class="sub">反馈问题、交流小程序开发，欢迎加入 QQ 群</p>
   <div class="community">
@@ -668,6 +637,7 @@ swlink-cli get /switch/miniapp/miniapp.log ./miniapp.log
     <span>NXMiniApp · 开源 Switch 小程序容器</span>
     <span class="links">
       <a href="/download">下载容器</a>
+      <a href="/tools">配套工具</a>
       <a href="/docs/index.html">开发文档</a>
       <a href="/docs/guide/structure.html">目录结构</a>
       <a href="/docs/reference/store.html">商店规范</a>

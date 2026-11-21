@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>配套工具 · Switch 应用商店与 SwLink</title>
+<style>
+:root {
+  --accent: #07c160;
+  --accent-soft: #e8f8ee;
+  --text: #1f2328;
+  --text-2: #57606a;
+  --text-3: #8b949e;
+  --bg: #ffffff;
+  --bg-side: #fafafa;
+  --border: #e6e8eb;
+  --code-bg: #f6f8fa;
+  --radius: 10px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 84px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.75 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+        "Microsoft YaHei", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+code {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+pre {
+  margin: 14px 0 0;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: #0f1216;
+  color: #d8dee9;
+  font: 13px/1.75 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-x: auto;
+}
+pre code { background: none; border: 0; padding: 0; color: inherit; }
+
+/* 顶栏 */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 12px;
+  height: 60px; padding: 0 28px;
+  background: rgba(255,255,255,.94);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--text); font-size: 16px; }
+.logo {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 7px;
+  background: linear-gradient(135deg,#0ddc78,#07a34b);
+  color: #fff; font-size: 12px; font-weight: 700;
+}
+.nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.nav a { padding: 6px 12px; border-radius: 6px; color: var(--text-2); font-size: 14px; }
+.nav a:hover { background: var(--bg-side); color: var(--text); }
+.nav a.active { background: var(--accent-soft); color: #067a3f; font-weight: 600; }
+.nav a.cta { margin-left: 8px; background: var(--accent); color: #fff; font-weight: 600; }
+
+/* Hero */
+.hero {
+  padding: 72px 28px 56px;
+  background:
+    radial-gradient(620px 300px at 16% 0%, rgba(13,220,120,.14), transparent 65%),
+    radial-gradient(680px 320px at 86% 10%, rgba(7,193,96,.10), transparent 60%),
+    var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.hero-inner { max-width: 1120px; margin: 0 auto; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 14px; border: 1px solid #bfe8d0; border-radius: 999px;
+  background: var(--accent-soft); color: #067a3f; font-size: 13px; font-weight: 600;
+}
+.hero h1 { margin: 18px 0 12px; font-size: 38px; line-height: 1.3; letter-spacing: -.5px; }
+.hero .lead { margin: 0; max-width: 860px; color: var(--text-2); font-size: 16px; }
+.hero .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.chips span {
+  padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--bg-side); color: var(--text-2); font-size: 13px;
+}
+
+/* 布局 */
+.layout { max-width: 1120px; margin: 0 auto; padding: 40px 28px 20px; display: grid; grid-template-columns: 208px 1fr; gap: 40px; }
+.toc { position: sticky; top: 84px; align-self: start; font-size: 14px; }
+.toc h4 { margin: 0 0 10px; font-size: 12px; letter-spacing: .08em; color: var(--text-3); font-weight: 600; }
+.toc a { display: block; padding: 6px 10px; border-radius: 7px; color: var(--text-2); }
+.toc a:hover { background: var(--bg-side); color: var(--text); }
+main { min-width: 0; }
+section.block { padding: 8px 0 40px; border-bottom: 1px solid var(--border); margin-bottom: 36px; }
+section.block:last-of-type { border-bottom: 0; }
+h2 { margin: 0 0 6px; font-size: 25px; letter-spacing: -.3px; }
+h2 .num { color: var(--text-3); font-weight: 500; margin-right: 8px; }
+.sub { margin: 0 0 20px; color: var(--text-2); }
+h3 { margin: 26px 0 10px; font-size: 17px; }
+p { color: var(--text-2); }
+ul.clean { margin: 12px 0; padding-left: 20px; color: var(--text-2); }
+ul.clean li { margin: 6px 0; }
+ul.clean li b { color: var(--text); }
+
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+.card {
+  padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg);
+}
+.card h4 { margin: 0 0 6px; font-size: 15px; }
+.card p { margin: 0; font-size: 13.5px; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--text-3); font-weight: 600; font-size: 12.5px; letter-spacing: .04em; }
+td code { white-space: nowrap; }
+
+.note {
+  margin-top: 16px; padding: 12px 16px; border-radius: var(--radius);
+  background: #fbfdff; border: 1px solid #d9e7ff; color: #33547a; font-size: 13.5px;
+}
+.warn {
+  margin-top: 16px; padding: 12px 16px; border-radius: var(--radius);
+  background: #fff9f0; border: 1px solid #ffe0b2; color: #7a4f12; font-size: 13.5px;
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  border: 1px solid transparent; cursor: pointer;
+}
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary:hover { background: #06ad57; }
+.btn.ghost { background: var(--bg); border-color: var(--border); color: var(--text-2); }
+.btn.ghost:hover { border-color: #c8cdd4; color: var(--text); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+
+.shot { margin-top: 18px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg-side); }
+.shot img { display: block; width: 100%; height: auto; }
+
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.flow span {
+  padding: 7px 12px; border-radius: 8px; background: var(--bg-side);
+  border: 1px solid var(--border); font-size: 13px; color: var(--text-2);
+}
+.flow i { color: var(--text-3); font-style: normal; }
+
+.footer { border-top: 1px solid var(--border); background: var(--bg-side); margin-top: 40px; }
+.footer-inner {
+  max-width: 1120px; margin: 0 auto; padding: 26px 28px;
+  display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  color: var(--text-3); font-size: 13px;
+}
+.footer a { color: var(--text-2); }
+.footer a:hover { color: var(--accent); }
+
+@media (max-width: 920px) {
+  .layout { grid-template-columns: 1fr; gap: 10px; }
+  .toc { position: static; display: flex; flex-wrap: wrap; gap: 4px; }
+  .toc h4 { width: 100%; }
+  .cards { grid-template-columns: 1fr 1fr; }
+  .hero h1 { font-size: 30px; }
+}
+@media (max-width: 600px) {
+  .cards { grid-template-columns: 1fr; }
+  .nav a:not(.cta):not(.active) { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="/"><span class="logo">NX</span> NXMiniApp</a>
+  <nav class="nav">
+    <a href="/">首页</a>
+    <a href="/download">下载容器</a>
+    <a class="active" href="/tools">配套工具</a>
+    <a href="/docs/index.html">开发文档</a>
+    <a href="/my">我的小程序</a>
+    <a class="cta" href="/submit">我要投稿</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <span class="badge">Switch 应用商店 · SwLink 串流与文件</span>
+    <h1>机内商店装应用，电脑端看画面、管文件</h1>
+    <p class="lead">
+      NXMiniApp 的配套工具链由两部分组成：运行在 Switch 上的<b>应用商店启动器</b>（浏览、安装、更新小程序），
+      以及系统模块 <b>SwLink</b>（USB / Wi-Fi 画面串流 + SD 卡读写）。
+      两者配合，Switch 全程不必拔卡，电脑端也不必打开 hbmenu。
+    </p>
+    <div class="chips">
+      <span>720p30 H.264 串流</span>
+      <span>Wi-Fi 读写 SD 卡</span>
+      <span>商店一键安装 / 升级</span>
+      <span>macOS 客户端 + CLI</span>
+      <span>配套 AI Skill</span>
+    </div>
+    <div class="actions">
+      <a class="btn primary" href="/downloads/updater.nro" download="updater.nro">下载商店启动器 updater.nro</a>
+      <a class="btn ghost" href="https://github.com/xbw12138/SwitchTools" target="_blank" rel="noopener">SwLink 源码与教程</a>
+      <a class="btn ghost" href="#install">快速安装</a>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+  <aside class="toc">
+    <h4>本页目录</h4>
+    <a href="#launcher">1. 应用商店启动器</a>
+    <a href="#swlink">2. SwLink 串流</a>
+    <a href="#files">3. SD 卡文件传输</a>
+    <a href="#install">4. 安装与升级</a>
+    <a href="#mac">5. macOS 客户端</a>
+    <a href="#cli">6. 命令行 swlink-cli</a>
+    <a href="#skill">7. 配套 Skill</a>
+    <a href="#faq">8. 常见问题</a>
+  </aside>
+
+  <main>
+
+    <section class="block" id="launcher">
+      <h2><span class="num">01</span>应用商店启动器</h2>
+      <p class="sub">独立 updater.nro：原生卡片墙商店 + 容器一键更新，不依赖电脑</p>
+      <p>
+        updater.nro 在 Switch 上提供完整的商店界面：应用卡片墙、分类筛选、详情面板与一键安装。
+        它还负责容器更新——先备份旧 NRO，多段并行下载新版本，校验通过后替换，失败自动回滚。
+      </p>
+      <div class="cards">
+        <div class="card"><h4>卡片墙浏览</h4><p>按分类筛选、查看详情与版本历史，全部用手柄操作。</p></div>
+        <div class="card"><h4>一键安装</h4><p>小程序与系统模块（如 SwLink）都从商店安装，无需电脑。</p></div>
+        <div class="card"><h4>安全更新</h4><p>下载校验 SHA256，替换前备份，失败自动回滚。</p></div>
+      </div>
+      <div class="shot"><img src="/docs/assets/updater-desktop.png" alt="Switch 应用商店启动器界面截图" loading="lazy"></div>
+      <div class="actions">
+        <a class="btn primary" href="/downloads/updater.nro" download="updater.nro">下载 updater.nro</a>
+        <a class="btn ghost" href="https://github.com/xbw12138/NXMiniApp/tree/main/client/apps/updater" target="_blank" rel="noopener">在 GitHub 查看</a>
+      </div>
+      <div class="note">约 14 MB · 放到 <code>sdmc:/switch/</code> · 首次需插线推送一次，之后商店与容器更新都能在机内完成</div>
+    </section>
+
+    <section class="block" id="swlink">
+      <h2><span class="num">02</span>SwLink 画面串流</h2>
+      <p class="sub">把 Switch 的画面和声音投到 Mac，USB 直连或同一 Wi-Fi 无线串流</p>
+      <p>
+        SwLink 是随系统启动的模块（sysmodule），通过系统录制接口 <code>grc:d</code> 取 720p30 H.264 画面与 48kHz 立体声。
+        电脑端 SwLink.app 负责解码与显示，支持独立窗口、全屏与静音。
+      </p>
+      <table>
+        <thead><tr><th>连接方式</th><th>端口</th><th>适用场景</th></tr></thead>
+        <tbody>
+          <tr><td>USB</td><td>VID:PID <code>16C0:27DA</code></td><td>延迟最低，传大文件首选</td></tr>
+          <tr><td>Wi-Fi 串流</td><td>TCP <code>12345</code></td><td>不想插线，建议 5GHz</td></tr>
+          <tr><td>Wi-Fi 发现</td><td>UDP <code>12346</code></td><td>自动发现局域网主机，免手填 IP</td></tr>
+          <tr><td>Wi-Fi 文件</td><td>TCP <code>12347</code></td><td>无线读写 SD 卡，与串流互不影响</td></tr>
+        </tbody>
+      </table>
+      <ul class="clean">
+        <li><b>独立窗口</b>：纯画面弹出到副屏，可缩放、可全屏</li>
+        <li><b>全屏</b>：主窗口全屏；纯画面满屏请用独立窗口</li>
+        <li><b>按需采集</b>：首次连接才打开 <code>grc:d</code>，待机时不影响休眠</li>
+        <li><b>唤醒自愈</b>：休眠唤醒后自动重建监听，不需要重启主机</li>
+      </ul>
+      <div class="warn">只有支持系统录屏（长按截图键）的游戏才有画面；主菜单与设置界面不产生录制输出。建议安装 dvr-patches 解锁全部游戏。</div>
+    </section>
+
+    <section class="block" id="files">
+      <h2><span class="num">03</span>SD 卡文件传输</h2>
+      <p class="sub">USB 与 Wi-Fi 都能读写 Switch 的 SD 卡，像本地文件夹一样操作</p>
+      <p>
+        文件通道与串流完全分开：USB 走文件接口，Wi-Fi 走独立的 TCP <code>12347</code>。
+        同一套 <code>SwlinkFtHeader</code> 协议，40 字节请求/响应头 + 负载，按 512KB 分块。
+      </p>
+      <div class="cards">
+        <div class="card"><h4>浏览与下载</h4><p>按表头排序、搜索过滤、多选（⌘/Shift）、整目录递归下载。</p></div>
+        <div class="card"><h4>上传</h4><p>支持整个文件夹拖入窗口，直接写入当前目录；上传前可确认覆盖。</p></div>
+        <div class="card"><h4>管理与容量</h4><p>新建目录、重命名、批量删除；底部显示 SD 已用/剩余容量进度条。</p></div>
+      </div>
+      <ul class="clean">
+        <li><b>右键菜单</b>：打开 / 下载、重命名、复制路径、删除</li>
+        <li><b>快捷键</b>：⌘A 全选、⌘R 刷新、Del 删除、Enter 打开、Backspace 上级、↑↓ 选择</li>
+        <li><b>传输中</b>：显示速度与剩余时间，可随时取消；失败会停在当前项并提示原因</li>
+      </ul>
+      <div class="note">大文件优先插 USB；Wi-Fi 文件通道与串流共用同一条无线链路，4~10 MB/s 属正常范围。</div>
+    </section>
+
+    <section class="block" id="install">
+      <h2><span class="num">04</span>安装与升级</h2>
+      <p class="sub">推荐从商店安装，之后全程一键升级</p>
+      <h3>方式一：商店内安装（推荐）</h3>
+      <div class="flow">
+        <span>打开容器</span><i>→</i><span>应用商店</span><i>→</i><span>SwLink</span><i>→</i><span>安装</span><i>→</i><span>重启主机</span>
+      </div>
+      <p>商店里出现新版本时，在「更新」页直接升级，不用再拔 SD 卡。</p>
+
+      <h3>方式二：手动安装</h3>
+      <p>下载安装包解压到 SD 卡根目录（目录已建好）：</p>
+      <pre><code>curl -LO https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-sysmodule-sd.zip
+unzip swlink-sysmodule-sd.zip -d /Volumes/&lt;你的 SD 卡&gt;</code></pre>
+      <p>装完后应存在：</p>
+      <pre><code>SD:/atmosphere/contents/00FF0000A53B5A57/
+├── exefs.nsp
+├── toolbox.json
+└── flags/boot2.flag</code></pre>
+      <p>重启主机，或在 Tesla 菜单 → Sysmodules 里启用。开机后 SD 卡根目录会生成 <code>SwLink.log</code>；没有日志说明模块未加载。</p>
+      <div class="warn">与 SysDVR 等同样占用 <code>usb:ds</code> 的系统模块冲突，请勿同时启用。</div>
+    </section>
+
+    <section class="block" id="mac">
+      <h2><span class="num">05</span>macOS 客户端</h2>
+      <p class="sub">免编译直接下载，内置 SDL2 / libusb / ffmpeg</p>
+      <div class="actions">
+        <a class="btn primary" href="https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-app-macos.zip">下载 SwLink.app</a>
+        <a class="btn ghost" href="https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-cli-macos-x64.zip">下载 swlink-cli</a>
+        <a class="btn ghost" href="https://github.com/xbw12138/SwitchTools" target="_blank" rel="noopener">源码与教程</a>
+      </div>
+      <pre><code>unzip swlink-app-macos.zip
+xattr -dr com.apple.quarantine SwLink.app   # 首次运行需放行
+open SwLink.app</code></pre>
+      <ul class="clean">
+        <li><b>USB 连接</b>：数据线直插 Mac 机身口，不经过 hub / 扩展坞</li>
+        <li><b>无线连接</b>：点「无线连接」，选自动发现的设备；也可手填 IP 与端口</li>
+        <li><b>同时只能一个客户端</b>：SwLink.app 与 swlink-cli 不能同时占用 USB 设备</li>
+      </ul>
+      <div class="note">macOS 12 及以上；Apple Silicon 需安装 Rosetta。未做 Apple 公证，首次打开被拦截时右键 → 打开。</div>
+    </section>
+
+    <section class="block" id="cli">
+      <h2><span class="num">06</span>命令行 swlink-cli</h2>
+      <p class="sub">批量操作 SD 卡、推送 NRO，适合脚本与自动化</p>
+      <p>免编译版本已内置 libusb，解压后两个文件必须放在同一目录：</p>
+      <pre><code>curl -LO https://raw.githubusercontent.com/xbw12138/SwitchTools/main/dist/swlink-cli-macos-x64.zip
+unzip swlink-cli-macos-x64.zip -d swlink-cli
+xattr -dr com.apple.quarantine swlink-cli
+
+./swlink-cli/swlink-cli ls /switch</code></pre>
+      <table>
+        <thead><tr><th>命令</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>ls [路径]</code></td><td>列出目录，默认 <code>/</code></td></tr>
+          <tr><td><code>get &lt;远端&gt; &lt;本地&gt;</code></td><td>下载文件；远端是目录时递归下载</td></tr>
+          <tr><td><code>put &lt;本地&gt; [远端]</code></td><td>上传文件或目录；目标是已存在目录则拼文件名</td></tr>
+          <tr><td><code>nro &lt;本地.nro&gt; [远端]</code></td><td>写入 NRO，默认 <code>switch/&lt;文件名&gt;</code></td></tr>
+          <tr><td><code>mkdir / rm --dir / mv</code></td><td>建目录、递归删除、重命名</td></tr>
+          <tr><td><code>df</code></td><td>显示 SD 卡总容量与剩余空间</td></tr>
+        </tbody>
+      </table>
+      <pre><code># 看容量与目录
+./swlink-cli df
+./swlink-cli ls /switch
+
+# 推送 NRO(之后在 hbmenu 的 switch 目录里运行)
+./swlink-cli nro ./hbmenu.nro
+
+# 递归上传 / 下载整个目录
+./swlink-cli put ./payload /switch/payload
+./swlink-cli get /switch/payload ./downloaded
+
+# 清理
+./swlink-cli rm /switch/payload --dir</code></pre>
+      <ul class="clean">
+        <li>远端路径统一以 <code>/</code> 开头（<code>/</code> 即 SD 卡根）</li>
+        <li>退出码 <code>0</code> 成功、<code>1</code> 失败；进度条写 stderr，可与 <code>2&gt;/dev/null</code> 分离</li>
+        <li><b>CLI 只走 USB</b>：没有 <code>--wifi</code> 参数，SD 卡读写必须插线</li>
+        <li>大文件按 512KB 分块；传输中不要拔线，半截请求会让端点停滞数秒</li>
+      </ul>
+    </section>
+
+    <section class="block" id="skill">
+      <h2><span class="num">07</span>配套 Skill</h2>
+      <p class="sub">把 SwLink 的使用规范交给 AI，直接用自然语言操作 SD 卡与排查连接</p>
+      <p>
+        swlink-cli Skill 描述了完整的命令语义、路径规则、协议约束与排障流程。装进支持 Skill 的 IDE
+        （Trae / Claude Code 等）后，AI 能按规范帮你列出目录、批量上传、推送 NRO，
+        并在「找不到设备」时按顺序排查数据线、sysmodule 与端口占用。
+      </p>
+      <h3>安装</h3>
+      <pre><code># 仓库内路径
+git clone https://github.com/xbw12138/SwitchTools.git
+mkdir -p your-project/.trae/skills/swlink-cli
+cp SwitchTools/.trae/skills/swlink-cli/SKILL.md \
+   your-project/.trae/skills/swlink-cli/</code></pre>
+      <h3>可以这样问</h3>
+      <pre><code>"用 swlink-cli 把 switch/ 下的 hbmenu.nro 备份到本地"
+"列出 SD 卡根目录，找出所有大于 100MB 的文件"
+"连不上 Switch，按 skill 的排查流程帮我定位"</code></pre>
+      <div class="actions">
+        <a class="btn ghost" href="https://github.com/xbw12138/SwitchTools/blob/main/.trae/skills/swlink-cli/SKILL.md" target="_blank" rel="noopener">查看 SKILL.md</a>
+        <a class="btn ghost" href="https://github.com/xbw12138/SwitchTools/tree/main/skills/swlink-cli/references" target="_blank" rel="noopener">协议与排障手册</a>
+      </div>
+    </section>
+
+    <section class="block" id="faq">
+      <h2><span class="num">08</span>常见问题</h2>
+      <table>
+        <thead><tr><th>现象</th><th>原因与处理</th></tr></thead>
+        <tbody>
+          <tr><td>未找到设备 16C0:27DA</td><td>模块未启动 / 充电线 / 被占用：先看 SD 卡有没有 SwLink.log，换数据线，退出 SwLink.app</td></tr>
+          <tr><td>claim_interface: Access denied</td><td>SwLink.app 占着 USB，退出后重试</td></tr>
+          <tr><td>文件页报「连接文件通道超时」</td><td>设备端过旧，没有 TCP 12347；升级到 1.2.0 以上</td></tr>
+          <tr><td>一直「等待画面」</td><td>停在主菜单或该游戏不支持录制；进入游戏画面等待 10 秒</td></tr>
+          <tr><td>锁屏/唤醒后卡死</td><td>旧版监听线程空转；1.1.0 起已修复，唤醒后自动重建监听</td></tr>
+          <tr><td>开机后没有 SwLink.log</td><td>固件与 NPDM 不匹配；使用 1.1.0 以上安装包，或按固件版本重编</td></tr>
+          <tr><td>开机黑屏</td><td>关机拔卡，删除 <code>atmosphere/contents/00FF0000A53B5A57</code> 整个目录即可恢复</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="block" style="padding-bottom:0">
+      <div class="actions">
+        <a class="btn primary" href="/submit">投稿我的小程序</a>
+        <a class="btn ghost" href="/docs/index.html">查看开发文档</a>
+        <a class="btn ghost" href="https://qm.qq.com/q/NZe1VLTuI8" target="_blank" rel="noopener">加入交流群</a>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>NXMiniApp · 开源 Switch 小程序容器</span>
+    <span class="links">
+      <a href="/download">下载容器</a>
+      <a href="/tools">配套工具</a>
+      <a href="/docs/index.html">开发文档</a>
+      <a href="https://github.com/xbw12138/NXMiniApp" target="_blank" rel="noopener">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

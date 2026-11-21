@@ -117,6 +117,8 @@ func NewRouter(cfg config.Config, db *gorm.DB) (*gin.Engine, *Env) {
 	r.GET("/submit", func(c *gin.Context) { servePortal(c, "submit.html") })
 	r.GET("/my", func(c *gin.Context) { servePortal(c, "my.html") })
 	r.GET("/download", func(c *gin.Context) { servePortal(c, "download.html") })
+	// 配套工具:应用商店启动器 + SwLink(串流/文件/CLI/Skill)。
+	r.GET("/tools", func(c *gin.Context) { servePortal(c, "tools.html") })
 	// 开发 Skill 直接打包下载，避免国内访问 GitHub 打不开。
 	r.GET("/skill/nxminiapp-dev.zip", func(c *gin.Context) {
 		portal, err := web.Portal()
